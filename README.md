@@ -117,8 +117,15 @@ class RegExExtractionHead(BaseHead):
 uv sync          # Abhängigkeiten installieren
 uv run pytest    # Tests
 uv run python examples/demo.py
-uv build         # PyPI-Artefakte (wheel + sdist) nach dist/
-uv publish       # Hochladen (erfordert Token/Account)
+```
+
+**Release-Kette (automatisch):** Version in `pyproject.toml` + `__init__.py` bumpen,
+committen, taggen, pushen — GitHub Actions baut und veröffentlicht dann selbstständig
+auf PyPI (Workflow `publish.yml`, Secret `PYPI_TOKEN`):
+
+```bash
+git tag vX.Y.Z
+git push origin main vX.Y.Z
 ```
 
 ## Lizenz

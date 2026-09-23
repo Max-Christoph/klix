@@ -1,7 +1,7 @@
-"""Die Entscheidungsköpfe: Choice (Routing), Score (Achse), Flag (Boolesch).
+"""The decision heads: Choice (routing), Score (axis), Flag (boolean).
 
-Alle Köpfe arbeiten ausschließlich auf den vorberechneten Vektoren aus
-`EncodedInput` und sind dadurch voneinander entkoppelt.
+All heads operate exclusively on the precomputed vectors from `EncodedInput`,
+which makes them fully decoupled from each other.
 """
 
 from abc import ABC, abstractmethod
@@ -12,12 +12,12 @@ from klix.backbone import EncodedInput, HybridBackbone
 
 
 class BaseHead(ABC):
-    """Basisklasse für alle Köpfe.
+    """Base class for all heads.
 
-    Ein Kopf wird dreiphasig verwendet:
-    1. `get_reference_texts()` — sammelt Referenztexte für den TF-IDF-Index.
-    2. `fit(backbone)` — Vorberechnung aller Referenzvektoren (einmalig).
-    3. `evaluate(encoded)` — Bewertung pro Abfrage, < 0.1 ms Ziel.
+    A head is used in three phases:
+    1. `get_reference_texts()` — collects reference texts for the TF-IDF index.
+    2. `fit(backbone)` — precomputes all reference vectors (once).
+    3. `evaluate(encoded)` — evaluates per query, target < 0.1 ms.
     """
 
     def __init__(self, name: str):
@@ -25,29 +25,29 @@ class BaseHead(ABC):
 
     @abstractmethod
     def get_reference_texts(self) -> list[str]:
-        """Gibt alle Texte zurück, die der Backbone für den TF-IDF-Index kennen muss."""
+        """Returns all texts the backbone must know for the TF-IDF index."""
 
     @abstractmethod
     def fit(self, backbone: HybridBackbone) -> None:
-        """Vorberechnung von Referenzvektoren."""
+        """Precomputes reference vectors."""
 
     @abstractmethod
     def evaluate(self, encoded: EncodedInput) -> dict:
-        """Berechnet das Ergebnis basierend auf den vorberechneten Vektoren."""
+        """Computes the result based on the precomputed vectors."""
 
 
 def _normalize_rows(vectors: np.ndarray) -> np.ndarray:
-    """Zeilenweise auf Einheitslänge normieren (0-Vektoren bleiben 0)."""
+    """Row-wise L2 normalization (zero vectors stay zero)."""
     norms = np.linalg.norm(vectors, axis=1, keepdims=True)
     return vectors / np.where(norms == 0, 1.0, norms)
 
 
 class Choice(BaseHead):
-    """Klassifikation / Routing über Max-Similarity + Keyword-Boost.
+    """Classification / routing via max-similarity + keyword boost.
 
-    Options-Label mit den meisten ähnlichen Beispielsätzen gewinnt. Die Sparse-
-    Ähnlichkeit (exakte Worttreffer, z. B. Asset-IDs wie `plc-34`) wird mit
-    `keyword_boost` auf die Dense-Ähnlichkeit addiert.
+    The option label with the most similar example sentences wins. Sparse
+    similarity (exact word hits, e.g. asset IDs like `plc-34`) is added to the
+    dense similarity, weighted by `keyword_boost`.
     """
 
     def __init__(self, name: str, options: dict[str, list[str]], keyword_boost: float = 0.5):
@@ -77,15 +77,15 @@ class Choice(BaseHead):
     def evaluate(self, encoded: EncodedInput) -> dict:
         dense_sims = self.dense_matrix @ encoded.dense_vec
 
-        # Direkter Sparse-Dot statt sklearn cosine_similarity: TfidfVectorizer
-        # normiert beide Vektoren L2 (default norm="l2"), der Dot nicht-negativer
-        # Einheitsvektoren IST die Cosine-Aehnlichkeit — aber ~5x schneller
-        # (kein sklearn-Call-Overhead pro Abfrage).
+        # Direct sparse dot product instead of sklearn cosine_similarity:
+        # TfidfVectorizer L2-normalizes both vectors (default norm="l2"), so the
+        # dot of non-negative unit vectors IS the cosine similarity — about 5x
+        # faster (no sklearn call overhead per query).
         sparse_sims = np.asarray((encoded.sparse_vec @ self.sparse_matrix.T).todense())[0]
 
         hybrid_sims = dense_sims + self.keyword_boost * sparse_sims
 
-        # Pro Label die beste Beispiel-Ähnlichkeit behalten.
+        # Keep the best example similarity per label.
         category_scores: dict[str, float] = {}
         for idx, sim in enumerate(hybrid_sims):
             label = self.label_map[idx]
@@ -95,7 +95,7 @@ class Choice(BaseHead):
         best_label = max(category_scores, key=category_scores.get)
         best_score = category_scores[best_label]
 
-        # Margin zum Runner-Up als Konfidenzkalibrierung.
+        # Margin to the runner-up as confidence calibration.
         sorted_scores = sorted(category_scores.values(), reverse=True)
         runner_up = sorted_scores[1] if len(sorted_scores) > 1 else 0.0
         confidence = float(np.clip((best_score - runner_up) / (best_score + 1e-5) * 1.5, 0.0, 1.0))
@@ -109,10 +109,11 @@ class Choice(BaseHead):
 
 
 class Score(BaseHead):
-    """Kontinuierliche Projektion auf eine semantische Achse.
+    """Continuous projection onto a semantic axis.
 
-    Der Text wird gegen Low- und High-Anker similarity-gemessen; die Differenz
-    geht durch eine Sigmoid-Scherfunktion und wird auf [min_val, max_val] gemappt.
+    The text is similarity-measured against low and high anchors; the difference
+    passes through a sigmoid sharpening function and is mapped to
+    [min_val, max_val].
     """
 
     def __init__(
@@ -144,11 +145,11 @@ class Score(BaseHead):
         self.high_matrix = _normalize_rows(high_v)
 
     def evaluate(self, encoded: EncodedInput) -> dict:
-        # Max-Similarity zu beiden Polen.
+        # Max similarity to both poles.
         s_low = float(np.max(self.low_matrix @ encoded.dense_vec))
         s_high = float(np.max(self.high_matrix @ encoded.dense_vec))
 
-        # Sigmoid-basierte Skalierung der Differenz.
+        # Sigmoid-based scaling of the difference.
         diff = s_high - s_low
         ratio = 1.0 / (1.0 + np.exp(-diff * self.sharpness))
         calculated_score = self.min_val + ratio * (self.max_val - self.min_val)
@@ -160,16 +161,16 @@ class Score(BaseHead):
 
 
 class Flag(BaseHead):
-    """Boolesche Entscheidung mit kalibrierter Wahrscheinlichkeit.
+    """Boolean decision with calibrated probability.
 
-    Softmax über die Similarities zu True- und False-Ankern; Temperatur steuert
-    die Schärfe der Entscheidung.
+    Softmax over the similarities to true and false anchors; temperature controls
+    the sharpness of the decision.
 
-    Problem ohne drittes Pol: Bei Out-of-Domain-Texten sind beide Similarities
-    niedrig und nahe beieinander -> Wahrscheinlichkeit ~0.5 und Rauschen kippt
-    die Entscheidung. Mit `neutral_anchors` wird ein 3-Klassen-Softmax genutzt;
-    der Kopf liefert dann `value=None` (statt True/False), wenn "neutral"
-    gewinnt. Standardmäßig deaktiviert (klassisches 2-Klassen-Verhalten).
+    Problem without a third pole: for out-of-domain texts both similarities are
+    low and close together -> probability ~0.5 and noise flips the decision.
+    With `neutral_anchors` a 3-class softmax is used; the head then returns
+    `value=None` (instead of True/False) whenever "neutral" wins. Disabled by
+    default (classic 2-class behavior).
     """
 
     def __init__(
@@ -211,14 +212,14 @@ class Flag(BaseHead):
         s_true = float(np.max(self.true_matrix @ encoded.dense_vec))
         s_false = float(np.max(self.false_matrix @ encoded.dense_vec))
 
-        # Softmax über zwei (oder drei) Klassen mit Temperatur-Skalierung.
+        # Softmax over two (or three) classes with temperature scaling.
         logits = np.array([s_true, s_false], dtype=float)
         if self.neutral_matrix is not None:
             s_neutral = float(np.max(self.neutral_matrix @ encoded.dense_vec))
             logits = np.array([s_true, s_false, s_neutral], dtype=float)
 
         scaled = logits / self.temp
-        scaled -= scaled.max()  # numerisch stabiler Softmax
+        scaled -= scaled.max()  # numerically stable softmax
         exp = np.exp(scaled)
         probs = exp / exp.sum()
 

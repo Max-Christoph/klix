@@ -1,9 +1,9 @@
-"""Klix: Entkoppelte Entscheidungs-Köpfe (Choice, Score, Flag) auf einem geteilten semantischen Backbone."""
+"""Klix: decoupled decision heads (Choice, Score, Flag) on a shared semantic backbone."""
 
 from klix.engine import DecisionEngine, DecisionResult
 from klix.heads import BaseHead, Choice, Flag, Score
 
-__version__ = "0.1.2"
+__version__ = "0.1.3"
 
 __all__ = [
     "DecisionEngine",

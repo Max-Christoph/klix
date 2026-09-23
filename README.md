@@ -4,41 +4,40 @@
 [![Python](https://img.shields.io/pypi/pyversions/klix-engine.svg)](https://pypi.org/project/klix-engine/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Entkoppelte Entscheidungs-Köpfe auf einem geteilten semantischen Backbone.
-Ein Text geht **genau einmal** durch das Embedding-Modell (Dense + Sparse), beliebig viele
-Köpfe (`Choice`, `Score`, `Flag`) arbeiten anschließend auf den vorberechneten Vektoren –
-jeder in seinem eigenen mathematischen Raum. Kein Modelltraining, keine Slot-Limits,
-vollständig offline und CPU-only.
+Decoupled decision heads on a shared semantic backbone.
+A text passes through the embedding model **exactly once** (dense + sparse), after which any number
+of heads (`Choice`, `Score`, `Flag`) operate on the precomputed vectors — each in its own
+mathematical space. No model training, no slot limits, fully offline and CPU-only.
 
-## Architektur
+## Architecture
 
 ```text
-Text ──► HybridBackbone (FastEmbed-Dense + TF-IDF-Sparse, einmalig ~10 ms)
+Text ──► HybridBackbone (FastEmbed dense + TF-IDF sparse, once, ~10 ms)
               │
-              ├──► Choice   (Routing/Klassifikation: Max-Similarity + Keyword-Boost)
-              ├──► Score    (kontinuierliche Achse: Low/High-Anker + Sigmoid)
-              ├──► Flag     (Boolesch: 2/3-Klassen-Softmax mit Temperatur)
-              └──► eigene Köpfe (von BaseHead erben)
+              ├──► Choice   (routing/classification: max-similarity + keyword boost)
+              ├──► Score    (continuous axis: low/high anchors + sigmoid)
+              ├──► Flag     (boolean: 2/3-class softmax with temperature)
+              └──► custom heads (subclass BaseHead)
 ```
 
-- **Shared Backbone:** Der Text wird einmal embedding + einmal TF-IDF transformiert.
-  3 Köpfe oder 50 Köpfe – die Extraktionskosten bleiben gleich.
-- **Entkoppelte Köpfe:** Neue Optionen in einem `Choice` beeinflussen weder `Score`- noch
-  `Flag`-Ergebnisse. Jeder Kopf kapselt seine eigene Logik.
-- **Deklarativ:** Nur Schemata mit Beispielsätzen definieren, `compile()`, fertig.
+- **Shared backbone:** Each text is embedded and TF-IDF-transformed exactly once.
+  Whether you register 3 heads or 50, the extraction cost stays the same.
+- **Decoupled heads:** Adding options to one `Choice` never affects `Score` or `Flag`
+  results. Every head encapsulates its own logic.
+- **Declarative:** Define schemas with example sentences, call `compile()`, done.
 
 ## Installation
 
 ```bash
 uv add klix-engine
-# oder
+# or
 pip install klix-engine
 ```
 
-Beim ersten Aufruf lädt FastEmbed das Modell `paraphrase-multilingual-MiniLM-L12-v2`
-(~120 MB, einmalig, danach lokal gecacht). Danach läuft alles offline.
+On first use, FastEmbed downloads the `paraphrase-multilingual-MiniLM-L12-v2` model
+(~120 MB, one-time, then cached locally). Everything runs offline afterwards.
 
-## Schnellstart
+## Quickstart
 
 ```python
 from klix import DecisionEngine, Choice, Score, Flag
@@ -49,10 +48,10 @@ engine.add_head(
     Choice(
         name="target",
         options={
-            "it_ops": ["VPN abgerissen", "Server down", "Rechner bootet nicht"],
-            "ot_plant": ["Roboterzelle steht", "SPS Fehler", "Taktzeit deviation"],
-            "finance": ["KST 4210 über Budget", "Rechnung freigeben"],
-            "facility": ["Öllache Halle 2", "Heizung defekt"],
+            "it_ops": ["VPN down", "server unreachable", "laptop won't boot"],
+            "ot_plant": ["robot cell stopped", "PLC fault", "plc-34 error", "cycle time deviation"],
+            "finance": ["cost center over budget", "approve invoice"],
+            "facility": ["oil spill in hall 2", "heating broken"],
         },
     )
 )
@@ -60,8 +59,8 @@ engine.add_head(
 engine.add_head(
     Score(
         name="urgency",
-        low_anchors=["Routine-Wartung", "Informelle Frage"],
-        high_anchors=["Notfall sofort", "Produktionsstillstand", "Akute Gefahr"],
+        low_anchors=["routine maintenance", "casual question"],
+        high_anchors=["emergency right now", "production line down", "acute danger"],
         min_val=0.0,
         max_val=3.0,
     )
@@ -70,15 +69,16 @@ engine.add_head(
 engine.add_head(
     Flag(
         name="is_security",
-        true_anchors=["Hackerangriff", "Ransomware Befall", "Datenabfluss"],
-        false_anchors=["Hardware kaputt", "Netzwerkstörung", "Alltägliche Anfrage"],
+        true_anchors=["hacker attack", "ransomware infection", "data exfiltration"],
+        false_anchors=["hardware broken", "ordinary IT problem", "network outage"],
+        neutral_anchors=["routine request", "general question", "other topic"],
         threshold=0.5,
     )
 )
 
 engine.compile()
 
-res = engine.decide("plc-34 meldet fehler, förderband steht sofort!")
+res = engine.decide("plc-34 reports a fault, conveyor belt stopped immediately!")
 
 print(res)                                   # <DecisionResult (11 ms): target=ot_plant, urgency=2.9, is_security=False>
 print(res.target)                            # 'ot_plant'
@@ -87,9 +87,12 @@ print(res.is_security)                       # False
 print(res.details("is_security"))            # {'value': False, 'probability': 0.03}
 ```
 
-## Eigene Köpfe
+The heads are language-agnostic — the example uses English anchors, but German,
+French, or any other language works the same way (the backbone model is multilingual).
 
-Von `BaseHead` erben und `evaluate(encoded)` implementieren:
+## Custom Heads
+
+Subclass `BaseHead` and implement `evaluate(encoded)`:
 
 ```python
 import re
@@ -101,7 +104,7 @@ class RegExExtractionHead(BaseHead):
         self.re = re.compile(pattern)
 
     def get_reference_texts(self) -> list[str]:
-        return []  # keine Referenztexte nötig
+        return []  # no reference texts needed
 
     def fit(self, backbone) -> None:
         pass
@@ -111,23 +114,23 @@ class RegExExtractionHead(BaseHead):
         return {"value": match.group(0) if match else None}
 ```
 
-## Entwicklung
+## Development
 
 ```bash
-uv sync          # Abhängigkeiten installieren
-uv run pytest    # Tests
+uv sync          # install dependencies
+uv run pytest    # run tests
 uv run python examples/demo.py
 ```
 
-**Release-Kette (automatisch):** Version in `pyproject.toml` + `__init__.py` bumpen,
-committen, taggen, pushen — GitHub Actions baut und veröffentlicht dann selbstständig
-auf PyPI (Workflow `publish.yml`, Secret `PYPI_TOKEN`):
+**Release chain (automated):** bump the version in `pyproject.toml` and `__init__.py`,
+commit, tag, push — GitHub Actions builds and publishes to PyPI automatically
+(workflow `publish.yml`, secret `PYPI_TOKEN`):
 
 ```bash
 git tag vX.Y.Z
 git push origin main vX.Y.Z
 ```
 
-## Lizenz
+## License
 
 MIT

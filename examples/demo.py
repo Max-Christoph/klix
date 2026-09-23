@@ -1,4 +1,4 @@
-"""Demo: Klix-Engine mit drei Köpfen (Choice, Score, Flag) auf IT/OT-Tickets."""
+"""Demo: Klix engine with three heads (Choice, Score, Flag) on IT/OT tickets."""
 
 import time
 
@@ -12,10 +12,10 @@ def main() -> None:
         Choice(
             name="target",
             options={
-                "it_ops": ["VPN abgerissen", "Server down", "Rechner bootet nicht", "web-02 timeout"],
-                "ot_plant": ["Roboterzelle steht", "SPS Fehler", "plc-34 fehler", "Taktzeit deviation"],
-                "finance": ["KST 4210 über Budget", "Rechnung freigeben", "Skonto abziehen"],
-                "facility": ["Schmiermittel-Pfütze Rutschgefahr", "Öllache Halle 2", "Heizung defekt"],
+                "it_ops": ["VPN down", "server unreachable", "laptop won't boot", "web-02 timeout"],
+                "ot_plant": ["robot cell stopped", "PLC fault", "plc-34 error", "cycle time deviation"],
+                "finance": ["cost center 4210 over budget", "approve invoice", "apply early-payment discount"],
+                "facility": ["lubricant puddle slip hazard", "oil spill hall 2", "heating broken"],
             },
         )
     )
@@ -23,8 +23,8 @@ def main() -> None:
     engine.add_head(
         Score(
             name="urgency",
-            low_anchors=["Routine-Wartung", "Informelle Frage", "Hat Zeit nächste Woche"],
-            high_anchors=["Notfall sofort", "Produktionsstillstand", "Akute Gefahr", "Kritischer Ausfall"],
+            low_anchors=["routine maintenance", "casual question", "can wait until next week"],
+            high_anchors=["emergency right now", "production line down", "acute danger", "critical outage"],
             min_val=0.0,
             max_val=3.0,
         )
@@ -33,9 +33,9 @@ def main() -> None:
     engine.add_head(
         Flag(
             name="is_security",
-            true_anchors=["Hackerangriff", "Ransomware Befall", "Root login kompromittiert", "Datenabfluss"],
-            false_anchors=["Hardware kaputt", "Standard IT Problem", "Netzwerkstörung", "Alltägliche Anfrage"],
-            neutral_anchors=["Routineanfrage", "Allgemeine Frage", "Sonstiges Thema"],
+            true_anchors=["hacker attack", "ransomware infection", "compromised root login", "data exfiltration"],
+            false_anchors=["hardware broken", "standard IT problem", "network outage", "everyday request"],
+            neutral_anchors=["routine request", "general question", "other topic"],
             threshold=0.5,
         )
     )
@@ -43,18 +43,18 @@ def main() -> None:
     engine.compile()
 
     tickets = [
-        "plc-34 meldet fehler, förderband steht sofort!",
-        "Kaffee ist alle, wer füllt die Maschine nach?",
-        "Halle 2 neben der Presse steht Öl auf dem Boden, jemand ist fast ausgerutscht",
-        "Verdächtiger Login auf dem Domain-Controller, Root-Zugriff um 3 Uhr nachts",
-        "VPN bricht bei Homeoffice ständig ab, Kundentermin in 10 Minuten",
-        "Rechnung 2024-118 bitte freigeben, Skonto läuft morgen ab",
-        "Roboterzelle 3 bleibt im Zyklus stehen, Taktzeit verdoppelt",
-        "Routine-Wartung der Lüftung ist nächste Woche geplant",
+        "plc-34 reports a fault, conveyor belt stopped immediately!",
+        "coffee machine is empty, who will refill it?",
+        "hall 2 next to the press: oil on the floor, someone almost slipped",
+        "suspicious login on the domain controller, root access at 3 am",
+        "VPN keeps dropping in home office, customer call in 10 minutes",
+        "please approve invoice 2024-118, early-payment discount expires tomorrow",
+        "robot cell 3 stalls mid-cycle, cycle time doubled",
+        "routine ventilation maintenance scheduled for next week",
     ]
 
     print("=" * 72)
-    print("Klix-Engine Demo - 3 Köpfe, geteilter Backbone")
+    print("Klix engine demo - 3 heads, shared backbone")
     print("=" * 72)
 
     for ticket in tickets:
@@ -63,14 +63,14 @@ def main() -> None:
         print(f"\nTicket : {ticket}")
         print(f"Result : {result}")
         print(
-            f"  target={result.target} (Konfidenz {result.details('target')['confidence']:.0%}) | "
+            f"  target={result.target} (confidence {result.details('target')['confidence']:.0%}) | "
             f"urgency={result.urgency}/3.0 | "
             f"is_security={result.is_security} (p={security['probability']:.1%})"
         )
 
-    # Latenz-Test: 10 Durchläufe, zeigt Shared-Backbone-Kosten vs. Kopf-Kosten.
+    # Latency test: 10 runs per ticket, shows shared-backbone cost vs. head cost.
     print("\n" + "=" * 72)
-    print("Latenzprofil (10 Durchläufe je Ticket)")
+    print("Latency profile (10 runs per ticket)")
     print("=" * 72)
     total = 0.0
     for ticket in tickets[:3]:
@@ -80,9 +80,9 @@ def main() -> None:
             times.append(result.latency_ms)
         avg = sum(times) / len(times)
         total += avg
-        print(f"  {avg:6.1f} ms Ø  |  {ticket[:50]}")
-    print(f"\nGeteilter Backbone: 8 Tickets × 3 Köpfe = 24 Kopf-Entscheidungen bei "
-          f"nur {total / 3:.0f} ms Ø Embedding-Kosten pro Durchlauf.")
+        print(f"  {avg:6.1f} ms avg  |  {ticket[:50]}")
+    print(f"\nShared backbone: 8 tickets x 3 heads = 24 head decisions at only "
+          f"{total / 3:.0f} ms avg embedding cost per pass.")
 
 
 if __name__ == "__main__":

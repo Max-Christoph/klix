@@ -1,4 +1,4 @@
-"""Die Orchestrierungs-Engine: bindet Backbone und Köpfe zusammen."""
+"""The orchestration engine: binds backbone and heads together."""
 
 import time
 
@@ -7,7 +7,7 @@ from klix.heads import BaseHead
 
 
 class DecisionResult:
-    """Ergebnis eines `decide()`-Aufrufs; Kopf-Werte als Attribute abrufbar."""
+    """Result of a `decide()` call; head values accessible as attributes."""
 
     def __init__(self, text: str, latency_ms: float, head_data: dict):
         self.text = text
@@ -17,10 +17,10 @@ class DecisionResult:
     def __getattr__(self, name: str):
         if name in self.data:
             return self.data[name]["value"]
-        raise AttributeError(f"Kopf '{name}' existiert nicht im Ergebnis.")
+        raise AttributeError(f"Head '{name}' does not exist in this result.")
 
     def details(self, name: str) -> dict:
-        """Vollständiges Ergebnis-Dict eines einzelnen Kopfs."""
+        """Full result dict of a single head."""
         return self.data.get(name, {})
 
     def __repr__(self):
@@ -29,10 +29,10 @@ class DecisionResult:
 
 
 class DecisionEngine:
-    """Shared-Backbone-Engine mit beliebig vielen entkoppelten Köpfen.
+    """Shared-backbone engine with any number of decoupled heads.
 
-    Der Text wird pro `decide()` genau einmal encoded; alle Köpfe evaluieren
-    danach parallel auf denselben Vektoren.
+    Each `decide()` call encodes the text exactly once; all heads then evaluate
+    on the same vectors.
     """
 
     def __init__(self, model_name: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"):
@@ -41,19 +41,19 @@ class DecisionEngine:
         self._compiled = False
 
     def add_head(self, head: BaseHead) -> "DecisionEngine":
-        """Registriert einen Kopf (fluent, verkettbar)."""
+        """Registers a head (fluent, chainable)."""
         self.heads.append(head)
         self._compiled = False
         return self
 
     def compile(self) -> None:
-        """Sammelt alle Texte aller Köpfe ein und initialisiert die Indizes."""
+        """Collects all reference texts from all heads and initializes the indexes."""
         all_texts = []
         for head in self.heads:
             all_texts.extend(head.get_reference_texts())
 
         if not all_texts:
-            raise ValueError("Keine Referenztexte vorhanden: erst Köpfe via add_head() registrieren.")
+            raise ValueError("No reference texts found: register heads via add_head() first.")
 
         self.backbone.build_vocabulary(all_texts)
 
@@ -63,18 +63,18 @@ class DecisionEngine:
         self._compiled = True
 
     def decide(self, text: str) -> DecisionResult:
-        """Encoded den Text einmal und evaluiert alle Köpfe auf den Vektoren."""
+        """Encodes the text once and evaluates all heads on the vectors."""
         if not self.heads:
-            raise ValueError("Keine Köpfe registriert: erst add_head() aufrufen.")
+            raise ValueError("No heads registered: call add_head() first.")
         if not self._compiled:
             self.compile()
 
         start = time.perf_counter()
 
-        # 1. Einmalige Vektorisierung (~10-12 ms).
+        # 1. One-time vectorization (~10-12 ms).
         encoded = self.backbone.encode(text)
 
-        # 2. Evaluation aller Köpfe (< 0.2 ms insgesamt).
+        # 2. Evaluation of all heads (< 1 ms total).
         results: dict[str, dict] = {}
         for head in self.heads:
             results[head.name] = head.evaluate(encoded)

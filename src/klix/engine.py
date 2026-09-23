@@ -119,9 +119,13 @@ class DecisionEngine:
             }
             if isinstance(h, Choice):
                 state.update({
-                    "options": {k: list(v) for k, v in h.options.items()},
+                    # Anchor lists are semantically unordered sets for the
+                    # nearest path; sort them so the hash is canonical over
+                    # insertion order (verified by test_insertion_order_
+                    # invariant — without sorting, the hash differs).
+                    "options": {k: sorted(v) for k, v in h.options.items()},
                     "keyword_boost": h.keyword_boost,
-                    "reject_anchors": list(h.reject_anchors),
+                    "reject_anchors": sorted(h.reject_anchors),
                     "label_aggregation": h.label_aggregation,
                     "label_topk": h.label_topk,
                     "keyword_boost_mode": h.keyword_boost_mode,
@@ -132,12 +136,12 @@ class DecisionEngine:
                     "bm25_k1": h.bm25_k1,
                     "bm25_b": h.bm25_b,
                     "counterexamples": {k: sorted(v) for k, v in h.counterexamples.items()},
-                    "rules": [rule.describe() for _regex, rule in h._compiled_rules],
+                    "rules": sorted(rule.describe() for _regex, rule in h._compiled_rules),
                 })
             elif isinstance(h, Score):
                 state.update({
-                    "low_anchors": list(h.low_anchors),
-                    "high_anchors": list(h.high_anchors),
+                    "low_anchors": sorted(h.low_anchors),
+                    "high_anchors": sorted(h.high_anchors),
                     "min_val": h.min_val,
                     "max_val": h.max_val,
                     "sharpness": h.sharpness,
@@ -151,9 +155,9 @@ class DecisionEngine:
                 })
             elif isinstance(h, Flag):
                 state.update({
-                    "true_anchors": list(h.true_anchors),
-                    "false_anchors": list(h.false_anchors),
-                    "neutral_anchors": list(h.neutral_anchors),
+                    "true_anchors": sorted(h.true_anchors),
+                    "false_anchors": sorted(h.false_anchors),
+                    "neutral_anchors": sorted(h.neutral_anchors),
                     "threshold": h.threshold,
                     "temp": h.temp,
                     "aggregation": h.aggregation,

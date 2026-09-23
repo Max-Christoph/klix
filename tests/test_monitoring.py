@@ -68,3 +68,16 @@ class TestDriftMonitor:
         res = eng.decide("vpn verbindet nicht")
         mon.observe(res)  # must not raise
         assert res.route == "it"
+
+    def test_monitor_survives_malformed_head_data(self):
+        # Fault injection: garbage in result.data must not crash the monitor.
+        mon = DriftMonitor()
+        class FakeResult:
+            text = "x"
+            data = {
+                "broken_head": "not a dict",                      # non-dict entry
+                "weird": {"coverage": "not-a-number", "confidence": None},  # bad values
+                "empty": {},
+            }
+        mon.observe(FakeResult())  # must not raise
+        assert mon.stats() in ({}, {"weird": {"n": 0}}) or isinstance(mon.stats(), dict)

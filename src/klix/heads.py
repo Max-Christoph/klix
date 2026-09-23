@@ -71,6 +71,14 @@ class Choice(BaseHead):
     strongly than any option, the head returns `value=None` — a "don't know"
     signal instead of a forced guess. This catches clearly out-of-domain texts;
     borderline cases still pass through (check `confidence`).
+
+    Additional knobs:
+    - `label_aggregation="topk"` pools the best `label_topk` anchors per label
+      (robust against a single lucky anchor; recommended with 4+ anchors/label).
+    - `keyword_boost_mode="coverage"` damps the keyword channel by the fraction
+      of query tokens this head's vocabulary recognizes (off-language/off-domain
+      queries stop over-boosting generic words).
+    - `reject_threshold` (a hybrid-score floor) forces `value=None` below it.
     """
 
     def __init__(
@@ -79,14 +87,24 @@ class Choice(BaseHead):
         options: dict[str, list[str]],
         keyword_boost: float = 0.5,
         reject_anchors: list[str] | None = None,
+        label_aggregation: str = "max",
+        label_topk: int = 2,
+        keyword_boost_mode: str = "fixed",
+        reject_threshold: float | None = None,
     ):
         super().__init__(name)
         self.options = options
         self.keyword_boost = keyword_boost
         self.reject_anchors = reject_anchors or []
         self.reject_matrix: np.ndarray | None = None
+        self.reject_sparse_matrix = None
+        self.label_aggregation = label_aggregation
+        self.label_topk = label_topk
+        self.keyword_boost_mode = keyword_boost_mode
+        self.reject_threshold = reject_threshold
         self.flat_texts: list[str] = []
         self.label_map: list[str] = []
+        self._label_rows: dict[str, list[int]] = {}
         self.dense_matrix: np.ndarray | None = None
         self.sparse_matrix = None
         self.tfidf = None  # per-head vectorizer (see _make_local_vectorizer)
@@ -107,40 +125,60 @@ class Choice(BaseHead):
         self.dense_matrix = _normalize_rows(vecs)
 
         # Own vocabulary + IDF weights, scoped to this head's reference texts.
+        # Fit on options AND reject anchors so the reject pole's distinctive
+        # terms are part of the vocabulary (otherwise its sparse score is 0).
         self.tfidf = _make_local_vectorizer(getattr(backbone, "stop_words", None))
-        self.sparse_matrix = self.tfidf.fit_transform(self.flat_texts)
+        self.tfidf.fit(self.flat_texts + self.reject_anchors)
+        self.sparse_matrix = self.tfidf.transform(self.flat_texts)
         # Cache vocabulary/IDF for the hand-rolled query vectorizer in evaluate().
         self._vocab = self.tfidf.vocabulary_
         self._idf = self.tfidf.idf_
+        # Group row indices by label (for label pooling).
+        self._label_rows = {}
+        for row, label in enumerate(self.label_map):
+            self._label_rows.setdefault(label, []).append(row)
 
         if self.reject_anchors:
             r_v = np.array(list(backbone.embed_model.embed(self.reject_anchors)))
             self.reject_matrix = _normalize_rows(r_v)
+            # Sparse vectors for the reject anchors too, so the reject pole can
+            # be scored on the same hybrid scale as the options (see evaluate).
+            self.reject_sparse_matrix = self.tfidf.transform(self.reject_anchors)
         else:
             self.reject_matrix = None
+            self.reject_sparse_matrix = None
 
-    def _sparse_query_vec(self, text: str):
+    def _sparse_query_vec(self, text: str) -> tuple[dict[int, float] | None, float]:
         """TF-IDF vector for `text` using this head's cached vocabulary/IDF.
 
         Mirrors sklearn's TfidfVectorizer (word ngrams=(1,1), sublinear_tf=False,
         L2 norm) exactly, but skips the per-query sklearn call overhead (~0.5 ms).
+
+        Returns ``(vec, coverage)`` where ``coverage`` is the fraction of the
+        query's tokens this head's vocabulary recognizes (0.0 for an empty or
+        fully out-of-vocabulary query, 1.0 for a fully in-vocabulary query).
         """
         import re
 
         tokens = re.findall(r"(?u)\b[\w-]+\b", text.lower())
+        if not tokens:
+            return None, 0.0
         counts: dict[int, float] = {}
+        matched = 0
         for tok in tokens:
             col = self._vocab.get(tok)
             if col is not None:  # vocabulary_ already excludes stop words
                 counts[col] = counts.get(col, 0.0) + 1.0
+                matched += 1
+        coverage = matched / len(tokens)
         if not counts:
-            return None
+            return None, coverage
         # tf * idf, then L2 normalize
         vec = {col: tf * self._idf[col] for col, tf in counts.items()}
         norm = float(np.sqrt(sum(v * v for v in vec.values())))
         if norm > 0:
             vec = {col: v / norm for col, v in vec.items()}
-        return vec
+        return vec, coverage
 
     def evaluate(self, encoded: EncodedInput) -> dict:
         dense_sims = self.dense_matrix @ encoded.dense_vec
@@ -148,7 +186,7 @@ class Choice(BaseHead):
         # Hand-rolled TF-IDF query vector (same math as sklearn, ~40x faster:
         # no per-query sklearn transform call). Dotted against the L2-normalized
         # reference matrix, the result IS cosine similarity.
-        query_vec = self._sparse_query_vec(encoded.text)
+        query_vec, query_coverage = self._sparse_query_vec(encoded.text)
         if query_vec:
             cols = np.fromiter(query_vec.keys(), dtype=np.int64)
             vals = np.fromiter(query_vec.values(), dtype=float)
@@ -160,22 +198,48 @@ class Choice(BaseHead):
         else:
             sparse_sims = np.zeros(self.sparse_matrix.shape[0])
 
-        hybrid_sims = dense_sims + self.keyword_boost * sparse_sims
+        # --- Keyword channel -----------------------------------------------
+        if self.keyword_boost_mode == "coverage":
+            # Damp the keyword channel by the fraction of query tokens the
+            # vocabulary recognizes: off-language/off-domain queries stop
+            # over-boosting generic words that happen to overlap.
+            boost = self.keyword_boost * query_coverage
+        else:  # "fixed" (default, backward compatible)
+            boost = self.keyword_boost
+        hybrid_sims = dense_sims + boost * sparse_sims
 
-        # Keep the best example similarity per label.
-        category_scores: dict[str, float] = {}
-        for idx, sim in enumerate(hybrid_sims):
-            label = self.label_map[idx]
-            if label not in category_scores or sim > category_scores[label]:
-                category_scores[label] = float(sim)
+        # --- Pool per label -------------------------------------------------
+        if self.label_aggregation == "topk":
+            # k is chosen per label, so a label with fewer anchors does not
+            # silently force all labels down to a max()-style pool.
+            category_scores = {
+                label: float(np.mean(np.sort(hybrid_sims[rows])[-min(self.label_topk, len(rows)):]))
+                for label, rows in self._label_rows.items()
+            }
+        else:  # "max" (default, backward compatible)
+            category_scores = {}
+            for idx, sim in enumerate(hybrid_sims):
+                label = self.label_map[idx]
+                if label not in category_scores or sim > category_scores[label]:
+                    category_scores[label] = float(sim)
 
         best_label = max(category_scores, key=category_scores.get)
         best_score = category_scores[best_label]
 
-        # Optional reject pole: wins against every option -> "don't know".
+        # --- Reject pole on the SAME scale as the best score -----------------
+        # The reject anchors participate in the hybrid score too (dense + the
+        # same keyword channel), so the comparison is apples-to-apples.
         reject_sim = 0.0
         if self.reject_matrix is not None:
-            reject_sim = float(np.max(self.reject_matrix @ encoded.dense_vec))
+            reject_dense = float(np.max(self.reject_matrix @ encoded.dense_vec))
+            # keyword score of the query against reject anchors
+            if query_vec:
+                reject_sparse = np.asarray(
+                    (row @ self.reject_sparse_matrix.T).todense()
+                ).ravel().max() if self.reject_sparse_matrix is not None else 0.0
+            else:
+                reject_sparse = 0.0
+            reject_sim = reject_dense + boost * reject_sparse
             if reject_sim > best_score:
                 return {
                     "value": None,
@@ -184,6 +248,16 @@ class Choice(BaseHead):
                     "scores": category_scores,
                     "reject_score": reject_sim,
                 }
+
+        # --- Score floor (reject_threshold) -----------------------------------
+        if self.reject_threshold is not None and best_score < self.reject_threshold:
+            return {
+                "value": None,
+                "score": best_score,
+                "confidence": 0.0,
+                "scores": category_scores,
+                "reject_score": reject_sim,
+            }
 
         # Margin to the runner-up as confidence calibration.
         sorted_scores = sorted(category_scores.values(), reverse=True)

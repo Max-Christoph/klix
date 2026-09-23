@@ -157,8 +157,8 @@ engine.add_head(
             # erzwungen, nicht der Semantik überlassen:
             Rule(
                 label="security",
-                pattern=r"(?i)(?:unbefugter|fremder|verdächtiger)\s+(?:login|zugriff)|"
-                        r"(?i)\badmin[- ]?(?:account|konto)\b.*(?:eingeloggt|login)",
+                pattern=r"(?i)(?:unbefugter|fremder|verdächtiger)\s+(?:login|zugriff)"
+                        r"|\badmin[- ]?(?:account|konto)\b.*(?:eingeloggt|login)",
                 mode="force",
                 name="unauthorized_login",
             ),
@@ -289,7 +289,13 @@ for ticket in tickets:
     print(f"  {res!r}")
     print(f"  route       : {res.route!r:12s}  (score={d_route['score']:.2f}, "
           f"conf={d_route['confidence']:.2f}, reject={d_route.get('reject_score', 0):.2f})")
-    print(f"  urgency     : {res.urgency:.2f}/3.0  (coverage={d_urg['coverage']:.2f})")
+    # NEU in 0.7.0: Coverage-Gate — Rausch-Scores kommen als None + raw_value.
+    # Ein CRM, das nur res.urgency liest, kann nie wieder Schrott verarbeiten.
+    if res.urgency is None:
+        print(f"  urgency     : None (Coverage-Gate: coverage={d_urg['coverage']:.2f} < 0.3, "
+              f"Rohwert {d_urg.get('raw_value')} ist Rauschen und wird NICHT durchgereicht)")
+    else:
+        print(f"  urgency     : {res.urgency:.2f}/3.0  (coverage={d_urg['coverage']:.2f})")
     print(f"  is_security : {res.is_security}  (p={d_flag['probability']:.2f}, "
           f"margin={d_flag['margin']:.2f}, coverage={d_flag['coverage']:.2f})")
     print(f"  >>> Aktion  : {action}")

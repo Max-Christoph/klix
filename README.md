@@ -117,6 +117,7 @@ Every head and the engine expose meaningful knobs:
 | `coverage` | `Score` result | Pooled similarity to the better pole; low (< ~0.3) means the score is noise |
 | `min_val` / `max_val` / `sharpness` | `Score` | Output range and sigmoid steepness |
 | `neutral_anchors` | `Flag` | Third pole for out-of-domain: returns `value=None` when it wins |
+| `aggregation` | `Flag` | `"max"` (default) or `"topk"` — topk averages the best-k anchors per pole, robust against a single noisy anchor |
 | `threshold` / `temp` | `Flag` | Decision cutoff and softmax temperature (lower = sharper) |
 | `model_name` | `DecisionEngine` | Any FastEmbed-compatible embedding model |
 | `stop_words` | `DecisionEngine` | Custom stopword list for the TF-IDF index (default: small German list) |

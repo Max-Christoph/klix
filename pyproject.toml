@@ -1,6 +1,6 @@
 [project]
 name = "klix-engine"
-version = "0.2.0"
+version = "0.2.1"
 description = "Decoupled decision heads (Choice, Score, Flag) on a shared semantic backbone - local, deterministic, no model training."
 readme = "README.md"
 requires-python = ">=3.10"

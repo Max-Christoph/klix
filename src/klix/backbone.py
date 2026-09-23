@@ -7,13 +7,23 @@ import numpy as np
 from fastembed import TextEmbedding
 from sklearn.feature_extraction.text import TfidfVectorizer
 
-# Compact German stopword list (deliberately small so domain terms keep their
-# signal; extendable via build_vocabulary(..., stop_words=...)).
-_DEFAULT_GERMAN_STOPWORDS = [
+# Compact bilingual (EN + DE) stopword list — deliberately small so domain terms
+# keep their signal. `stop_words=None` (default) uses this list, `stop_words=[]`
+# disables stopword filtering entirely, and a custom list replaces it (e.g. for
+# a third language). Extendable via DecisionEngine(stop_words=...).
+_DEFAULT_STOPWORDS = [
+    # German
     "die", "der", "das", "ein", "eine", "einer", "eines", "einem", "einen",
     "im", "in", "ist", "und", "für", "von", "mit", "an", "auf", "nach", "zu",
     "nicht", "mehr", "wird", "wie", "was", "hier", "dort",
+    # English
+    "the", "a", "an", "is", "are", "was", "were", "be", "been", "and", "for",
+    "of", "with", "to", "in", "on", "at", "do", "does", "did", "this", "that",
+    "it", "i", "you", "we", "they", "not", "have", "has", "had", "will", "can",
 ]
+
+# Backward-compatible alias (older code imported _DEFAULT_GERMAN_STOPWORDS).
+_DEFAULT_GERMAN_STOPWORDS = _DEFAULT_STOPWORDS
 
 
 @dataclass
@@ -44,7 +54,7 @@ class HybridBackbone:
     ) -> None:
         """Builds the sparse index over all reference texts registered in the heads."""
         if stop_words is None:
-            stop_words = _DEFAULT_GERMAN_STOPWORDS
+            stop_words = _DEFAULT_STOPWORDS
         self.stop_words = stop_words
         self.tfidf_vec = TfidfVectorizer(
             analyzer="word",

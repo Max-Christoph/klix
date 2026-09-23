@@ -13,10 +13,73 @@ from scipy.sparse import csr_matrix
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 
-from klix.backbone import _DEFAULT_GERMAN_STOPWORDS, EncodedInput, HybridBackbone
+from klix.backbone import _DEFAULT_STOPWORDS, EncodedInput, HybridBackbone
 
 # Sentinel class label for the optional reject class when classifier="linear".
 _REJECT_LABEL = "__klix_reject__"
+
+
+# Cheap German-signal words (umlaut-free forms included). Used by _detect_lang
+# for classifier="auto" and cross-lingual mixup — a heuristic, not a detector.
+_GERMAN_SIGNAL_WORDS = [
+    "der", "die", "das", "und", "ist", "nicht", "eine", "ein", "mit", "für",
+    "auf", "nach", "von", "im", "in", "mein", "meine", "wurde", "wird", "haben",
+    "fehlt", "kaputt", "staendig", "bricht", "startet", "konto", "rechnung",
+    "bestellung", "heizung", "gehaltsabrechnung", "urlaub", "kreditkarte",
+    "erstattung", "verschluesselt", "loesegeld", "unbekannte", "einloggt",
+    "gutschrift", "doppelt", "abgebucht", "belastet", "monat", "kueche", "tropft",
+    "wlan", "verbindet", "bildschirm", "schwarz", "zerbrochen", "tuerknauf",
+    "elternzeit", "abrechnung", "stunden", "postfach", "dateien",
+]
+
+
+def _detect_lang(text: str) -> str:
+    """Cheap language heuristic for anchor texts.
+
+    Returns "de" if the text contains German-specific characters (umlauts/sharp-s)
+    or German signal words, else "en". Used only for `classifier="auto"` and
+    cross-lingual augmentation — not a general-purpose language detector. For
+    better detection, prefer supplying `translate_fn` or keeping anchors in one
+    language.
+    """
+    low = text.lower()
+    for ch in low:
+        if ch in "äöüß":
+            return "de"
+    words = re.findall(r"(?u)\b[\w-]+\b", low)
+    for w in words:
+        if w in _GERMAN_SIGNAL_WORDS:
+            return "de"
+    return "en"
+
+
+def _cross_lingual_mixup(X: np.ndarray, y: np.ndarray, texts: list[str]) -> tuple[np.ndarray, np.ndarray]:
+    """Augments each class with midpoints between its anchors in DIFFERENT languages.
+
+    When a class has anchors in both EN and DE, the embedding-space midpoint
+    between an English and a German anchor is a point that sits between the two
+    languages — teaching the downstream probe that the class is one cloud, not
+    two language-split clouds. This is the model-free part of cross-lingual
+    augmentation (real translation still requires `translate_fn`).
+    """
+    parts_x: list[np.ndarray] = [X]
+    parts_y: list[np.ndarray] = [y]
+    groups: dict[str, list[int]] = {}
+    for i, lab in enumerate(y):
+        groups.setdefault(lab, []).append(i)
+    for lab, idxs in groups.items():
+        langs = [_detect_lang(texts[i]) for i in idxs]
+        if len(set(langs)) <= 1:  # skip: class is single-language
+            continue
+        for a, lang_a in zip(idxs, langs):
+            for b, lang_b in zip(idxs, langs):
+                if lang_a != lang_b:
+                    mid = X[a] + X[b]
+                    n = float(np.linalg.norm(mid))
+                    mid = mid / n if n > 0 else mid
+                    parts_x.append(mid.reshape(1, -1))
+                    parts_y.append(np.array([lab]))
+    return np.vstack(parts_x), np.concatenate(parts_y)
 
 
 def _augment_embeddings(
@@ -68,7 +131,7 @@ def _make_local_vectorizer(stop_words: list[str] | None) -> TfidfVectorizer:
         analyzer="word",
         token_pattern=r"(?u)\b[\w-]+\b",
         lowercase=True,
-        stop_words=stop_words if stop_words is not None else _DEFAULT_GERMAN_STOPWORDS,
+        stop_words=stop_words if stop_words is not None else _DEFAULT_STOPWORDS,
     )
 
 
@@ -137,6 +200,7 @@ class Choice(BaseHead):
         reject_threshold: float | None = None,
         classifier: str = "nearest",
         classifier_C: float = 10.0,
+        translate_fn=None,
     ):
         super().__init__(name)
         self.options = options
@@ -150,6 +214,7 @@ class Choice(BaseHead):
         self.reject_threshold = reject_threshold
         self.classifier = classifier
         self.classifier_C = classifier_C
+        self.translate_fn = translate_fn
         self._probe = None  # LogisticRegression probe when classifier="linear"
         self._probe_labels: list[str] = []
         self.flat_texts: list[str] = []
@@ -198,20 +263,55 @@ class Choice(BaseHead):
             self.reject_matrix = None
             self.reject_sparse_matrix = None
 
+        # --- Resolve classifier="auto" -> "nearest" or "linear" -----------------
+        # If anchors are mixed-language (EN+DE), the linear probe overfits to the
+        # language with more anchors; nearest-anchor is more robust there. For
+        # single-language schemas, the probe is the accuracy winner.
+        effective_classifier = self.classifier
+        if effective_classifier == "auto":
+            langs = {_detect_lang(t) for t in self.flat_texts}
+            effective_classifier = "nearest" if len(langs) > 1 else "linear"
+
         # --- Train a linear probe on the (augmented) anchor embeddings --------
         # A learned decision boundary separates overlapping class clouds far
         # better than nearest-anchor distance; with frozen embeddings this is the
         # standard few-shot approach (linear probing). Trained here, at compile
         # time, on the anchors only — inference is a single 384-dim matmul.
-        if self.classifier == "linear":
+        if effective_classifier == "linear":
             X = self.dense_matrix  # already L2-normalized rows
             y = np.array(self.label_map)
+            texts = self.flat_texts
             if self.reject_matrix is not None:
                 # Reject anchors become their own class so the probe learns a
                 # boundary against off-domain text (returns None when it wins).
                 X = np.vstack([X, self.reject_matrix])
                 y = np.concatenate([y, np.array([_REJECT_LABEL] * self.reject_matrix.shape[0])])
-            X_aug, y_aug = _augment_embeddings(X, y)
+                texts = texts + [""] * self.reject_matrix.shape[0]
+
+            # Cross-lingual augmentation: bridge language-split classes.
+            if self.translate_fn is not None:
+                # User supplied a translator: mirror each anchor to the other
+                # language and add it to the same class.
+                new_texts, new_labels = [], []
+                for text, lab in zip(texts, y):
+                    other = _detect_lang(text)
+                    target = "de" if other == "en" else "en"
+                    try:
+                        translated = self.translate_fn(text, target)
+                        if translated:
+                            new_texts.append(translated)
+                            new_labels.append(lab)
+                    except Exception:
+                        pass  # translation is best-effort; never break compile
+                if new_texts:
+                    tvecs = np.array(list(backbone.embed_model.embed(new_texts)))
+                    X = np.vstack([X, _normalize_rows(tvecs)])
+                    y = np.concatenate([y, np.array(new_labels)])
+                    texts = texts + new_texts  # keep texts aligned with X/y
+
+            # Cross-lingual mixup + standard augmentation.
+            X_cl, y_cl = _cross_lingual_mixup(X, y, texts)
+            X_aug, y_aug = _augment_embeddings(X_cl, y_cl)
             self._probe = LogisticRegression(
                 C=self.classifier_C,
                 max_iter=1000,
@@ -220,9 +320,11 @@ class Choice(BaseHead):
             )
             self._probe.fit(X_aug, y_aug)
             self._probe_labels = list(self._probe.classes_)
+            self._effective_classifier = "linear"
         else:
             self._probe = None
             self._probe_labels = []
+            self._effective_classifier = "nearest"
 
     def _sparse_query_vec(self, text: str) -> tuple[dict[int, float] | None, float]:
         """TF-IDF vector for `text` using this head's cached vocabulary/IDF.
@@ -450,13 +552,17 @@ class Score(BaseHead):
 
 
 class Flag(BaseHead):
-    """Boolean decision with calibrated probability.
+    """Boolean decision with a confidence score.
 
     Softmax over the similarities to true and false anchors; temperature controls
-    the sharpness of the decision.
+    the sharpness of the decision. The returned ``probability`` is a *softmax
+    confidence*, not a calibrated frequentist probability: with low temperature
+    it saturates near 0/1. Use ``margin`` (= |p_true - p_false|) and ``coverage``
+    (= similarity to the best-matching pole) to judge whether the decision is
+    trustworthy.
 
     Problem without a third pole: for out-of-domain texts both similarities are
-    low and close together -> probability ~0.5 and noise flips the decision.
+    low and close together -> confidence ~0.5 and noise flips the decision.
     With `neutral_anchors` a 3-class softmax is used; the head then returns
     `value=None` (instead of True/False) whenever "neutral" wins. Disabled by
     default (classic 2-class behavior).
@@ -529,6 +635,11 @@ class Flag(BaseHead):
         exp = np.exp(scaled)
         probs = exp / exp.sum()
 
+        # Trustworthiness signals: margin between the two main poles, and how
+        # strongly the text matched either pole (coverage).
+        margin = float(abs(probs[0] - probs[1]))
+        coverage = float(max(s_true, s_false))
+
         if self.neutral_matrix is not None:
             prob_true, prob_false, prob_neutral = (float(p) for p in probs)
             if prob_neutral > max(prob_true, prob_false):
@@ -536,16 +647,22 @@ class Flag(BaseHead):
                     "value": None,
                     "probability": prob_true,
                     "probabilities": {"true": prob_true, "false": prob_false, "neutral": prob_neutral},
+                    "margin": margin,
+                    "coverage": coverage,
                 }
             value = bool(prob_true >= self.threshold)
             return {
                 "value": value,
                 "probability": prob_true,
                 "probabilities": {"true": prob_true, "false": prob_false, "neutral": prob_neutral},
+                "margin": margin,
+                "coverage": coverage,
             }
 
         prob = float(probs[0])
         return {
             "value": bool(prob >= self.threshold),
             "probability": prob,
+            "margin": margin,
+            "coverage": coverage,
         }

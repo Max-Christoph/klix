@@ -116,8 +116,11 @@ class TestScore:
         assert result.urgency <= 1.5
 
     def test_score_within_bounds(self, engine):
+        # Since 0.7.0 the coverage gate can return None for off-axis texts;
+        # on-axis texts must stay within bounds.
         for text in ["emergency!!", "boring question", "server on fire"]:
-            assert 0.0 <= engine.decide(text).urgency <= 3.0
+            v = engine.decide(text).urgency
+            assert v is None or 0.0 <= v <= 3.0
 
 
 class TestFlag:

@@ -133,7 +133,12 @@ class TestDecideBatch:
         for text, res in zip(texts, batch):
             single = eng.decide(text)
             assert res.route == single.route
-            assert abs(res.urgency - single.urgency) < 1e-6
+            # Both may be None (coverage gate) or equal numbers.
+            if single.urgency is None:
+                assert res.urgency is None
+            else:
+                assert res.urgency is not None
+                assert abs(res.urgency - single.urgency) < 1e-6
 
     def test_batch_empty_list(self):
         eng = self._build()

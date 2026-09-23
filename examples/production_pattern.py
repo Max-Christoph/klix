@@ -1,4 +1,4 @@
-"""klix-engine 0.6.0 - Kompletter Überblick in einer Datei.
+"""klix-engine 0.7.0 - Kompletter Überblick in einer Datei.
 
 Ausführen:
     pip install klix-engine   (bzw. uv pip install klix-engine)
@@ -7,16 +7,16 @@ Ausführen:
 Das Skript zeigt alle Köpfe (Choice, Score, Flag), alle wichtigen Parameter
 und die typischen Nutzungsmuster -- direkt lauffähig, vollständig kommentiert.
 
-Neu in 0.4.0 (Abschnitte 8-10):
-  - Regeln (force/boost) als harte Signale über der Semantik
-  - res.explain(): welche Wörter/Anchors haben entschieden?
-  - engine.calibrate(): Schwellenwerte aus Beispielen lernen statt raten
+Neu in 0.4.0:
+  - Regeln (force/boost), res.explain(), engine.calibrate()
 Neu in 0.5.0:
-  - erweiterte Stoppwörter (Füllwörter wie "den/hat" überschreiben nichts mehr)
-  - decide_batch(): Bulk-Verarbeitung mit einem Embedding-Pass
-  - CV-Kalibrierung (k-fold, median über Folds)
-Neu in 0.6.0 (Abschnitt 11):
-  - engine.validate_anchors(): Klassen-Overlap-Report mit Schärfungsvorschlägen
+  - erweiterte Stoppwörter, decide_batch(), CV-Kalibrierung
+Neu in 0.6.0:
+  - engine.validate_anchors(): Klassen-Overlap-Report
+Neu in 0.7.0 (Enterprise-Hardening):
+  - Score min_coverage-Gate: Rausch-Scores liefern value=None (+raw_value)
+  - Kalibrierung warnt laut (UserWarning) bei n < 20
+  - Höflichkeits-Füllwörter (bitte/please/danke/thanks) gefiltert
 """
 
 import time
@@ -149,6 +149,18 @@ engine.add_head(
                 pattern=r"(?i)\b(?:ransomware|phishing|hacker)\b",
                 mode="force",
                 name="security_keywords",
+            ),
+            # K1-Fix (Enterprise-Pattern): unbefugte Login-Versuche sind IMMER
+            # Security, egal welche semantische Brücke das Embedding schlägt
+            # (der "admin account"-Fall lief sonst Gefahr, über "Konto" bei
+            # billing zu landen). Kritische Muster gehören deterministisch
+            # erzwungen, nicht der Semantik überlassen:
+            Rule(
+                label="security",
+                pattern=r"(?i)(?:unbefugter|fremder|verdächtiger)\s+(?:login|zugriff)|"
+                        r"(?i)\badmin[- ]?(?:account|konto)\b.*(?:eingeloggt|login)",
+                mode="force",
+                name="unauthorized_login",
             ),
             # Asset-IDs (plc-xx) sind immer technisch:
             Rule(

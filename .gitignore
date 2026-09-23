@@ -16,3 +16,6 @@ venv/
 # IDE
 .idea/
 .vscode/
+
+# Hermes planning artifacts (internal working files, not part of the package)
+.hermes/

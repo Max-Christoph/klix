@@ -74,6 +74,7 @@ class TestScoreCoverageGate:
             high_anchors=["production line down, immediate help", "critical outage right now"],
             min_val=0.0, max_val=3.0,
             min_coverage=min_coverage,
+            soft_coverage=False,  # v0.7.x hard-gate contract under test here
         ))
         eng.compile()
         return eng

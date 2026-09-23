@@ -21,6 +21,38 @@ from klix.rules import Rule, compile_rules
 _REJECT_LABEL = "__klix_reject__"
 
 
+def _bootstrap_ci(probs, y, threshold, metric_fn, n_boot: int = 300) -> tuple[float, float]:
+    """Bootstrap 95% confidence interval for a classification metric.
+
+    Resamples the (probability, label) pairs with replacement and recomputes
+    the metric at the fixed threshold. On tiny samples the point estimate can
+    be perfect (F1=1.0 with n=8) while the honest range is much wider — this
+    function surfaces that range instead of illusory precision.
+    """
+    rng = np.random.default_rng(42)  # deterministic for reproducible reports
+    n = len(y)
+    if n < 4:
+        return (0.0, 1.0)  # too small to bootstrap honestly — full range
+    metrics = []
+    for _ in range(n_boot):
+        idx = rng.integers(0, n, size=n)
+        p_sample, y_sample = probs[idx], y[idx]
+        if len(set(y_sample)) < 2:
+            continue  # degenerate resample without both classes
+        metrics.append(metric_fn(p_sample, y_sample, threshold))
+    if not metrics:
+        return (0.0, 1.0)
+    metrics = sorted(metrics)
+    lo = metrics[int(0.025 * len(metrics))]
+    hi = metrics[min(len(metrics) - 1, int(0.975 * len(metrics)))]
+    # Tiny-sample honesty (n < 8): even a perfect resample distribution must
+    # not present a razor-thin CI. The lower bound is floored so the report
+    # stays honest about the statistical uncertainty of a 4-sample estimate.
+    if n < 8:
+        lo = min(lo, 0.5)
+    return (round(float(lo), 4), round(float(hi), 4))
+
+
 # Cheap German-signal words (umlaut-free forms included). Used by _detect_lang
 # for classifier="auto" and cross-lingual mixup — a heuristic, not a detector.
 _GERMAN_SIGNAL_WORDS = [
@@ -144,10 +176,33 @@ class BaseHead(ABC):
     1. `get_reference_texts()` — collects reference texts for the TF-IDF index.
     2. `fit(backbone)` — precomputes all reference vectors (once).
     3. `evaluate(encoded)` — evaluates per query, target < 0.1 ms.
+
+    Head gating (v0.8.0): pass ``suppress_when={other_head: {values}}`` to make
+    this head conditional on another head's result — when the named head's
+    value is in the set, this head returns ``value=None`` with a
+    ``suppressed_by`` marker instead of computing. Example: an urgency Score
+    with ``suppress_when={"route": {"not_relevant"}}`` never emits a misleading
+    "urgent" number for tickets that were classified as irrelevant.
     """
 
-    def __init__(self, name: str):
+    def __init__(self, name: str, suppress_when: dict[str, set | list] | None = None):
         self.name = name
+        self.suppress_when: dict[str, set] = {
+            k: set(v) for k, v in (suppress_when or {}).items()
+        }
+
+    def is_suppressed(self, prior_results: dict) -> bool:
+        """True if any suppression condition matches already-computed heads.
+
+        ``None`` inside a value set matches "that head declined" (its value
+        is None) — useful for "only compute X if Y was confident".
+        """
+        for head_name, values in self.suppress_when.items():
+            other = prior_results.get(head_name)
+            v = other.get("value") if isinstance(other, dict) else other
+            if v in values or (v is None and None in values):
+                return True
+        return False
 
     @abstractmethod
     def get_reference_texts(self) -> list[str]:
@@ -206,21 +261,40 @@ class Choice(BaseHead):
         reject_threshold: float | None = None,
         classifier: str = "nearest",
         classifier_C: float = 10.0,
+        sparse_metric: str = "tfidf",
+        bm25_k1: float = 1.5,
+        bm25_b: float = 0.75,
         translate_fn=None,
         rules: list[Rule] | None = None,
+        suppress_when: dict[str, set | list] | None = None,
     ):
-        super().__init__(name)
+        super().__init__(name, suppress_when=suppress_when)
         self.options = options
         self.keyword_boost = keyword_boost
         self.reject_anchors = reject_anchors or []
+        # Hard-negative counterexamples (D.3): label -> texts that must NOT
+        # pull similarity credit for that label. Filled via
+        # add_counterexamples() from the hard-negative mining workflow.
+        self.counterexamples: dict[str, list[str]] = {}
         self.reject_matrix: np.ndarray | None = None
         self.reject_sparse_matrix = None
+        self._ce_matrix: np.ndarray | None = None
+        self._ce_labels: list[str] = []
+        self._ce_sparse = None
         self.label_aggregation = label_aggregation
         self.label_topk = label_topk
         self.keyword_boost_mode = keyword_boost_mode
         self.reject_threshold = reject_threshold
         self.classifier = classifier
         self.classifier_C = classifier_C
+        # Sparse channel metric (v0.8.0): "tfidf" (default, backward compatible)
+        # or "bm25" ( Robertson/Sparck-Jones scoring with length normalization;
+        # often stronger when anchor lengths vary a lot).
+        if sparse_metric not in ("tfidf", "bm25"):
+            raise ValueError(f"sparse_metric must be 'tfidf' or 'bm25', got {sparse_metric!r}")
+        self.sparse_metric = sparse_metric
+        self.bm25_k1 = bm25_k1
+        self.bm25_b = bm25_b
         self.translate_fn = translate_fn
         self.rules = rules or []
         self._compiled_rules: list = []
@@ -235,7 +309,23 @@ class Choice(BaseHead):
 
     def get_reference_texts(self) -> list[str]:
         texts = [text for examples in self.options.values() for text in examples]
-        return texts + self.reject_anchors
+        return texts + self.reject_anchors + [t for exs in self.counterexamples.values() for t in exs]
+
+    def add_counterexamples(self, label: str, texts: list[str]) -> None:
+        """Adds hard-negative texts for one label (D.3 mining workflow).
+
+        A counterexample text must NOT grant similarity credit for `label`.
+        Raises at compile() time if the label is unknown (typo guard, same as
+        rules). Call compile() again after adding.
+        """
+        if label not in self.options:
+            raise ValueError(
+                f"add_counterexamples: unknown label {label!r}; known: {sorted(self.options)}"
+            )
+        bucket = self.counterexamples.setdefault(label, [])
+        for text in texts:
+            if text not in bucket:
+                bucket.append(text)
 
     def fit(self, backbone: HybridBackbone) -> None:
         self.flat_texts = []
@@ -257,6 +347,62 @@ class Choice(BaseHead):
         # Cache vocabulary/IDF for the hand-rolled query vectorizer in evaluate().
         self._vocab = self.tfidf.vocabulary_
         self._idf = self.tfidf.idf_
+
+        # --- BM25 statistics (sparse_metric="bm25") --------------------------
+        # BM25 scores are computed against the anchor documents directly (not
+        # TF-IDF rows): idfBM25 * (tf*(k1+1)) / (tf + k1*(1-b+b*dl/avgdl)).
+        # The anchor-side score matrix is dense-shaped per (anchor, vocab-col)
+        # pair it contains; query-side weights are plain idfBM25 per term.
+        if self.sparse_metric == "bm25":
+            n_docs = self.sparse_matrix.shape[0]
+            # Document lengths in tokens (same tokenizer as the vectorizer).
+            import re as _re
+            doc_tokens = [_re.findall(r"(?u)\b[\w-]+\b", t.lower()) for t in self.flat_texts]
+            doc_lens = np.array([len(toks) for toks in doc_tokens], dtype=float)
+            avgdl = float(doc_lens.mean()) if n_docs else 1.0
+            # Real document frequency per vocab column:
+            df_counts = np.zeros(len(self._vocab))
+            for toks in doc_tokens:
+                for col in {self._vocab[w] for w in toks if w in self._vocab}:
+                    df_counts[col] += 1.0
+            idf_bm25 = np.log((n_docs - df_counts + 0.5) / (df_counts + 0.5) + 1.0)
+            self._bm25_idf = idf_bm25
+            self._bm25_avgdl = avgdl
+            self._bm25_k1 = self.bm25_k1
+            self._bm25_b = self.bm25_b
+            # Precompute anchor-side BM25 weight matrix (dense, vocab is small).
+            tf = np.asarray(self.sparse_matrix.todense())  # (n_docs, vocab)
+            denom = tf + self.bm25_k1 * (1.0 - self.bm25_b + self.bm25_b * (doc_lens[:, None] / avgdl))
+            anchor_bm25 = idf_bm25[None, :] * (tf * (self.bm25_k1 + 1.0)) / np.where(denom == 0, 1.0, denom)
+            # BM25 scores are unbounded; normalize rows to unit L2 so the
+            # hybrid scale stays comparable with the dense cosine channel.
+            self._bm25_anchor_matrix = anchor_bm25 / np.where(
+                np.linalg.norm(anchor_bm25, axis=1, keepdims=True) == 0, 1.0,
+                np.linalg.norm(anchor_bm25, axis=1, keepdims=True),
+            )
+        else:
+            self._bm25_anchor_matrix = None
+
+        # --- Hard-negative counterexamples (D.3) -----------------------------
+        # One dense + sparse pole per counterexample text, grouped by label.
+        # evaluate() subtracts a penalty from a label's score when the query
+        # is close to one of its counterexamples.
+        if self.counterexamples:
+            ce_texts: list[str] = []
+            ce_labels: list[str] = []
+            for label, exs in self.counterexamples.items():
+                for ex in exs:
+                    ce_texts.append(ex)
+                    ce_labels.append(label)
+            ce_v = np.array(list(backbone.embed_model.embed(ce_texts)))
+            self._ce_matrix = _normalize_rows(ce_v)
+            self._ce_labels = ce_labels
+            self._ce_sparse = self.tfidf.transform(ce_texts)
+        else:
+            self._ce_matrix = None
+            self._ce_labels = []
+            self._ce_sparse = None
+
         # Group row indices by label (for label pooling).
         self._label_rows = {}
         for row, label in enumerate(self.label_map):
@@ -298,7 +444,11 @@ class Choice(BaseHead):
         # better than nearest-anchor distance; with frozen embeddings this is the
         # standard few-shot approach (linear probing). Trained here, at compile
         # time, on the anchors only — inference is a single 384-dim matmul.
-        if effective_classifier == "linear":
+        # classifier="hybrid" (v0.8.0): the probe learns on CONCATENATED
+        # [dense | tfidf] features instead of dense-only, so the dense/sparse
+        # weighting is learned from the anchors rather than hand-tuned via
+        # keyword_boost. Inference cost stays tiny (one matmul over 384+V dims).
+        if effective_classifier in ("linear", "hybrid"):
             X = self.dense_matrix  # already L2-normalized rows
             y = np.array(self.label_map)
             texts = self.flat_texts
@@ -339,13 +489,51 @@ class Choice(BaseHead):
                 solver="lbfgs",
                 class_weight="balanced",
             )
-            self._probe.fit(X_aug, y_aug)
+            if effective_classifier == "hybrid":
+                # Concatenate the head's own TF-IDF features to the dense side.
+                # Sparse rows come from the ORIGINAL anchor texts (not from
+                # embedding-space augmentation), so the keyword channel stays
+                # honest: the probe learns its weight from real word hits.
+                # Mixup midpoints / noised vectors are dense-space artifacts
+                # without an honest sparse counterpart, so the hybrid path
+                # trains on X_cl (original + cross-lingual rows) and adds
+                # zero sparse rows for dense-only extras.
+                from scipy.sparse import vstack as sp_vstack, csr_matrix as _csr
+
+                S = self.tfidf.transform(texts)  # reject rows: empty text -> zero row
+                if X_cl.shape[0] == len(texts):
+                    S_cl = S
+                else:
+                    n_extra = X_cl.shape[0] - len(texts)
+                    S_extra = _csr((n_extra, S.shape[1]))
+                    S_cl = sp_vstack([S, S_extra]).tocsr()
+                self._dense_dim = X_cl.shape[1]
+                X_comb = np.hstack([X_cl, np.asarray(S_cl.todense())])
+                X_comb = self._hybrid_augment(X_comb)
+                self._probe.fit(X_comb, y_cl)
+            else:
+                self._probe.fit(X_aug, y_aug)
             self._probe_labels = list(self._probe.classes_)
-            self._effective_classifier = "linear"
+            self._effective_classifier = effective_classifier
         else:
             self._probe = None
             self._probe_labels = []
             self._effective_classifier = "nearest"
+
+    @staticmethod
+    def _hybrid_augment(X: np.ndarray) -> np.ndarray:
+        """Adds small Gaussian noise to the DENSE half of hybrid feature rows.
+
+        The sparse half stays untouched: injecting noise there would invent
+        phantom keyword hits that no real query would produce.
+        """
+        split = 384  # embedding dim of the backbone (dense part comes first)
+        rng = np.random.RandomState(42)
+        X_noise = X.copy()
+        X_noise[:, :split] += rng.normal(0.0, 0.01, (X.shape[0], split))
+        norms = np.linalg.norm(X_noise[:, :split], axis=1, keepdims=True)
+        X_noise[:, :split] = X_noise[:, :split] / np.where(norms == 0, 1.0, norms)
+        return X_noise
 
     def _sparse_query_vec(self, text: str) -> tuple[dict[int, float] | None, float]:
         """TF-IDF vector for `text` using this head's cached vocabulary/IDF.
@@ -376,6 +564,16 @@ class Choice(BaseHead):
         if norm > 0:
             vec = {col: v / norm for col, v in vec.items()}
         return vec, coverage
+
+    def _raw_query_counts(self, text: str) -> dict[int, float]:
+        """Raw in-vocabulary token counts (BM25 query side helper)."""
+        tokens = re.findall(r"(?u)\b[\w-]+\b", text.lower())
+        counts: dict[int, float] = {}
+        for tok in tokens:
+            col = self._vocab.get(tok)
+            if col is not None:
+                counts[col] = counts.get(col, 0.0) + 1.0
+        return counts
 
     def _apply_rules(self, encoded: EncodedInput, result: dict, clip_to: float | None = None) -> dict:
         """Applies compiled rules to a finished result dict (in place).
@@ -569,10 +767,22 @@ class Choice(BaseHead):
                         "matched_rules": [rule.describe()],
                     }
 
-        # --- Linear-probe path (classifier="linear") -------------------------
+        # --- Linear-probe path (classifier="linear"/"hybrid") -----------------
         if self._probe is not None:
-            # Single matmul + softmax over the probe; dense only, microseconds.
-            probs = self._probe.predict_proba(encoded.dense_vec.reshape(1, -1))[0]
+            # Single matmul + softmax over the probe; microseconds.
+            if self._effective_classifier == "hybrid":
+                # Hybrid: build the query's [dense | tfidf] feature row using
+                # the SAME vectorizer the probe was trained on.
+                query_vec, _cov = self._sparse_query_vec(encoded.text)
+                sparse_part = np.zeros(X_comb_dim := (self._probe.n_features_in_ - encoded.dense_vec.shape[0]))
+                if query_vec:
+                    for col, val in query_vec.items():
+                        if col < sparse_part.shape[0]:
+                            sparse_part[col] = val
+                features = np.concatenate([encoded.dense_vec, sparse_part]).reshape(1, -1)
+                probs = self._probe.predict_proba(features)[0]
+            else:
+                probs = self._probe.predict_proba(encoded.dense_vec.reshape(1, -1))[0]
             label_probs = dict(zip(self._probe_labels, probs))
             best_label = max(label_probs, key=label_probs.get)
             best_prob = label_probs[best_label]
@@ -603,6 +813,9 @@ class Choice(BaseHead):
         # Hand-rolled TF-IDF query vector (same math as sklearn, ~40x faster:
         # no per-query sklearn transform call). Dotted against the L2-normalized
         # reference matrix, the result IS cosine similarity.
+        # sparse_metric="bm25": the query's raw term counts are scored against
+        # the precomputed BM25 anchor matrix instead (query side: idfBM25 per
+        # matched term; anchor side: length-normalized tf saturation).
         query_vec, query_coverage = self._sparse_query_vec(encoded.text)
         if query_vec:
             cols = np.fromiter(query_vec.keys(), dtype=np.int64)
@@ -611,7 +824,16 @@ class Choice(BaseHead):
                 (vals, (np.zeros(len(cols), dtype=int), cols)),
                 shape=(1, len(self._vocab)),
             )
-            sparse_sims = np.asarray((row @ self.sparse_matrix.T).todense()).ravel()
+            if self.sparse_metric == "bm25" and self._bm25_anchor_matrix is not None:
+                # BM25: query side is a term SET (idf-weighted); tf saturation
+                # happens on the anchor side (baked into _bm25_anchor_matrix).
+                qvec_raw = self._raw_query_counts(encoded.text)
+                bm25_query = np.zeros(len(self._vocab))
+                for col in qvec_raw:
+                    bm25_query[col] = self._bm25_idf[col]
+                sparse_sims = self._bm25_anchor_matrix @ bm25_query
+            else:
+                sparse_sims = np.asarray((row @ self.sparse_matrix.T).todense()).ravel()
         else:
             sparse_sims = np.zeros(self.sparse_matrix.shape[0])
 
@@ -643,6 +865,40 @@ class Choice(BaseHead):
         best_label = max(category_scores, key=category_scores.get)
         best_score = category_scores[best_label]
 
+        # --- Hard-negative penalty (D.3) --------------------------------------
+        # Query close to a counterexample of label X => penalize X's score.
+        # The penalty is a scaled similarity to the counterexample pole so it
+        # moves decisions only when the overlap is real.
+        ce_applied = False
+        if self._ce_matrix is not None and category_scores:
+            ce_dense = self._ce_matrix @ encoded.dense_vec
+            if query_vec:
+                ce_sparse = np.asarray(
+                    (row @ self._ce_sparse.T).todense()
+                ).ravel()
+            else:
+                ce_sparse = np.zeros(self._ce_matrix.shape[0])
+            ce_hybrid = ce_dense + boost * ce_sparse
+            for label in list(category_scores):
+                rows = [i for i, lab in enumerate(self._ce_labels) if lab == label]
+                if not rows:
+                    continue
+                penalty = float(np.max(ce_hybrid[rows]))
+                # A counterexample only bites when it actually matches the
+                # query (similarity > 0); the penalty scales with the match.
+                if penalty > 0.0:
+                    category_scores[label] = category_scores[label] - penalty
+                    ce_applied = True
+
+        best_label = max(category_scores, key=category_scores.get)
+        best_score = category_scores[best_label]
+        if ce_applied:
+            # Re-normalize penalized scores so they never go below zero
+            # (keeps the hybrid scale comparable with the reject pole).
+            category_scores = {k: max(0.0, v) for k, v in category_scores.items()}
+            best_label = max(category_scores, key=category_scores.get)
+            best_score = category_scores[best_label]
+
         # --- Reject pole on the SAME scale as the best score -----------------
         # The reject anchors participate in the hybrid score too (dense + the
         # same keyword channel), so the comparison is apples-to-apples.
@@ -651,9 +907,21 @@ class Choice(BaseHead):
             reject_dense = float(np.max(self.reject_matrix @ encoded.dense_vec))
             # keyword score of the query against reject anchors
             if query_vec:
-                reject_sparse = np.asarray(
-                    (row @ self.reject_sparse_matrix.T).todense()
-                ).ravel().max() if self.reject_sparse_matrix is not None else 0.0
+                if self.sparse_metric == "bm25" and self._bm25_anchor_matrix is not None:
+                    # BM25 reject pole: score reject anchors with the same
+                    # BM25 statistics; the reject rows sit after the option
+                    # rows in the anchor matrix.
+                    qvec_raw = self._raw_query_counts(encoded.text)
+                    bm25_query = np.zeros(len(self._vocab))
+                    for col in qvec_raw:
+                        bm25_query[col] = self._bm25_idf[col]
+                    n_real = self.sparse_matrix.shape[0]
+                    reject_rows = self._bm25_anchor_matrix[n_real:]
+                    reject_sparse = float(np.max(reject_rows @ bm25_query)) if reject_rows.shape[0] else 0.0
+                else:
+                    reject_sparse = np.asarray(
+                        (row @ self.reject_sparse_matrix.T).todense()
+                    ).ravel().max() if self.reject_sparse_matrix is not None else 0.0
             else:
                 reject_sparse = 0.0
             reject_sim = reject_dense + boost * reject_sparse
@@ -719,8 +987,10 @@ class Score(BaseHead):
         topk: int = 2,
         min_coverage: float | None = 0.3,
         fallback_value: float | None = None,
+        suppress_when: dict[str, set | list] | None = None,
+        soft_coverage: bool = True,
     ):
-        super().__init__(name)
+        super().__init__(name, suppress_when=suppress_when)
         self.low_anchors = low_anchors
         self.high_anchors = high_anchors
         self.min_val = min_val
@@ -739,6 +1009,10 @@ class Score(BaseHead):
         # (default) keeps the strict "don't pass noise" contract; set a number
         # for pipelines (Jira/Salesforce) that cannot handle None.
         self.fallback_value = fallback_value
+        # Soft coverage (v0.8.0): shrink uncertain scores toward the axis
+        # midpoint instead of a hard None-cliff (see evaluate). Default True;
+        # pass False for the v0.7.x hard-gate contract.
+        self.soft_coverage = soft_coverage
         self._calib_a: float | None = None
         self._calib_b: float | None = None
         self.low_matrix: np.ndarray | None = None
@@ -777,10 +1051,46 @@ class Score(BaseHead):
 
         coverage = float(max(s_low, s_high))
 
-        # Coverage gate (v0.7.0): below min_coverage the projection is noise —
-        # the text did not resemble either pole. Return None as the value and
-        # keep the raw projection under "raw_value" for inspection. Downstream
-        # systems reading only "value" can never mistake noise for a score.
+        # Confidence label (v0.8.0): honest three-level signal instead of a
+        # binary None/number cliff. Thresholds are calibrated so that
+        # HIGH = clearly on-axis, LOW = mostly noise.
+        gate = self.min_coverage if self.min_coverage is not None else 0.3
+        if coverage >= 0.55:
+            confidence = "HIGH"
+        elif coverage >= gate:
+            confidence = "MEDIUM"
+        else:
+            confidence = "LOW"
+
+        # Soft coverage (v0.8.0): instead of a hard None-cliff at min_coverage,
+        # uncertain scores are shrunk toward the axis midpoint (Bayesian-style
+        # prior). alpha rises continuously with coverage:
+        #   score_final = alpha * score_raw + (1 - alpha) * midpoint
+        # With soft_coverage=True the head NEVER returns None for on-axis-ish
+        # texts — a single extra word can no longer flip a ticket between
+        # "1.6" and "None". The confidence field still tells downstream systems
+        # how much to trust the number. The hard gate (v0.7.0 behavior) stays
+        # available via soft_coverage=False.
+        if self.soft_coverage:
+            prior = (self.min_val + self.max_val) / 2.0
+            if coverage >= 0.55:
+                alpha = 1.0
+            else:
+                # linear ramp: 0 at coverage=0 .. 1 at coverage=0.55
+                alpha = float(np.clip(coverage / 0.55, 0.0, 1.0))
+            final = alpha * float(calculated_score) + (1.0 - alpha) * prior
+            return {
+                "value": round(min(max(final, self.min_val), self.max_val), 2),
+                "raw_value": round(float(calculated_score), 2),
+                "alpha": round(alpha, 3),
+                "confidence": confidence,
+                "raw_diff": diff,
+                "coverage": coverage,
+            }
+
+        # Hard gate (v0.7.0 legacy contract): below min_coverage the projection
+        # is noise — the text did not resemble either pole. Return None as the
+        # value and keep the raw projection under "raw_value" for inspection.
         # With fallback_value set (v0.7.2), pipelines that cannot handle None
         # (Jira/Salesforce connectors) receive that default instead.
         if self.min_coverage is not None and coverage < self.min_coverage:
@@ -789,11 +1099,13 @@ class Score(BaseHead):
                 "raw_value": round(float(calculated_score), 2),
                 "raw_diff": diff,
                 "coverage": coverage,
+                "confidence": confidence,
                 "below_coverage": True,
             }
 
         return {
             "value": round(float(calculated_score), 2),
+            "confidence": confidence,
             "raw_diff": diff,
             "coverage": coverage,
         }
@@ -906,8 +1218,9 @@ class Flag(BaseHead):
         neutral_anchors: list[str] | None = None,
         aggregation: str = "max",
         topk: int = 2,
+        suppress_when: dict[str, set | list] | None = None,
     ):
-        super().__init__(name)
+        super().__init__(name, suppress_when=suppress_when)
         self.true_anchors = true_anchors
         self.false_anchors = false_anchors
         self.threshold = threshold
@@ -1086,8 +1399,14 @@ class Flag(BaseHead):
                 if n < 8:
                     warning = (f"only {n} samples with cv={len(fold_t)}; "
                                f"threshold estimate is rough, prefer 8+")
+                # Bootstrap 95% confidence interval for the metric (v0.8.0):
+                # a point estimate like "F1 = 1.00" on tiny samples is illusory;
+                # resample the held-out fold predictions to show the honest
+                # range the user should expect.
+                ci = _bootstrap_ci(probs, y, self.threshold, metric_value, n_boot=min(300, 50 * n))
                 return {"threshold": self.threshold, "metric": metric,
                         "value": round(float(np.mean(fold_v)), 4),
+                        "ci95": ci,
                         "n": n, "cv": len(fold_t), "spread": round(spread, 4),
                         "warning": warning}
 
@@ -1097,7 +1416,9 @@ class Flag(BaseHead):
         warning = None
         if n < 8:
             warning = f"only {n} samples; threshold estimate is rough, prefer 8+"
+        ci = _bootstrap_ci(probs, y, best_t, metric_value, n_boot=min(300, 50 * max(1, n)))
         return {"threshold": best_t, "metric": metric, "value": round(best_v, 4),
+                "ci95": ci,
                 "n": n, "cv": None, "spread": None, "warning": warning}
 
     @staticmethod

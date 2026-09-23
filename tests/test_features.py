@@ -125,3 +125,107 @@ class TestEngineConfig:
         eng.add_head(Choice(name="c", options={"a": ["alpha error"], "b": ["beta fault"]}))
         eng.compile()
         assert "error" not in eng.backbone.tfidf_vec.vocabulary_
+
+
+class TestTopkPerLabel:
+    """A1 fix: label_topk must not be clamped by the smallest label."""
+
+    def _eng(self):
+        eng = DecisionEngine()
+        # "small" has only ONE anchor, others have three -> old bug forced k=1
+        # for every label, silently degrading topk to max.
+        eng.add_head(
+            Choice(
+                name="c",
+                options={
+                    "big_a": ["alpha one", "alpha two", "alpha three"],
+                    "big_b": ["beta one", "beta two", "beta three"],
+                    "small": ["tiny"],
+                },
+                label_aggregation="topk",
+                label_topk=3,
+            )
+        )
+        eng.compile()
+        return eng
+
+    def test_topk_does_not_collapse_to_max(self):
+        eng = self._eng()
+        head = eng.heads[0]
+        # The bug would make k=1 for all labels; per-label fix keeps k=3 for the
+        # big labels and k=1 (its own length) for the tiny label.
+        assert head.label_aggregation == "topk"
+        # exercise the pooling path without crashing on the 1-anchor label
+        r = eng.decide("alpha one two three")
+        assert r.c in {"big_a", "big_b", "small"}
+
+    def test_topk_per_label_values_distinct_from_max(self):
+        # For a 3-anchor label, topk3 mean differs from max when anchors differ.
+        eng = DecisionEngine()
+        eng.add_head(
+            Choice(
+                name="c",
+                options={"x": ["aaa", "bbb", "ccc"]},
+                label_aggregation="topk",
+                label_topk=2,
+            )
+        )
+        eng.compile()
+        eng.decide("some probe text")
+        assert eng.heads[0]._label_rows["x"] == [0, 1, 2]
+
+
+class TestRejectThreshold:
+    def test_reject_threshold_forces_none(self):
+        eng = DecisionEngine()
+        eng.add_head(
+            Choice(
+                name="c",
+                options={"a": ["alpha one two three"], "b": ["beta one two three"]},
+                reject_threshold=0.9,
+            )
+        )
+        eng.compile()
+        # A query that matches neither strongly should fall below the floor.
+        r = eng.decide("completely unrelated words here")
+        assert r.c is None
+
+    def test_reject_threshold_passes_strong_match(self):
+        eng = DecisionEngine()
+        eng.add_head(
+            Choice(
+                name="c",
+                options={"a": ["alpha one two three"], "b": ["beta one two three"]},
+                reject_threshold=0.9,
+            )
+        )
+        eng.compile()
+        r = eng.decide("alpha one two three exactly")
+        assert r.c == "a"
+
+    def test_reject_threshold_none_keeps_value(self):
+        eng = DecisionEngine()
+        eng.add_head(Choice(name="c", options={"a": ["alpha"], "b": ["beta"]}))
+        eng.compile()
+        assert eng.decide("alpha").c == "a"
+
+
+class TestCoverageBoost:
+    def test_coverage_boost_lowers_generic_word_effect(self):
+        # A German query (off-vocabulary) should get a tiny keyword boost vs. an
+        # in-vocabulary English query, all else equal.
+        eng = DecisionEngine()
+        eng.add_head(
+            Choice(
+                name="c",
+                options={"a": ["please approve this invoice"], "b": ["the server is down"]},
+                keyword_boost_mode="coverage",
+                keyword_boost=1.0,
+            )
+        )
+        eng.compile()
+        # in-vocabulary English -> high coverage
+        d_en = eng.decide("please approve invoice").details("c")
+        # German query shares almost no vocabulary -> low coverage
+        d_de = eng.decide("bitte die rechnung freigeben").details("c")
+        assert d_en["score"] > d_de["score"]

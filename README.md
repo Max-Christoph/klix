@@ -148,6 +148,18 @@ class RegExExtractionHead(BaseHead):
         return {"value": match.group(0) if match else None}
 ```
 
+## Production Pattern
+
+`examples/production_pattern.py` zeigt das komplette produktionsreife Muster in einer
+Datei: Choice/Score/Flag mit `classifier="auto"` und `translate_fn`, eine explizite
+Auffang-Klasse (`not_relevant`), das zweistufige Aktionsmuster (Security-Flag als
+Veto, Confidence-Gate, Auto-Schließen), ein eigener Kopf per `BaseHead`-Vererbung
+und die Interpretation aller Vertrauenssignale.
+
+```bash
+uv run python examples/production_pattern.py
+```
+
 ## Benchmarks
 
 All benchmarks are **reproducible** — scripts live in `evals/` and every method is

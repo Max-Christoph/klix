@@ -121,8 +121,12 @@ Every head and the engine expose meaningful knobs:
 | `aggregation` | `Flag` | `"max"` (default) or `"topk"` — topk averages the best-k anchors per pole, robust against a single noisy anchor |
 | `threshold` / `temp` | `Flag` | Decision cutoff and softmax temperature (lower = sharper) |
 | `model_name` | `DecisionEngine` | Any FastEmbed-compatible embedding model |
-| `stop_words` | `DecisionEngine` | Custom stopword list for the TF-IDF index (default: combined EN+DE list; pass `[]` to disable filtering) |
+| `stop_words` | `DecisionEngine` | Custom stopword list for the TF-IDF index (default: extended EN+DE list filtering grammatical fillers; pass `[]` to disable filtering) |
 | `evaluate(encoded)` | `BaseHead` subclass | Add entirely custom head types (regex, business rules, ...) |
+| `rules` | `Choice` | Hard keyword/regex `Rule`s (force/boost) layered over the semantic decision |
+| `engine.calibrate(head, samples)` | `DecisionEngine` | Learn Flag threshold / Score sharpness+remap / Choice reject_threshold from labeled samples; k-fold CV for n ≥ 6, stability reported via `spread` |
+| `res.explain(head)` | `DecisionResult` | Token-level attribution: which keywords and which anchor drove the decision |
+| `engine.decide_batch(texts)` | `DecisionEngine` | Bulk mode: one embedding pass for the whole list — per-item overhead drops sharply for large volumes |
 
 ## Custom Heads
 

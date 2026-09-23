@@ -72,6 +72,17 @@ def validate_choice_head(head) -> list[dict]:
                 "b_exclusive": excl_b[:5],
                 "misplaced": misplaced,
                 "severity": severity,
+                # Actionable rewrite suggestions (v0.7.2): move each class's
+                # centroid AWAY from the other by anchoring its exclusive
+                # vocabulary harder. The report still never mutates anything.
+                "suggestions": [
+                    f"rewrite '{a}' anchors to emphasize: {', '.join(excl_a[:3])}"
+                    if excl_a else f"no exclusive terms found for '{a}' — the class is fully subsumed; redefine it or merge with '{b}'",
+                    f"rewrite '{b}' anchors to emphasize: {', '.join(excl_b[:3])}"
+                    if excl_b else f"no exclusive terms found for '{b}' — the class is fully subsumed; redefine it or merge with '{a}'",
+                    f"remove shared confusers from one side: {', '.join(shared[:3])}"
+                    if shared else "",
+                ],
             })
 
     return findings

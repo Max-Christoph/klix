@@ -718,6 +718,7 @@ class Score(BaseHead):
         aggregation: str = "max",
         topk: int = 2,
         min_coverage: float | None = 0.3,
+        fallback_value: float | None = None,
     ):
         super().__init__(name)
         self.low_anchors = low_anchors
@@ -733,6 +734,11 @@ class Score(BaseHead):
         # projection in "raw_value"; pass None to disable the gate and always
         # return the (possibly noisy) number.
         self.min_coverage = min_coverage
+        # Downstream-system fallback (v0.7.2): when the gate fires, return this
+        # value instead of None — e.g. a class-based default urgency. None
+        # (default) keeps the strict "don't pass noise" contract; set a number
+        # for pipelines (Jira/Salesforce) that cannot handle None.
+        self.fallback_value = fallback_value
         self._calib_a: float | None = None
         self._calib_b: float | None = None
         self.low_matrix: np.ndarray | None = None
@@ -775,9 +781,11 @@ class Score(BaseHead):
         # the text did not resemble either pole. Return None as the value and
         # keep the raw projection under "raw_value" for inspection. Downstream
         # systems reading only "value" can never mistake noise for a score.
+        # With fallback_value set (v0.7.2), pipelines that cannot handle None
+        # (Jira/Salesforce connectors) receive that default instead.
         if self.min_coverage is not None and coverage < self.min_coverage:
             return {
-                "value": None,
+                "value": self.fallback_value,
                 "raw_value": round(float(calculated_score), 2),
                 "raw_diff": diff,
                 "coverage": coverage,

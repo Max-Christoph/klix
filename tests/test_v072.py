@@ -12,6 +12,7 @@ class TestScoreFallback:
             high_anchors=["production line down, immediate help", "critical outage right now"],
             min_val=0.0, max_val=3.0,
             min_coverage=0.3,
+            soft_coverage=False,  # v0.7.x hard-gate contract under test here
             fallback_value=1.5,  # Jira-style default priority
         ))
         eng.compile()

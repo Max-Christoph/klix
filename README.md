@@ -2,6 +2,7 @@
 
 [![PyPI version](https://img.shields.io/pypi/v/klix-engine.svg)](https://pypi.org/project/klix-engine/)
 [![Python](https://img.shields.io/pypi/pyversions/klix-engine.svg)](https://pypi.org/project/klix-engine/)
+[![CI](https://github.com/Max-Christoph/klix/actions/workflows/ci.yml/badge.svg)](https://github.com/Max-Christoph/klix/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 Decoupled decision heads on a shared semantic backbone.
@@ -211,6 +212,38 @@ LLM-guardrail scenario:
 Here `klix linear` is the clear accuracy winner (+8 pts over the nearest-anchor
 ceiling), at a still-CPU-friendly ~13 ms.
 
+**Statistical honesty:** with n=70, differences of 1–2 points between
+embedding-based rows are within the 95 % CI (roughly ±9 pts at n=70); the
+`klix linear` lead is the only row pair that separates clearly. Treat the
+table as directional, not as a ranking with that precision.
+
+### vs. SetFit (few-shot training, same examples)
+
+`evals/setfit_baseline.py` — SetFit trains a contrastive few-shot classifier
+on the same anchor texts (identical example budget, `num_epochs=1`, same
+MiniLM backbone, CPU):
+
+| Dataset | klix (nearest) | klix (linear) | SetFit |
+|---|---|---|---|
+| HR | 8/12 | 9/12 | 9/12 |
+| FIN | 10/12 | 12/12 | 11/12 |
+| IMAGE | 9/12 | 11/12 | 11/12 |
+| TASK | 7/12 | 11/12 | 10/12 |
+| SHOP | 7/12 | 8/12 | 10/12 |
+| **total (n=60)** | 41/60 = 68 % | 51/60 = 85 % | **51/60 = 85 %** |
+
+**The honest verdict:** trained few-shot classification (SetFit) reaches the
+same accuracy as klix's linear probe — training does buy accuracy when you
+are willing to pay its costs (~seconds of CPU training per schema update,
+a saved model artifact per schema, a heavier dependency stack). Klix's pitch
+is therefore NOT "as accurate as training at zero cost" — it is: instant
+schema updates (no training step, sub-100 ms compile), no model artifacts,
+full keyword explainability via the sparse channel, and hard-negative mining
+as the training-free accuracy lever (+7 pts measured). SetFit is the right
+choice when schema updates are rare and accuracy is everything; klix is the
+right choice when schemas change with the business, the process is
+iterative, or the deployment must stay tiny and offline.
+
 ### vs. Laya (`convaiinnovations/laya`)
 
 Klix's original inspiration is the trained zero-shot engine
@@ -236,14 +269,25 @@ substitutes.
   anchors; always a safe baseline.
 - **`classifier="linear"`** — highest accuracy on single-language schemas with
   3+ anchors per class; watch for overfitting with mixed-language few-shot data.
+- **`classifier="hybrid"`** — learned dense+sparse fusion; wins on keyword-rich
+  schemas (asset IDs, SKU codes, error codes). Trails `linear` on plain
+  natural-language sets (81.7 % vs 85.0 % at n=60) — opt-in, not a default.
+- **`sparse_metric="bm25"`** — BM25 instead of TF-IDF cosine; better when
+  anchor lengths vary a lot (+3 pts at n=60 on the nearest path). Combined
+  with `topk3 + coverage` it matches `linear` accuracy *without any probe
+  training* (85 % at n=60).
 - **`label_aggregation="topk"`** — damps single-anchor noise when you have 4+
   anchors per label.
+- **Hard negatives** — for production schemas, collect low-confidence live
+  decisions (`HardNegativeStore`), review them by hand, attach them as
+  counterexamples and recompile: 68 % → 75 % at n=60 on the nearest path
+  after one mining round. See `evals/hard_negative_e2e.py`.
 
 ## Development
 
 ```bash
 uv sync          # install dependencies
-uv run pytest    # run tests (50 tests, fully offline)
+uv run pytest    # run the test suite (fully offline)
 uv run python examples/demo.py
 ```
 
@@ -251,14 +295,40 @@ The `evals/` directory contains a labeled evaluation harness (routing accuracy,
 score bands, flag behavior, out-of-domain rejection) — use it to measure changes
 to your anchor schemas.
 
-**Release chain (automated):** bump the version in `pyproject.toml` and `__init__.py`,
-commit, tag, push — GitHub Actions builds and publishes to PyPI automatically
-(workflow `publish.yml`, secret `PYPI_TOKEN`):
+**Release chain (automated, no token):** bump the version in `pyproject.toml`
+and `__init__.py`, update `CHANGELOG.md`, commit, tag, push — GitHub Actions
+builds and publishes to PyPI automatically via **Trusted Publishing (OIDC)**
+(workflow `publish.yml`, environment `pypi`; configured once in the PyPI
+project settings — no API token is stored in the repo):
 
 ```bash
+uv build && uv run --with twine python -m twine check dist/*   # pre-tag check
 git tag vX.Y.Z
 git push origin main vX.Y.Z
 ```
+
+## Offline / air-gapped deployment
+
+Klix needs no API keys, but the first run downloads the ONNX embedding model
+(~120 MB) into the fastembed cache. To prepare an air-gapped machine, cache
+the model on a connected machine and transfer it:
+
+```bash
+# 1. On a machine with internet: warm the cache once.
+uv run python -c "from klix import DecisionEngine; e=DecisionEngine(); e.add_head(__import__('klix').Choice(name='x', options={'a':['alpha']})); e.compile()"
+
+# 2. Find the cache dir (fastembed uses the HF-style local cache):
+uv run python -c "from fastembed import TextEmbedding; print(TextEmbedding.list_supported_models()[0]['sources'])"  # model id reference
+# cache location (default): ~/.cache/fastembed  (respects XDG_CACHE_HOME / LOCALAPPDATA)
+
+# 3. Copy the cache directory to the air-gapped machine, same path, then
+#    set the cache env var if the path differs:
+#    XDG_CACHE_HOME=/data/cache   (Linux)
+#    LOCALAPPDATA=%CUSTOM_PATH%   (Windows)
+```
+
+After that, klix runs fully offline — no network access is ever attempted
+at inference time.
 
 ## License
 

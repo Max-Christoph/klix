@@ -26,13 +26,19 @@ class Rule:
                   the head's ``options`` (validated at compile time).
         any_of:   Keywords (case-insensitive, word-boundary matched). Either
                   ``any_of`` or ``pattern`` is required.
-        pattern:  A raw regular expression (alternative to ``any_of``).
+        pattern:  A raw regular expression (alternative to ``any_of``). No
+                  implicit word boundaries — matches inside compounds too.
         mode:     "force" -> on match, the label wins immediately.
                   "boost" -> on match, ``weight`` is added to the label's score.
         weight:   Added to the label score for "boost". NOTE: in the
                   ``classifier="linear"`` path scores are probabilities in
                   [0, 1], so a weight >= 1.0 effectively acts like "force".
         name:     Optional human-readable id, surfaced in ``matched_rules``.
+
+    Priority: force rules beat everything — semantic decision, reject pole and
+    reject_threshold. Boost rules are applied to normal semantic results but do
+    NOT resurrect a rejected (value=None) result: once the head declines, boost
+    cannot override that decline (only force can).
     """
 
     label: str

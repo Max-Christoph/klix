@@ -1,4 +1,4 @@
-"""klix-engine 0.4.0 - Kompletter Überblick in einer Datei.
+"""klix-engine 0.6.0 - Kompletter Überblick in einer Datei.
 
 Ausführen:
     pip install klix-engine   (bzw. uv pip install klix-engine)
@@ -11,6 +11,12 @@ Neu in 0.4.0 (Abschnitte 8-10):
   - Regeln (force/boost) als harte Signale über der Semantik
   - res.explain(): welche Wörter/Anchors haben entschieden?
   - engine.calibrate(): Schwellenwerte aus Beispielen lernen statt raten
+Neu in 0.5.0:
+  - erweiterte Stoppwörter (Füllwörter wie "den/hat" überschreiben nichts mehr)
+  - decide_batch(): Bulk-Verarbeitung mit einem Embedding-Pass
+  - CV-Kalibrierung (k-fold, median über Folds)
+Neu in 0.6.0 (Abschnitt 11):
+  - engine.validate_anchors(): Klassen-Overlap-Report mit Schärfungsvorschlägen
 """
 
 import time
@@ -451,7 +457,71 @@ check2 = engine.decide("routinefrage, kann warten")
 print(f"  Kontrolle 'routinefrage, kann warten': urgency={check2.urgency} (Ziel ~0.2)")
 
 # ============================================================================
-# 10. LATEZ-PROFIL
+# 10. BATCH - Massenverarbeitung (NEU in 0.5.0)
+# ============================================================================
+print("\n" + "=" * 78)
+print("engine.decide_batch() - ein Embedding-Pass für alle Texte")
+print("=" * 78)
+
+batch_texts = [
+    "meine karte wurde doppelt belastet",
+    "the server is down",
+    "die heizung geht nicht",
+    "phishing mail erhalten",
+    "kaffee ist alle",
+]
+t0 = time.perf_counter()
+batch = engine.decide_batch(batch_texts)
+batch_ms = (time.perf_counter() - t0) * 1000
+print(f"\n{len(batch_texts)} Texte in einem Embedding-Pass: {batch_ms:.1f} ms gesamt "
+      f"({batch_ms/len(batch_texts):.2f} ms/Item)")
+for text, res in zip(batch_texts, batch):
+    print(f"  {res.route!r:15s} <- {text}")
+
+# ============================================================================
+# 11. VALIDATE_ANCHORS - Klassen-Overlap-Report (NEU in 0.6.0)
+# ============================================================================
+print("\n" + "=" * 78)
+print("engine.validate_anchors_report() - Anchor-Qualität prüfen")
+print("=" * 78)
+print("\nRead-only Diagnose: überlappende Klassen, Verwechsler-Wörter,")
+print("fehlplazierte und doppelte Anchors. Mutiert NIEMALS Anchors.\n")
+
+# Zweite Engine mit absichtlich überlappenden Klassen zum Zeigen des Reports:
+overlap_engine = DecisionEngine()
+overlap_engine.add_head(
+    Choice(
+        name="bereich",
+        options={
+            "billing": [
+                "bitte rechnung freigeben",
+                "die rechnung muss geprüft werden",
+                "rechnung nr 42 freigeben",
+            ],
+            "finance": [
+                "bitte rechnung freigeben",
+                "rechnung für die buchhaltung freigeben",
+                "rechnungsfreigabe für das finance team",
+            ],
+            "technical": [
+                "server ausgefallen",
+                "vpn bricht ab",
+                "laptop startet nicht",
+            ],
+        },
+    )
+)
+overlap_engine.compile()
+print(overlap_engine.validate_anchors_report())
+print("\n(Legende: !! = hohe Überlappung, ? = mittlere; 'sharpen' = exklusive")
+print(" Begriffe, mit denen sich die jeweilige Klasse schärfen lässt)")
+
+# Und für die HAUPTEngine zeigen, dass sie sauber ist:
+main_report = engine.validate_anchors_report()
+print("\nHaupt-Engine:", main_report.splitlines()[0] if main_report else "keine Findings")
+
+# ============================================================================
+# 12. LATEZ-PROFIL
 # ============================================================================
 print("\n" + "=" * 78)
 print("Latenzprofil (50 Durchläufe, median)")

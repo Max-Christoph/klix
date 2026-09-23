@@ -35,8 +35,13 @@ class DecisionEngine:
     on the same vectors.
     """
 
-    def __init__(self, model_name: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"):
+    def __init__(
+        self,
+        model_name: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+        stop_words: list[str] | None = None,
+    ):
         self.backbone = HybridBackbone(model_name=model_name)
+        self.stop_words = stop_words
         self.heads: list[BaseHead] = []
         self._compiled = False
 
@@ -55,7 +60,7 @@ class DecisionEngine:
         if not all_texts:
             raise ValueError("No reference texts found: register heads via add_head() first.")
 
-        self.backbone.build_vocabulary(all_texts)
+        self.backbone.build_vocabulary(all_texts, stop_words=self.stop_words)
 
         for head in self.heads:
             head.fit(self.backbone)

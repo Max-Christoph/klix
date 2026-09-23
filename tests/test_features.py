@@ -104,3 +104,24 @@ class TestScoreTopk:
         eng2.compile()
         result = eng2.decide("panic everywhere")
         assert result.u is not None  # must not raise
+
+
+class TestEngineConfig:
+    def test_stop_words_none_uses_default(self):
+        eng = DecisionEngine()
+        eng.add_head(Choice(name="c", options={"a": ["alpha sentence"], "b": ["beta sentence"]}))
+        eng.compile()
+        assert eng.backbone.is_indexed
+
+    def test_custom_stop_words_change_index(self):
+        eng = DecisionEngine(stop_words=[])  # keep everything
+        eng.add_head(Choice(name="c", options={"a": ["the alpha"], "b": ["the beta"]}))
+        eng.compile()
+        # "the" is now part of the vocabulary
+        assert "the" in eng.backbone.tfidf_vec.vocabulary_
+
+    def test_custom_stop_words_exclude_terms(self):
+        eng = DecisionEngine(stop_words=["error"])
+        eng.add_head(Choice(name="c", options={"a": ["alpha error"], "b": ["beta fault"]}))
+        eng.compile()
+        assert "error" not in eng.backbone.tfidf_vec.vocabulary_

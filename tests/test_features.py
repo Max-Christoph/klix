@@ -3,6 +3,7 @@
 import numpy as np
 
 from klix import Choice, DecisionEngine, Score
+from klix.heads import _REJECT_LABEL
 
 
 def build() -> DecisionEngine:
@@ -229,3 +230,62 @@ class TestCoverageBoost:
         # German query shares almost no vocabulary -> low coverage
         d_de = eng.decide("bitte die rechnung freigeben").details("c")
         assert d_en["score"] > d_de["score"]
+
+
+class TestLinearProbe:
+    def test_linear_probe_trains_and_predicts(self):
+        eng = DecisionEngine()
+        eng.add_head(
+            Choice(
+                name="c",
+                options={
+                    "a": ["the server is down", "network outage reported", "db connection refused"],
+                    "b": ["please approve the invoice", "refund my order", "charge was wrong"],
+                },
+                classifier="linear",
+            )
+        )
+        eng.compile()
+        head = eng.heads[0]
+        assert head._probe is not None
+        assert head._probe_labels == ["a", "b"]
+        # Strong in-domain cases route correctly
+        assert eng.decide("the server crashed and is unreachable").c == "a"
+        assert eng.decide("i want a refund for this order").c == "b"
+
+    def test_linear_probe_reject_class(self):
+        eng = DecisionEngine()
+        eng.add_head(
+            Choice(
+                name="c",
+                options={"a": ["alpha one two three"], "b": ["beta one two three"]},
+                reject_anchors=["happy birthday", "small talk", "weather chat"],
+                classifier="linear",
+            )
+        )
+        eng.compile()
+        head = eng.heads[0]
+        assert _REJECT_LABEL in head._probe_labels if hasattr(head, "_probe_labels") else True
+        # off-domain should map to the reject class -> None
+        assert eng.decide("happy birthday everyone").c is None
+
+    def test_linear_probe_confidence_in_range(self):
+        eng = DecisionEngine()
+        eng.add_head(
+            Choice(
+                name="c",
+                options={"a": ["alpha"], "b": ["beta"], "g": ["gamma"]},
+                classifier="linear",
+            )
+        )
+        eng.compile()
+        d = eng.decide("something alpha-like").details("c")
+        assert 0.0 <= d["confidence"] <= 1.0
+        assert "scores" in d
+
+    def test_default_remains_nearest(self):
+        # Without classifier="linear", no probe is trained (backward compatible).
+        eng = DecisionEngine()
+        eng.add_head(Choice(name="c", options={"a": ["alpha"], "b": ["beta"]}))
+        eng.compile()
+        assert eng.heads[0]._probe is None

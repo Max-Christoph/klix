@@ -9,8 +9,50 @@ from abc import ABC, abstractmethod
 import numpy as np
 from scipy.sparse import csr_matrix
 from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.linear_model import LogisticRegression
 
 from klix.backbone import _DEFAULT_GERMAN_STOPWORDS, EncodedInput, HybridBackbone
+
+# Sentinel class label for the optional reject class when classifier="linear".
+_REJECT_LABEL = "__klix_reject__"
+
+
+def _augment_embeddings(
+    X: np.ndarray,
+    y: np.ndarray,
+    mixup: bool = True,
+    noise_std: float = 0.01,
+    seed: int = 42,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Expands a few-shot anchor set with same-class embedding interpolation.
+
+    - mixup: pairwise midpoints of anchors within the same class (densifies each
+      class cloud without any external text source).
+    - noise: a small amount of normalized Gaussian noise (teaches a downstream
+      linear probe a smoother decision boundary).
+
+    Runs at compile time only; inference cost is unchanged.
+    """
+    rng = np.random.RandomState(seed)
+    parts_x: list[np.ndarray] = [X]
+    parts_y: list[np.ndarray] = [y]
+    if mixup:
+        groups: dict = {}
+        for i, lab in enumerate(y):
+            groups.setdefault(lab, []).append(i)
+        for lab, idxs in groups.items():
+            for a in range(len(idxs)):
+                for b in range(a + 1, len(idxs)):
+                    mid = X[idxs[a]] + X[idxs[b]]
+                    n = float(np.linalg.norm(mid))
+                    mid = mid / n if n > 0 else mid
+                    parts_x.append(mid.reshape(1, -1))
+                    parts_y.append(np.array([lab]))
+    if noise_std > 0:
+        noisy = _normalize_rows(X + rng.normal(0.0, noise_std, X.shape))
+        parts_x.append(noisy)
+        parts_y.append(y)
+    return np.vstack(parts_x), np.concatenate(parts_y)
 
 
 def _make_local_vectorizer(stop_words: list[str] | None) -> TfidfVectorizer:
@@ -91,6 +133,8 @@ class Choice(BaseHead):
         label_topk: int = 2,
         keyword_boost_mode: str = "fixed",
         reject_threshold: float | None = None,
+        classifier: str = "nearest",
+        classifier_C: float = 10.0,
     ):
         super().__init__(name)
         self.options = options
@@ -102,6 +146,10 @@ class Choice(BaseHead):
         self.label_topk = label_topk
         self.keyword_boost_mode = keyword_boost_mode
         self.reject_threshold = reject_threshold
+        self.classifier = classifier
+        self.classifier_C = classifier_C
+        self._probe = None  # LogisticRegression probe when classifier="linear"
+        self._probe_labels: list[str] = []
         self.flat_texts: list[str] = []
         self.label_map: list[str] = []
         self._label_rows: dict[str, list[int]] = {}
@@ -148,6 +196,32 @@ class Choice(BaseHead):
             self.reject_matrix = None
             self.reject_sparse_matrix = None
 
+        # --- Train a linear probe on the (augmented) anchor embeddings --------
+        # A learned decision boundary separates overlapping class clouds far
+        # better than nearest-anchor distance; with frozen embeddings this is the
+        # standard few-shot approach (linear probing). Trained here, at compile
+        # time, on the anchors only — inference is a single 384-dim matmul.
+        if self.classifier == "linear":
+            X = self.dense_matrix  # already L2-normalized rows
+            y = np.array(self.label_map)
+            if self.reject_matrix is not None:
+                # Reject anchors become their own class so the probe learns a
+                # boundary against off-domain text (returns None when it wins).
+                X = np.vstack([X, self.reject_matrix])
+                y = np.concatenate([y, np.array([_REJECT_LABEL] * self.reject_matrix.shape[0])])
+            X_aug, y_aug = _augment_embeddings(X, y)
+            self._probe = LogisticRegression(
+                C=self.classifier_C,
+                max_iter=1000,
+                solver="lbfgs",
+                class_weight="balanced",
+            )
+            self._probe.fit(X_aug, y_aug)
+            self._probe_labels = list(self._probe.classes_)
+        else:
+            self._probe = None
+            self._probe_labels = []
+
     def _sparse_query_vec(self, text: str) -> tuple[dict[int, float] | None, float]:
         """TF-IDF vector for `text` using this head's cached vocabulary/IDF.
 
@@ -181,6 +255,35 @@ class Choice(BaseHead):
         return vec, coverage
 
     def evaluate(self, encoded: EncodedInput) -> dict:
+        # --- Linear-probe path (classifier="linear") -------------------------
+        if self._probe is not None:
+            # Single matmul + softmax over the probe; dense only, microseconds.
+            probs = self._probe.predict_proba(encoded.dense_vec.reshape(1, -1))[0]
+            label_probs = dict(zip(self._probe_labels, probs))
+            best_label = max(label_probs, key=label_probs.get)
+            best_prob = label_probs[best_label]
+            if best_label == _REJECT_LABEL:
+                # Off-domain: reject class won -> "don't know".
+                return {
+                    "value": None,
+                    "score": float(best_prob),
+                    "confidence": 0.0,
+                    "scores": {k: float(v) for k, v in label_probs.items() if k != _REJECT_LABEL},
+                    "reject_score": float(best_prob),
+                }
+            # Confidence from probability margin (top class minus runner-up).
+            option_probs = [v for k, v in label_probs.items() if k != _REJECT_LABEL]
+            sorted_probs = sorted(option_probs, reverse=True)
+            runner_up = sorted_probs[1] if len(sorted_probs) > 1 else 0.0
+            confidence = float(np.clip(best_prob - runner_up, 0.0, 1.0))
+            return {
+                "value": best_label,
+                "score": float(best_prob),
+                "confidence": confidence,
+                "scores": {k: float(v) for k, v in label_probs.items() if k != _REJECT_LABEL},
+                "reject_score": float(label_probs.get(_REJECT_LABEL, 0.0)),
+            }
+
         dense_sims = self.dense_matrix @ encoded.dense_vec
 
         # Hand-rolled TF-IDF query vector (same math as sklearn, ~40x faster:

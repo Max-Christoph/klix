@@ -25,6 +25,9 @@ Text ──► HybridBackbone (FastEmbed dense + TF-IDF sparse, once, ~10 ms)
 - **Decoupled heads:** Adding options to one `Choice` never affects `Score` or `Flag`
   results. Every head encapsulates its own logic.
 - **Declarative:** Define schemas with example sentences, call `compile()`, done.
+- **Honest uncertainty:** Optional reject poles (`Choice(reject_anchors=...)`,
+  `Flag(neutral_anchors=...)`) return `None` instead of guessing; the `Score` head
+  reports a `coverage` signal so you know when a score is noise.
 
 ## Installation
 
@@ -53,6 +56,8 @@ engine.add_head(
             "finance": ["cost center over budget", "approve invoice"],
             "facility": ["oil spill in hall 2", "heating broken"],
         },
+        # Optional: texts resembling these get value=None instead of a forced guess.
+        reject_anchors=["casual office chat", "birthday wishes", "off topic request"],
     )
 )
 
@@ -63,6 +68,10 @@ engine.add_head(
         high_anchors=["emergency right now", "production line down", "acute danger"],
         min_val=0.0,
         max_val=3.0,
+        # "topk" pools the best 2 anchors per pole (robust against a single
+        # noisy anchor). Result dict carries "coverage": if it is low (< ~0.3),
+        # the text matched neither pole and the score is mostly noise.
+        aggregation="topk",
     )
 )
 

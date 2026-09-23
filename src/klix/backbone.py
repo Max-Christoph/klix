@@ -26,6 +26,8 @@ _DEFAULT_STOPWORDS = [
     "nicht", "kein", "keine", "mehr", "wird", "werden", "wurde", "wurden",
     "wie", "was", "wer", "hier", "dort", "hat", "hatte", "haben", "hatte",
     "seit", "schon", "noch", "nur", "auch", "wieder", "um", "dann", "als",
+    # German politeness/filler particles ("bitte" dominated TF-IDF confuser lists)
+    "bitte", "danke", "dank", "vielen", "mal", "gerne", "vielleicht", "hallo",
     # English: articles, pronouns, auxiliaries, prepositions
     "the", "a", "an", "is", "are", "was", "were", "be", "been", "being",
     "and", "or", "for", "of", "with", "to", "in", "on", "at", "by", "from",
@@ -36,6 +38,8 @@ _DEFAULT_STOPWORDS = [
     "just", "also", "only", "than", "then", "there", "here", "what", "which",
     "who", "whom", "how", "when", "where", "why", "all", "each", "every",
     "some", "any", "no", "nor", "not", "so", "too", "very",
+    # English politeness/filler words
+    "please", "thanks", "thank", "hello", "hi", "kindly",
 ]
 
 # Backward-compatible alias (older code imported _DEFAULT_GERMAN_STOPWORDS).

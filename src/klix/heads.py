@@ -7,6 +7,7 @@ which makes them fully decoupled from each other.
 from abc import ABC, abstractmethod
 
 import re
+import warnings
 
 import numpy as np
 from scipy.sparse import csr_matrix
@@ -427,6 +428,14 @@ class Choice(BaseHead):
         """
         if len(samples) < 3:
             raise ValueError("Choice.calibrate needs at least 3 samples")
+        if len(samples) < 20:
+            warnings.warn(
+                f"Insufficient data for calibration: n={len(samples)} (< 20). "
+                f"The learned reject_threshold is statistically fragile; collect "
+                f"20+ labeled samples for a production-grade calibration.",
+                UserWarning,
+                stacklevel=3,
+            )
         if self._probe is not None:
             raise ValueError("reject_threshold calibration is only supported on the nearest path")
 
@@ -708,6 +717,7 @@ class Score(BaseHead):
         sharpness: float = 8.0,
         aggregation: str = "max",
         topk: int = 2,
+        min_coverage: float | None = 0.3,
     ):
         super().__init__(name)
         self.low_anchors = low_anchors
@@ -717,6 +727,12 @@ class Score(BaseHead):
         self.sharpness = sharpness
         self.aggregation = aggregation
         self.topk = topk
+        # Coverage gate: below this similarity to either pole the score is
+        # noise (the text did not resemble the axis at all). With the gate
+        # active (default 0.3) the result carries value=None and the raw
+        # projection in "raw_value"; pass None to disable the gate and always
+        # return the (possibly noisy) number.
+        self.min_coverage = min_coverage
         self._calib_a: float | None = None
         self._calib_b: float | None = None
         self.low_matrix: np.ndarray | None = None
@@ -753,10 +769,25 @@ class Score(BaseHead):
             raw = self._calib_a + self._calib_b * raw
         calculated_score = min(max(raw, self.min_val), self.max_val)
 
+        coverage = float(max(s_low, s_high))
+
+        # Coverage gate (v0.7.0): below min_coverage the projection is noise —
+        # the text did not resemble either pole. Return None as the value and
+        # keep the raw projection under "raw_value" for inspection. Downstream
+        # systems reading only "value" can never mistake noise for a score.
+        if self.min_coverage is not None and coverage < self.min_coverage:
+            return {
+                "value": None,
+                "raw_value": round(float(calculated_score), 2),
+                "raw_diff": diff,
+                "coverage": coverage,
+                "below_coverage": True,
+            }
+
         return {
             "value": round(float(calculated_score), 2),
             "raw_diff": diff,
-            "coverage": float(max(s_low, s_high)),
+            "coverage": coverage,
         }
 
     def calibrate(self, backbone: HybridBackbone, samples: list[tuple[str, float]], metric: str = "sse") -> dict:
@@ -771,6 +802,14 @@ class Score(BaseHead):
         """
         if len(samples) < 3:
             raise ValueError("Score.calibrate needs at least 3 samples")
+        if len(samples) < 20:
+            warnings.warn(
+                f"Insufficient data for calibration: n={len(samples)} (< 20). "
+                f"The learned sharpness/remap is statistically fragile; collect "
+                f"20+ labeled samples for a production-grade calibration.",
+                UserWarning,
+                stacklevel=3,
+            )
         texts = [t for t, _ in samples]
         targets = np.array([float(v) for _, v in samples])
 
@@ -1003,6 +1042,17 @@ class Flag(BaseHead):
             return best_t, best_v
 
         n = len(samples)
+        # Honest statistics: a threshold tuned on < 20 samples is fragile even
+        # with cross-validation. Warn loudly (visible unless suppressed) so
+        # production users notice, instead of silently trusting the number.
+        if n < 20:
+            warnings.warn(
+                f"Insufficient data for calibration: n={n} (< 20). The learned "
+                f"threshold is statistically fragile; collect 20+ labeled samples "
+                f"for a production-grade calibration.",
+                UserWarning,
+                stacklevel=3,
+            )
         if n >= 6:
             # Stratified-ish k-fold: interleave by label so both classes appear
             # in every fold even with skewed samples.

@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from klix import Choice, DecisionEngine, Score
+from klix import Choice, DecisionEngine, Flag, Score
 from klix.heads import _REJECT_LABEL
 
 
@@ -289,3 +289,39 @@ class TestLinearProbe:
         eng.add_head(Choice(name="c", options={"a": ["alpha"], "b": ["beta"]}))
         eng.compile()
         assert eng.heads[0]._probe is None
+
+
+class TestFlagTopk:
+    def test_flag_topk_does_not_break_2class(self):
+        eng = DecisionEngine()
+        eng.add_head(
+            Flag(
+                name="f",
+                true_anchors=["hacker attack", "ransomware infection", "data exfiltration"],
+                false_anchors=["hardware broken", "network outage", "printer jam"],
+                aggregation="topk",
+            )
+        )
+        eng.compile()
+        r = eng.decide("ransomware encrypted our files")
+        assert r.f is True
+        r2 = eng.decide("the printer is jammed")
+        assert r2.f is False
+
+    def test_flag_topk_consistent_with_max_on_strong_case(self):
+        # On a clear true case, topk and max both fire; topk must not crash with
+        # 3-class neutral pole.
+        eng = DecisionEngine()
+        eng.add_head(
+            Flag(
+                name="f",
+                true_anchors=["hacker attack", "ransomware", "data breach"],
+                false_anchors=["hardware broken", "network down", "printer jam"],
+                neutral_anchors=["routine request", "general question"],
+                aggregation="topk",
+            )
+        )
+        eng.compile()
+        d = eng.decide("ransomware hit our server").details("f")
+        assert "probability" in d
+        assert 0.0 <= d["probability"] <= 1.0

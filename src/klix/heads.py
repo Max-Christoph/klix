@@ -6,6 +6,8 @@ which makes them fully decoupled from each other.
 
 from abc import ABC, abstractmethod
 
+import re
+
 import numpy as np
 from scipy.sparse import csr_matrix
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -232,8 +234,6 @@ class Choice(BaseHead):
         query's tokens this head's vocabulary recognizes (0.0 for an empty or
         fully out-of-vocabulary query, 1.0 for a fully in-vocabulary query).
         """
-        import re
-
         tokens = re.findall(r"(?u)\b[\w-]+\b", text.lower())
         if not tokens:
             return None, 0.0
@@ -460,6 +460,11 @@ class Flag(BaseHead):
     With `neutral_anchors` a 3-class softmax is used; the head then returns
     `value=None` (instead of True/False) whenever "neutral" wins. Disabled by
     default (classic 2-class behavior).
+
+    `aggregation` pools anchor similarities per pole:
+    - `"max"` (default, backward compatible): single best anchor decides.
+    - `"topk"`: mean of the best `topk` anchors per pole — robust against a
+      single noisy anchor, recommended when you have 3+ anchors per pole.
     """
 
     def __init__(
@@ -470,6 +475,8 @@ class Flag(BaseHead):
         threshold: float = 0.5,
         temp: float = 0.12,
         neutral_anchors: list[str] | None = None,
+        aggregation: str = "max",
+        topk: int = 2,
     ):
         super().__init__(name)
         self.true_anchors = true_anchors
@@ -477,6 +484,8 @@ class Flag(BaseHead):
         self.threshold = threshold
         self.temp = temp
         self.neutral_anchors = neutral_anchors or []
+        self.aggregation = aggregation
+        self.topk = topk
         self.true_matrix: np.ndarray | None = None
         self.false_matrix: np.ndarray | None = None
         self.neutral_matrix: np.ndarray | None = None
@@ -497,14 +506,22 @@ class Flag(BaseHead):
         else:
             self.neutral_matrix = None
 
+    def _pool(self, matrix: np.ndarray, dense_vec: np.ndarray) -> float:
+        """Pools similarity of `dense_vec` to a pole's anchor matrix."""
+        sims = matrix @ dense_vec
+        if self.aggregation == "topk":
+            k = max(1, min(self.topk, len(sims)))
+            return float(np.mean(np.sort(sims)[-k:]))
+        return float(np.max(sims))
+
     def evaluate(self, encoded: EncodedInput) -> dict:
-        s_true = float(np.max(self.true_matrix @ encoded.dense_vec))
-        s_false = float(np.max(self.false_matrix @ encoded.dense_vec))
+        s_true = self._pool(self.true_matrix, encoded.dense_vec)
+        s_false = self._pool(self.false_matrix, encoded.dense_vec)
 
         # Softmax over two (or three) classes with temperature scaling.
         logits = np.array([s_true, s_false], dtype=float)
         if self.neutral_matrix is not None:
-            s_neutral = float(np.max(self.neutral_matrix @ encoded.dense_vec))
+            s_neutral = self._pool(self.neutral_matrix, encoded.dense_vec)
             logits = np.array([s_true, s_false, s_neutral], dtype=float)
 
         scaled = logits / self.temp

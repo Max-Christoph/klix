@@ -147,11 +147,85 @@ class RegExExtractionHead(BaseHead):
         return {"value": match.group(0) if match else None}
 ```
 
+## Benchmarks
+
+All benchmarks are **reproducible** — scripts live in `evals/` and every method is
+trained/evaluated on the *same* labeled data (the anchors are the few-shot training set).
+
+### Bilingual routing (EN/DE, 5 classes, support tickets)
+
+`evals/benchmark_bilingual.py` — 10 English + 10 German test cases with parallel
+meaning, anchors mixed EN/DE. Reproduce with:
+
+```bash
+uv run python -c "import sys; sys.path.insert(0,'.'); sys.path.insert(0,'src'); from evals import benchmark_bilingual; benchmark_bilingual.main()"
+```
+
+| Method | EN | DE | Combined |
+|---|---|---|---|
+| TF-IDF + LogReg | 8/10 | 6/10 | 14/20 |
+| Embed-KNN (dense) | 9/10 | 7/10 | **16/20** |
+| klix nearest | 9/10 | 6/10 | 15/20 |
+| klix nearest + topk2 | 9/10 | 6/10 | 15/20 |
+| klix linear | 10/10 | 5/10 | 15/20 |
+
+**Latency per decision (CPU, includes the ~10 ms embedding forward pass):** all
+embedding-based methods ≈ 9–13 ms; TF-IDF+LogReg ≈ 0.9 ms (no embeddings).
+
+**Reading this honestly:** on this *mixed-language, few-anchor* schema the
+`linear` probe overfits to English (100 % EN / 50 % DE). The dense Embed-KNN is
+the most language-robust. Recommendation: with few mixed-language anchors, use
+`classifier="nearest"`; the `linear` probe pays off on *single-language* schemas
+with several anchors per class (see the cross-domain result below).
+
+### Cross-domain routing (6 domains, 70 cases, mostly EN)
+
+`evals/benchmark.py` — HR, Finance, Image-captions, Tasks, Shop, and the
+LLM-guardrail scenario:
+
+| Method | avg accuracy | median latency |
+|---|---|---|
+| TF-IDF + LogReg | 51 % | 0.9 ms |
+| Embed-KNN (dense) | 78 % | ~7 ms |
+| klix nearest | 76 % | ~9 ms |
+| **klix linear** | **86 %** | ~13 ms |
+
+Here `klix linear` is the clear accuracy winner (+8 pts over the nearest-anchor
+ceiling), at a still-CPU-friendly ~13 ms.
+
+### vs. Laya (`convaiinnovations/laya`)
+
+Klix's original inspiration is the trained zero-shot engine
+[`laya`](https://pypi.org/project/laya/) (Torch/ModernBERT-large, GPU-oriented).
+Measured on the same 70 cases on **CPU**:
+
+| | klix-linear | Laya (zero-shot) |
+|---|---|---|
+| accuracy | **86 %** | 67 % |
+| latency (CPU) | **~13 ms** | ~1.3–1.5 s |
+| model size | ~120 MB | ~2 GB |
+| setup | anchors (few-shot) | instructions + criteria (zero-shot) |
+
+**The honest trade-off:** Laya needs *no* examples and natively routes 100+
+languages with automatic script detection — a real advantage for low-resource
+scripts on GPU. Klix is the opposite design point: a tiny model, few-shot anchors
+you fully control, and 100× lower CPU latency. They are complements, not
+substitutes.
+
+### Choosing a variant
+
+- **`classifier="nearest"` (default)** — most robust with few or mixed-language
+  anchors; always a safe baseline.
+- **`classifier="linear"`** — highest accuracy on single-language schemas with
+  3+ anchors per class; watch for overfitting with mixed-language few-shot data.
+- **`label_aggregation="topk"`** — damps single-anchor noise when you have 4+
+  anchors per label.
+
 ## Development
 
 ```bash
 uv sync          # install dependencies
-uv run pytest    # run tests (30 tests, fully offline)
+uv run pytest    # run tests (50 tests, fully offline)
 uv run python examples/demo.py
 ```
 

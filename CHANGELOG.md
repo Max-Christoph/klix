@@ -18,8 +18,10 @@ All notable changes to klix are documented here. Format based on
 - Hard-negative mining workflow (`HardNegativeStore`, `attach_counterexamples`,
   `Choice.add_counterexamples`): collect low-confidence live decisions, review
   them (human-in-the-loop by design — no auto-training), attach them as
-  label-specific counterexamples, recompile. End-to-end verified: 41/60 (68.3%)
-  -> 45/60 (75.0%) on the labeled sets.
+  label-specific counterexamples, recompile. **Holdout-verified (v3 eval):
+  generalization gain on unseen cases ≈ 0** (11/20 → 10/20, n=20); the
+  earlier 68.3% → 75.0% was memorization of the mining set. Repositioned as
+  a diagnosis loop (surfaces confused label pairs), not an accuracy lever.
 - `DriftMonitor` (E.2): streaming monitor over Score coverage / Flag margin /
   Choice confidence with sliding-window low-trust-share alerting (cooldown
   prevents alert storms). Never raises into inference.
@@ -29,9 +31,10 @@ All notable changes to klix are documented here. Format based on
   reproducible historical decisions.
 - SetFit baseline comparison (E.4, `evals/setfit_baseline.py`): honest
   benchmark vs. trained few-shot classification on the same examples.
-  Result: SetFit matches the linear probe (51/60 = 85%); klix's pitch is
-  instant schema updates + explainability, not "training accuracy at zero
-  cost". Documented in the README.
+  Leakage-verified (anchors and test cases are disjoint — zero exact/near
+  duplicates). Result: SetFit matches the linear probe (51/60 = 85%) and
+  buys nothing beyond it; klix's pitch is equivalent accuracy with instant
+  schema updates + explainability. Documented in the README.
 - Bootstrap 95% confidence intervals in `calibrate()` reports; CI lower bound
   is floored for tiny samples (n < 8) so a perfect point estimate cannot
   masquerade as certainty.

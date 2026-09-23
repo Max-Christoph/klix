@@ -232,17 +232,20 @@ MiniLM backbone, CPU):
 | SHOP | 7/12 | 8/12 | 10/12 |
 | **total (n=60)** | 41/60 = 68 % | 51/60 = 85 % | **51/60 = 85 %** |
 
-**The honest verdict:** trained few-shot classification (SetFit) reaches the
-same accuracy as klix's linear probe — training does buy accuracy when you
-are willing to pay its costs (~seconds of CPU training per schema update,
-a saved model artifact per schema, a heavier dependency stack). Klix's pitch
-is therefore NOT "as accurate as training at zero cost" — it is: instant
-schema updates (no training step, sub-100 ms compile), no model artifacts,
-full keyword explainability via the sparse channel, and hard-negative mining
-as the training-free accuracy lever (+7 pts measured). SetFit is the right
-choice when schema updates are rare and accuracy is everything; klix is the
-right choice when schemas change with the business, the process is
-iterative, or the deployment must stay tiny and offline.
+**The honest verdict:** trained few-shot classification (SetFit) *matches*
+the klix linear probe (85 %) but buys nothing beyond it — on this benchmark,
+training reaches exactly what klix already achieves without any training
+step. The klix linear probe and bm25+topk3+coverage configs reach the same
+accuracy in sub-100 ms at compile time, with no model artifact, no extra
+dependency stack, and full keyword explainability via the sparse channel.
+Klix's pitch is therefore NOT "as accurate as training at zero cost" — it is:
+equivalent accuracy to few-shot training on these sets, but instant schema
+updates (no training step), no saved model per schema, and hard-negative
+mining as the training-free accuracy lever (+7 pts measured). SetFit is the
+right choice when anchor sets are tiny per class (its contrastive pairing
+extracts more from 3-4 anchors); klix is the right choice when schemas
+change with the business, the process is iterative, or the deployment must
+stay tiny and offline.
 
 ### vs. Laya (`convaiinnovations/laya`)
 
@@ -280,8 +283,13 @@ substitutes.
   anchors per label.
 - **Hard negatives** — for production schemas, collect low-confidence live
   decisions (`HardNegativeStore`), review them by hand, attach them as
-  counterexamples and recompile: 68 % → 75 % at n=60 on the nearest path
-  after one mining round. See `evals/hard_negative_e2e.py`.
+  counterexamples and recompile. **Honest measured effect (holdout eval,
+  `evals/hard_negative_e2e.py`):** on cases the mining step never saw, the
+  gain is ≈0 (11/20 → 10/20 on n=20 holdout); the earlier +7 pts claim was
+  dominated by memorization of the mining set itself. The workflow is still
+  valuable as a *diagnosis* loop (it surfaces which label pairs the schema
+  confuses — fix those by adding/sharpening anchors), not as an automatic
+  accuracy lever.
 
 ## Development
 

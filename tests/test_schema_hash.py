@@ -51,3 +51,24 @@ class TestSchemaHash:
         h_before = eng.schema_hash()
         eng.heads.reverse()
         assert eng.schema_hash() != h_before
+
+    def test_insertion_order_invariant(self):
+        """Same schema, different dict insertion order -> same hash (E.5)."""
+        eng1 = DecisionEngine()
+        eng1.add_head(Choice(name="route", options={
+            "billing": ["rechnung doppelt", "invoice wrong"],
+            "it": ["vpn verbindet nicht", "laptop startet nicht"],
+        }))
+        eng1.compile()
+        eng2 = DecisionEngine()
+        # Same content, reversed key and list order.
+        eng2.add_head(Choice(name="route", options={
+            "it": ["laptop startet nicht", "vpn verbindet nicht"],
+            "billing": ["invoice wrong", "rechnung doppelt"],
+        }))
+        eng2.compile()
+        # Key order within a label's anchor list is semantically irrelevant
+        # for the nearest path, so the hash MUST be invariant to it.
+        h1 = eng1.schema_hash()
+        h2 = eng2.schema_hash()
+        assert h1 == h2, f"hash not canonical: {h1} != {h2}"

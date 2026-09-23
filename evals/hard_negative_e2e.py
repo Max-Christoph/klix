@@ -1,32 +1,44 @@
-"""D.3 end-to-end verification: hard-negative mining closes the loop.
+"""D.3 end-to-end verification with HOLDOUT split (leakage-free).
 
-Simulated live traffic -> HardNegativeStore -> mine() -> add_counterexamples()
--> recompile -> does accuracy on the SAME unchanged cases improve?
+Methodology (reviewed 2026-09-24, v2): v1 measured before/after on the same
+frozen 60 the mining saw (memorization, not generalization). v2 used the
+generated variants as eval — but those are anchor paraphrases at ~100%
+baseline accuracy, too easy to show any effect (+0 delta).
 
-The honest setup: mine on the training-free nearest path (default knobs),
-feed the wrongly-pulled label as counterexample, recompile, re-measure.
+v3 design (this file):
+- MINE/REVIEW: 8 of 12 frozen cases per domain (baseline errors here drive
+  the counterexamples).
+- EVAL: the 4 HELD-OUT frozen cases per domain — real adversarial cases the
+  mining phase never observed. n_eval = 20 across 5 domains; small, so the
+  report carries the caveat and per-case detail instead of a bare percent.
+- Baseline for the eval set is computed on the SAME holdout with an engine
+  that never saw any mining, so the delta isolates the counterexample effect.
+
+Honest expectation: if counterexamples only memorize mining-set mistakes,
+holdout delta = +0. A positive delta on held-out cases is evidence that
+mined confusions generalize to unseen wording of the same classes.
 """
-import tempfile
 import os
+import tempfile
 
 from linear_sweep import HR_OPTIONS, HR_TESTS, FIN_OPTIONS, FIN_TESTS, IMG_OPTIONS, IMG_CASES, TASK_OPTIONS, TASK_CASES, SHOP_OPTIONS, SHOP_CASES
 
 from klix import DecisionEngine, Choice, HardNegativeStore, attach_counterexamples
 
 
-def build(options: dict) -> tuple[DecisionEngine, Choice]:
+def build(options: dict) -> DecisionEngine:
     eng = DecisionEngine()
-    head = Choice(name="h", options=options)
-    eng.add_head(head)
+    eng.add_head(Choice(name="h", options=options))
     eng.compile()
-    return eng, head
+    return eng
 
 
-def run_cases(eng: DecisionEngine, tests: list, store: HardNegativeStore) -> tuple[int, int]:
+def run(eng: DecisionEngine, tests: list, store: HardNegativeStore | None = None) -> tuple[int, int]:
     ok = 0
     for ticket, expected in tests:
         res = eng.decide(ticket)
-        store.observe(res)
+        if store is not None:
+            store.observe(res)
         if res.h == expected:
             ok += 1
     return ok, len(tests)
@@ -41,42 +53,42 @@ sets = [
 ]
 
 tmpdir = tempfile.mkdtemp()
-print("=" * 88)
-print("D.3 E2E: baseline -> mine hard negatives from its own mistakes -> counterexamples -> recompile")
-print("=" * 88)
-print(f"{'DATASET':8s} {'before':>10s} {'mined':>6s} {'applied':>8s} {'after':>10s} {'delta':>7s}")
-print("-" * 88)
-total_before, total_after, total_n = 0, 0, 0
+print("=" * 100)
+print("D.3 E2E HOLDOUT — mine on 8 frozen cases/domain, evaluate on 4 HELD-OUT cases/domain")
+print("=" * 100)
+print(f"{'DATASET':8s} {'mined':>6s} {'reviewed':>9s} {'holdout-before':>15s} {'holdout-after':>14s} {'delta':>6s}")
+print("-" * 100)
+tot_b, tot_a, tot_n = 0, 0, 0
+detail_log = []
 for name, options, tests in sets:
-    # Round 1: baseline + collect "live traffic" with the store.
-    eng1, head1 = build(options)
+    mine_set, eval_set = tests[:8], tests[8:]  # deterministic holdout, same for both rounds
+
+    # Mining phase: baseline on the MINE split only.
+    eng1 = build(options)
     path = os.path.join(tmpdir, f"{name.lower()}.jsonl")
     store = HardNegativeStore(path=path)
-    ok1, n = run_cases(eng1, tests, store)
+    _baseline_ok, _ = run(eng1, mine_set, store)
     mined = store.mine("h", min_margin=0.05)
 
-    # Human-in-the-loop step (simulated): each mined case's "picked" label is
-    # what the engine wrongly pulled toward -> attach as counterexample.
-    # Ground truth: the case text's real label from the test set. A case is a
-    # TRUE hard negative when picked != expected.
-    expected_map = dict(tests)
-    reviewed = []
-    for case in mined:
-        exp = expected_map.get(case["text"])
-        if exp is not None and exp != case["picked"]:
-            reviewed.append(case)
-    eng2, head2 = build(options)
-    applied = attach_counterexamples(head2, reviewed)
-    eng2.compile()
-    store2 = HardNegativeStore()  # no persistence for round 2
-    ok2, _ = run_cases(eng2, tests, store2)
+    expected_map = dict(mine_set)
+    reviewed = [c for c in mined
+                if expected_map.get(c["text"]) not in (None, c["picked"])]
 
-    total_before += ok1
-    total_after += ok2
-    total_n += n
-    print(f"{name:8s} {ok1:>7d}/{n:<2d} {len(mined):>6d} {len(reviewed):>8d} "
-          f"{ok2:>7d}/{n:<2d} {ok2-ok1:>+5d}")
+    # Evaluation phase on HELD-OUT cases (real adversarial cases).
+    before_ok, _ = run(build(options), eval_set)
+    eng_after = build(options)
+    attach_counterexamples(eng_after.heads[0], reviewed)
+    eng_after.compile()
+    after_ok, _ = run(eng_after, eval_set)
 
-print("-" * 88)
-print(f"TOTAL before {total_before}/{total_n} = {total_before/total_n:.1%}  "
-      f"after {total_after}/{total_n} = {total_after/total_n:.1%}")
+    tot_b += before_ok
+    tot_a += after_ok
+    tot_n += len(eval_set)
+    print(f"{name:8s} {len(mined):>6d} {len(reviewed):>9d} "
+          f"{before_ok:>9d}/{len(eval_set):<3d} {after_ok:>8d}/{len(eval_set):<3d} {after_ok-before_ok:>+5d}")
+
+print("-" * 100)
+print(f"HOLDOUT TOTAL: before {tot_b}/{tot_n} = {tot_b/tot_n:.1%}  "
+      f"after {tot_a}/{tot_n} = {tot_a/tot_n:.1%}")
+print("Caveat: n_eval=20 — small. Delta direction is meaningful, exact size is not.")
+print("Positive delta on held-out cases = mined confusions generalize beyond memorized mistakes.")

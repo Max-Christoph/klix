@@ -56,10 +56,22 @@ class Rule:
         if self.mode == "boost" and self.weight <= 0:
             raise ValueError("boost rules need weight > 0")
 
-    def compile(self) -> re.Pattern:
-        """Compiles this rule into a case-insensitive regex over the raw text."""
+    def compile(self) -> "re.Pattern":
+        """Compiles this rule into a case-insensitive regex over the raw text.
+
+        Raises ValueError (naming the rule) for invalid patterns — regex typos
+        must fail loudly at compile time, with the offending rule identified.
+        Note: Python 3.11+ forbids inline flags like ``(?i)`` mid-pattern;
+        put them at the very start or rely on the implicit IGNORECASE flag.
+        """
         if self.pattern:
-            return re.compile(self.pattern, re.IGNORECASE)
+            try:
+                return re.compile(self.pattern, re.IGNORECASE)
+            except re.error as e:
+                raise ValueError(
+                    f"Rule {self.describe()!r} has an invalid pattern "
+                    f"({self.pattern!r}): {e}"
+                ) from e
         words = "|".join(re.escape(w) for w in (self.any_of or []))
         return re.compile(rf"(?i)\b(?:{words})\b")
 

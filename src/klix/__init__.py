@@ -2,6 +2,7 @@
 
 from klix.engine import DecisionEngine, DecisionResult
 from klix.heads import BaseHead, Choice, Flag, Score
+from klix.rules import Rule
 
 __version__ = "0.6.0"
 
@@ -12,4 +13,5 @@ __all__ = [
     "Choice",
     "Score",
     "Flag",
+    "Rule",
 ]

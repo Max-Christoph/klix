@@ -943,17 +943,24 @@ class Flag(BaseHead):
             "coverage": coverage,
         }
 
-    def calibrate(self, backbone: HybridBackbone, samples: list[tuple[str, bool]], metric: str = "f1") -> dict:
+    def calibrate(self, backbone: HybridBackbone, samples: list[tuple[str, bool]], metric: str = "f1",
+                  cv: int | None = None) -> dict:
         """Learns the best threshold from labeled validation samples.
 
         Samples: ``(text, expected_value)`` pairs where expected_value is the
         ground-truth boolean (samples that would be None/neutral are excluded —
-        use them for neutral_anchors instead). Evaluates every candidate
-        threshold (the sorted unique sample probabilities plus 0.5), computes the
-        chosen metric for each, and sets ``self.threshold`` to the winner.
+        use them for neutral_anchors instead). Candidate thresholds are the
+        sorted unique sample probabilities plus 0.5.
 
-        Returns a report dict: {"threshold", "metric", "value", "n", "warning"}.
-        Warns when n < 8 (the F1 estimate is then statistically rough).
+        Selection uses k-fold cross-validation when n >= 6 (default cv=3):
+        each fold picks its own best threshold, and the final threshold is the
+        *median* over folds — much more robust against overfitting to a small
+        sample than a single full-data sweep. When n < 6 the method falls back
+        to the full-sample sweep and says so via ``warning``.
+
+        Returns {"threshold", "metric", "value", "n", "cv", "spread", "warning"}.
+        ``spread`` (max-min metric across folds) is a stability signal: values
+        near 0 mean the threshold choice is stable across folds.
         """
         if metric not in ("f1", "precision", "recall", "accuracy"):
             raise ValueError(f"metric must be f1|precision|recall|accuracy, got {metric!r}")
@@ -963,43 +970,77 @@ class Flag(BaseHead):
         texts = [t for t, _ in samples]
         y = np.array([1.0 if lab else 0.0 for _, lab in samples])
 
-        # One forward pass per sample over the two poles (cheap, no softmax
-        # needed: the decision only depends on s_true vs s_false ordering).
         s_true = np.array([self._pool(self.true_matrix, self._enc_vec(backbone, t)) for t in texts])
         s_false = np.array([self._pool(self.false_matrix, self._enc_vec(backbone, t)) for t in texts])
-        # Two-class softmax probability (mirrors evaluate without neutral).
         scaled = np.stack([s_true, s_false], axis=1) / self.temp
         scaled -= scaled.max(axis=1, keepdims=True)
         exp = np.exp(scaled)
         probs = exp / exp.sum(axis=1, keepdims=True)
         probs = probs[:, 0]
 
-        best_t, best_v = 0.5, -1.0
-        for t in sorted(set(probs.tolist()) | {0.5}):
-            pred = (probs >= t).astype(float)
-            tp = float(((pred == 1) & (y == 1)).sum())
-            fp = float(((pred == 1) & (y == 0)).sum())
-            fn = float(((pred == 0) & (y == 1)).sum())
-            tn = float(((pred == 0) & (y == 0)).sum())
+        def metric_value(p, yy, t):
+            pred = (p >= t).astype(float)
+            tp = float(((pred == 1) & (yy == 1)).sum())
+            fp = float(((pred == 1) & (yy == 0)).sum())
+            fn = float(((pred == 0) & (yy == 1)).sum())
+            tn = float(((pred == 0) & (yy == 0)).sum())
             if metric == "accuracy":
-                v = (tp + tn) / len(y)
-            elif metric == "precision":
-                v = tp / (tp + fp) if (tp + fp) > 0 else 0.0
-            elif metric == "recall":
-                v = tp / (tp + fn) if (tp + fn) > 0 else 0.0
-            else:  # f1
-                p = tp / (tp + fp) if (tp + fp) > 0 else 0.0
-                r = tp / (tp + fn) if (tp + fn) > 0 else 0.0
-                v = 2 * p * r / (p + r) if (p + r) > 0 else 0.0
-            if v > best_v:
-                best_v, best_t = v, float(t)
+                return (tp + tn) / len(yy)
+            if metric == "precision":
+                return tp / (tp + fp) if (tp + fp) > 0 else 0.0
+            if metric == "recall":
+                return tp / (tp + fn) if (tp + fn) > 0 else 0.0
+            p_ = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+            r_ = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+            return 2 * p_ * r_ / (p_ + r_) if (p_ + r_) > 0 else 0.0
 
+        def sweep(p, yy):
+            best_t, best_v = 0.5, -1.0
+            for t in sorted(set(p.tolist()) | {0.5}):
+                v = metric_value(p, yy, t)
+                if v > best_v:
+                    best_v, best_t = v, float(t)
+            return best_t, best_v
+
+        n = len(samples)
+        if n >= 6:
+            # Stratified-ish k-fold: interleave by label so both classes appear
+            # in every fold even with skewed samples.
+            order = np.argsort(y + np.arange(n) * 1e-9)  # stable interleave
+            folds = [[] for _ in range(min(3, n))]
+            for i, idx in enumerate(order):
+                folds[i % len(folds)].append(idx)
+            fold_t, fold_v = [], []
+            for f in folds:
+                test_idx = np.array(f)
+                train_idx = np.array([i for i in range(n) if i not in set(f)])
+                if len(set(y[train_idx])) < 2:
+                    continue  # fold without both classes cannot sweep
+                t_i, _v_train = sweep(probs[train_idx], y[train_idx])
+                # evaluate on the held-out fold: honest estimate
+                v_test = metric_value(probs[test_idx], y[test_idx], t_i)
+                fold_t.append(t_i)
+                fold_v.append(v_test)
+            if fold_t:
+                self.threshold = float(np.median(fold_t))
+                spread = float(np.max(fold_v) - np.min(fold_v)) if len(fold_v) > 1 else 0.0
+                warning = None
+                if n < 8:
+                    warning = (f"only {n} samples with cv={len(fold_t)}; "
+                               f"threshold estimate is rough, prefer 8+")
+                return {"threshold": self.threshold, "metric": metric,
+                        "value": round(float(np.mean(fold_v)), 4),
+                        "n": n, "cv": len(fold_t), "spread": round(spread, 4),
+                        "warning": warning}
+
+        # Fallback: full-sample sweep (n < 6 or degenerate folds).
+        best_t, best_v = sweep(probs, y)
         self.threshold = best_t
         warning = None
-        if len(samples) < 8:
-            warning = f"only {len(samples)} samples; threshold estimate is rough, prefer 8+"
+        if n < 8:
+            warning = f"only {n} samples; threshold estimate is rough, prefer 8+"
         return {"threshold": best_t, "metric": metric, "value": round(best_v, 4),
-                "n": len(samples), "warning": warning}
+                "n": n, "cv": None, "spread": None, "warning": warning}
 
     @staticmethod
     def _enc_vec(backbone: HybridBackbone, text: str) -> np.ndarray:

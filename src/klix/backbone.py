@@ -11,15 +11,31 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 # keep their signal. `stop_words=None` (default) uses this list, `stop_words=[]`
 # disables stopword filtering entirely, and a custom list replaces it (e.g. for
 # a third language). Extendable via DecisionEngine(stop_words=...).
+#
+# Lesson (the "Joghurt-Fehler"): grammatical fillers like "den"/"hat" gave the
+# sparse channel high weights on off-domain queries and overrode semantics.
+# Articles, pronouns, auxiliaries and prepositions carry no routing signal and
+# are therefore filtered by default.
 _DEFAULT_STOPWORDS = [
-    # German
-    "die", "der", "das", "ein", "eine", "einer", "eines", "einem", "einen",
-    "im", "in", "ist", "und", "für", "von", "mit", "an", "auf", "nach", "zu",
-    "nicht", "mehr", "wird", "wie", "was", "hier", "dort",
-    # English
-    "the", "a", "an", "is", "are", "was", "were", "be", "been", "and", "for",
-    "of", "with", "to", "in", "on", "at", "do", "does", "did", "this", "that",
-    "it", "i", "you", "we", "they", "not", "have", "has", "had", "will", "can",
+    # German: articles, pronouns, auxiliaries, prepositions, common adverbs
+    "die", "der", "das", "den", "dem", "des", "ein", "eine", "einer", "eines",
+    "einem", "einen", "einer", "ich", "du", "er", "sie", "es", "wir", "ihr",
+    "mich", "dir", "uns", "mir", "sich", "im", "in", "ist", "bin", "bist",
+    "sind", "war", "waren", "und", "oder", "für", "von", "mit", "an", "auf",
+    "nach", "zu", "zum", "zur", "bei", "aus", "über", "unter", "vor", "hinter",
+    "nicht", "kein", "keine", "mehr", "wird", "werden", "wurde", "wurden",
+    "wie", "was", "wer", "hier", "dort", "hat", "hatte", "haben", "hatte",
+    "seit", "schon", "noch", "nur", "auch", "wieder", "um", "dann", "als",
+    # English: articles, pronouns, auxiliaries, prepositions
+    "the", "a", "an", "is", "are", "was", "were", "be", "been", "being",
+    "and", "or", "for", "of", "with", "to", "in", "on", "at", "by", "from",
+    "do", "does", "did", "this", "that", "these", "those", "it", "i", "you",
+    "he", "she", "we", "they", "me", "him", "her", "us", "them", "my", "your",
+    "our", "their", "its", "not", "have", "has", "had", "will", "can", "could",
+    "would", "should", "may", "might", "must", "shall", "again", "still",
+    "just", "also", "only", "than", "then", "there", "here", "what", "which",
+    "who", "whom", "how", "when", "where", "why", "all", "each", "every",
+    "some", "any", "no", "nor", "not", "so", "too", "very",
 ]
 
 # Backward-compatible alias (older code imported _DEFAULT_GERMAN_STOPWORDS).
@@ -73,3 +89,21 @@ class HybridBackbone:
 
         sparse = self.tfidf_vec.transform([text]) if self.is_indexed else None
         return EncodedInput(text=text, dense_vec=dense_norm, sparse_vec=sparse)
+
+    def encode_batch(self, texts: list[str]) -> list[EncodedInput]:
+        """Encodes many texts in ONE dense pass (bulk mode).
+
+        fastembed batches the ONNX forward internally, so per-text overhead
+        drops sharply versus calling encode() in a loop. The sparse transform is
+        a single sklearn call over the whole list.
+        """
+        if not texts:
+            return []
+        dense = np.array(list(self.embed_model.embed(texts)))
+        norms = np.linalg.norm(dense, axis=1, keepdims=True)
+        dense = dense / np.where(norms == 0, 1.0, norms)
+        sparse = self.tfidf_vec.transform(texts) if self.is_indexed else None
+        return [
+            EncodedInput(text=text, dense_vec=dense[i], sparse_vec=(sparse[i] if sparse is not None else None))
+            for i, text in enumerate(texts)
+        ]

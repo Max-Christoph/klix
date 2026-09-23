@@ -105,6 +105,46 @@ class DecisionEngine:
         elapsed_ms = (time.perf_counter() - start) * 1000
         return DecisionResult(text=text, latency_ms=elapsed_ms, head_data=results, engine=self)
 
+    def decide_batch(self, texts: list[str]) -> list[DecisionResult]:
+        """Processes many texts in one embedding pass (bulk mode).
+
+        The dense encoder runs once over the whole list (fastembed batches the
+        ONNX forward pass internally), so per-text overhead drops sharply for
+        large volumes. Head evaluation then loops per text but stays in the
+        sub-millisecond regime. Results are returned in input order; latency_ms
+        per item reflects its share of the batch time.
+
+        For pipelines that already hold embeddings, `encode_batch` +
+        head.evaluate() can be used directly to avoid re-encoding.
+        """
+        if not self.heads:
+            raise ValueError("No heads registered: call add_head() first.")
+        if not self._compiled:
+            self.compile()
+        if not texts:
+            return []
+
+        start = time.perf_counter()
+
+        # 1. ONE embedding pass over the whole batch.
+        encoded_list = self.backbone.encode_batch(texts)
+
+        # 2. Head evaluation per encoded input (heads are microsecond-fast;
+        #    a vectorized multi-head matmul would complicate the BaseHead API
+        #    for no measurable gain at this scale).
+        results: list[DecisionResult] = []
+        for text, encoded in zip(texts, encoded_list):
+            head_data: dict[str, dict] = {}
+            for head in self.heads:
+                head_data[head.name] = head.evaluate(encoded)
+            results.append(DecisionResult(text=text, latency_ms=0.0, head_data=head_data, engine=self))
+
+        elapsed_ms = (time.perf_counter() - start) * 1000
+        per_item = elapsed_ms / max(1, len(texts))
+        for r in results:
+            r.latency_ms = per_item
+        return results
+
     def calibrate(self, head_name: str, samples: list, metric: str = "f1") -> dict:
         """Learns decision parameters for one head from labeled validation samples.
 

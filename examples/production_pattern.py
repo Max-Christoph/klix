@@ -1,21 +1,22 @@
-"""klix-engine 0.3.0 - Production-Pattern: vollständiges Ticket-Routing in einer Datei.
+"""klix-engine 0.4.0 - Kompletter Überblick in einer Datei.
 
 Ausführen:
     pip install klix-engine   (bzw. uv pip install klix-engine)
-    python examples/production_pattern.py
+    python klix_demo.py
 
-Das Skript zeigt das produktionsreife Nutzungsmuster:
-- Choice + Score + Flag auf einem geteilten Backbone
-- classifier="auto" und translate_fn (cross-lingual)
-- explizite Auffang-Klasse ("not_relevant") statt blindem Routing
-- zweistufige Aktion: Security-Veto, Confidence-Gate, Auto-Schließen
-- eigener Kopf per BaseHead-Vererbung (Ticket-ID-Extraktion)
-- alle Vertrauenssignale (score, confidence, coverage, margin) erklärt
+Das Skript zeigt alle Köpfe (Choice, Score, Flag), alle wichtigen Parameter
+und die typischen Nutzungsmuster -- direkt lauffähig, vollständig kommentiert.
+
+Neu in 0.4.0 (Abschnitte 8-10):
+  - Regeln (force/boost) als harte Signale über der Semantik
+  - res.explain(): welche Wörter/Anchors haben entschieden?
+  - engine.calibrate(): Schwellenwerte aus Beispielen lernen statt raten
 """
 
 import time
 
 from klix import BaseHead, Choice, DecisionEngine, Flag, Score
+from klix.rules import Rule
 
 # ============================================================================
 # 1. ENGINE ANLEGEN
@@ -126,6 +127,32 @@ engine.add_head(
         # ---- Score-Floor: zu niedriger score -> ebenfalls value=None ------
         # (zweite Sicherheitsschicht für Off-Domain-Texte ohne Reject-Pol)
         reject_threshold=0.35,
+        #
+        # ---- Regeln: harte Signale über der Semantik (NEU in 0.4.0) --------
+        # mode="force": wenn der Ausdruck matcht, gewinnt das Label SOFORT -
+        #     auch gegen die Semantik, den Reject-Pol und reject_threshold.
+        #     Das expliziteste Nutzer-Signal ("diese Wörter sind immer X").
+        # mode="boost": addiert `weight` auf das Label - kann knappe
+        #     Entscheidungen kippen, ohne sie zu erzwingen.
+        # Getriggerte Regeln stehen später in details("route")["matched_rules"].
+        rules=[
+            # Kernserver-IPs und Asset-Tags sind IMMER ein OT-Problem,
+            # egal wie der Rest des Satzes klingt:
+            Rule(
+                label="security",
+                pattern=r"(?i)\b(?:ransomware|phishing|hacker)\b",
+                mode="force",
+                name="security_keywords",
+            ),
+            # Asset-IDs (plc-xx) sind immer technisch:
+            Rule(
+                label="technical",
+                pattern=r"\bplc-\d+\b",
+                mode="boost",
+                weight=1.5,
+                name="plc_asset_tag",
+            ),
+        ],
         #
         # ---- Weitere nützliche Knobs ---------------------------------------
         # keyword_boost=0.5          : Gewicht exakter Worttreffer (Asset-IDs wie "plc-34")
@@ -287,11 +314,15 @@ import re
 
 
 class TicketIdHead(BaseHead):
-    """Extrahiert IDs wie 'INC-4711' oder 'TICKET-42' aus dem Text."""
+    """Extrahiert IDs wie 'INC-4711' oder 'TICKET-42' aus dem Text.
+
+    Gibt die ID MIT ihrem Original-Präfix zurück — ein Extraktions-Kopf darf
+    Daten nicht stillschweigend umschreiben (Transformations-Regel).
+    """
 
     def __init__(self, name: str = "ticket_id"):
         super().__init__(name)
-        self.pattern = re.compile(r"(?i)\b(?:ticket|inc|case)[-# ]?(\d{2,6})\b")
+        self.pattern = re.compile(r"(?i)\b(ticket|inc|case)[-# ]?(\d{2,6})\b")
 
     def get_reference_texts(self) -> list[str]:
         return []  # keine Referenztexte nötig
@@ -301,7 +332,10 @@ class TicketIdHead(BaseHead):
 
     def evaluate(self, encoded) -> dict:
         m = self.pattern.search(encoded.text)
-        return {"value": f"INC-{m.group(1)}" if m else None}
+        if not m:
+            return {"value": None}
+        prefix, number = m.group(1).upper(), m.group(2)
+        return {"value": f"{prefix}-{number}"}  # original prefix, no rewriting
 
 
 engine.add_head(TicketIdHead())
@@ -313,54 +347,95 @@ print(f"\nText  : {demo}")
 print(f"route : {res.route} | ticket_id: {res.ticket_id} | urgency: {res.urgency}")
 
 # ============================================================================
-# 7. EXPLAIN - WARUM wurde so entschieden? (v0.4.0)
+# 7. REGELN IN AKTION - force und boost (NEU in 0.4.0)
 # ============================================================================
 print("\n" + "=" * 78)
-print("res.explain() - Decision Attribution (Debugging in der Industrie)")
+print("Regeln (force/boost) - harte Signale über der Semantik")
 print("=" * 78)
 
-klarer_fall = "die rechnung wurde doppelt abgebucht, bitte sofort prüfen"
-res = engine.decide(klarer_fall)
-exp = res.explain("route")
-print(f"\nText : {klarer_fall}")
-print(f"Route: {exp['value']}")
-for b in exp.get("because", []):
-    if b["kind"] == "semantic":
-        print(f"  semantisch : Anchor {b['anchor']!r} -> {b['similarity']:.0%} Übereinstimmung")
-    elif b["kind"] == "keyword":
-        print(f"  keyword    : {b['token']!r} (gewichteter Beitrag {b['weight']})")
-    elif b["kind"] == "rule":
-        print(f"  regel      : {b['rule']}")
-print(f"  runner-up  : {exp.get('runner_up')}")
+rule_tickets = [
+    # Force-Regel: "ransomware" erzwingt security, egal was die Semantik sagt
+    ("phishing mail aussieht wie eine rechnung, bitte prüfen", "security erzwungen"),
+    # Boost-Regel: "plc-42" hebt technical an (Asset-ID-Signal)
+    ("plc-42 sporadische fehler im schichtbetrieb", "technical per boost"),
+    # Ohne Regel-Treffer: normale Semantik
+    ("die heizung im besprechungsraum geht nicht", "normal geroutet"),
+]
+for text, expect in rule_tickets:
+    res = engine.decide(text)
+    d = res.details("route")
+    matched = d.get("matched_rules", [])
+    forced = d.get("forced_by")
+    print(f"\nText : {text}")
+    print(f"  Route : {d['value']!r} (score={d['score']:.2f}, conf={d['confidence']:.2f})")
+    if forced:
+        print(f"  >>> ERZWUNGEN durch Regel {forced!r}")
+    elif matched:
+        print(f"  >>> Regel getriggert: {matched}")
+    else:
+        print(f"  >>> keine Regel gegriffen (rein semantisch)")
 
 # ============================================================================
-# 8. CALIBRATE - Schwellenwerte aus Beispielen lernen (v0.4.0)
+# 8. EXPLAIN - WARUM wurde so entschieden? (NEU in 0.4.0)
 # ============================================================================
 print("\n" + "=" * 78)
-print("engine.calibrate() - Threshold automatisch kalibrieren")
+print("res.explain() - Decision Attribution (Debugging)")
+print("=" * 78)
+
+explain_tickets = [
+    "die rechnung wurde doppelt abgebucht, bitte sofort prüfen",  # klarer billing-Fall
+    "jemand hat sich in den admin account eingeloggt, um 3 uhr",  # security
+]
+for text in explain_tickets:
+    res = engine.decide(text)
+    exp = res.explain("route")
+    print(f"\nText : {text}")
+    print(f"  Entscheidung: {exp['value']}")
+    for b in exp.get("because", []):
+        if b["kind"] == "semantic":
+            print(f"    semantisch : Anchor {b['anchor']!r} -> {b['similarity']:.0%}")
+        elif b["kind"] == "keyword":
+            print(f"    keyword    : {b['token']!r} (Beitrag {b['weight']})")
+        elif b["kind"] == "rule":
+            print(f"    regel      : {b['rule']}")
+    if exp.get("runner_up"):
+        print(f"    runner-up  : {exp['runner_up']['label']} ({exp['runner_up']['score']:.2f})")
+
+# Auch Flag und Score erklären sich selbst:
+print()
+exp_flag = engine.decide("ransomware verschlüsselt unsere daten!").explain("is_security")
+print(f"Flag-Interpretation: {exp_flag['interpretation']}")
+exp_score = engine.decide("produktion steht, sofort hilfe!").explain("urgency")
+print(f"Score-Interpretation: {exp_score['interpretation']}")
+
+# ============================================================================
+# 9. CALIBRATE - Schwellenwerte lernen statt raten (NEU in 0.4.0)
+# ============================================================================
+print("\n" + "=" * 78)
+print("engine.calibrate() - Threshold aus Beispielen lernen")
 print("=" * 78)
 
 flag_head = next(h for h in engine.heads if h.name == "is_security")
-print(f"Flag-Threshold vorher : {flag_head.threshold}")
-
-samples = [
-    ("ransomware hat unseren server verschlüsselt", True),
-    ("jemand hat sich in das admin konto eingeloggt", True),
-    ("phishing mail im postfach gefunden", True),
-    ("verdächtiger datenabfluss nachts um 3", True),
+print(f"\nFlag-Threshold vorher: {flag_head.threshold}")
+kalib_samples = [
+    ("ransomware hat den server verschlüsselt", True),
+    ("fremder login im admin konto um 3 uhr", True),
+    ("phishing mail an die buchhaltung", True),
+    ("unbekannter datenabfluss gestern nacht", True),
     ("der drucker hat papierstau", False),
-    ("der monitor flackert manchmal", False),
+    ("der monitor flackert", False),
     ("das wlan ist langsam", False),
-    ("maus-kabel ist kaputt", False),
+    ("maus kabel ist kaputt", False),
 ]
-report = engine.calibrate("is_security", samples)
+report = engine.calibrate("is_security", kalib_samples)
 print(f"Flag-Threshold nachher: {flag_head.threshold} "
-      f"(metric={report['metric']}, wert={report['value']}, n={report['n']})")
+      f"(metric={report['metric']}, wert={report['value']:.2f}, n={report['n']})")
 if report.get("warning"):
     print(f"  Hinweis: {report['warning']}")
 
 # Score-Kalibrierung: Sharpness + affine Remap aus Zielwerten lernen
-samples_urg = [
+print("\nScore-Kalibrierung (Zielwerte statt Standard-Skala):")
+score_samples = [
     ("produktion steht komplett still", 3.0),
     ("notfall, alles fällt aus", 3.0),
     ("kritischer ausfall läuft gerade", 2.7),
@@ -368,12 +443,15 @@ samples_urg = [
     ("kann bis nächste woche warten", 0.1),
     ("normale anfrage ohne priorität", 0.3),
 ]
-report = engine.calibrate("urgency", samples_urg)
-print(f"Score-Kalibrierung    : sharpness={report['sharpness']}, "
-      f"remap a={report['a']:.2f} b={report['b']:.2f}")
+report = engine.calibrate("urgency", score_samples)
+print(f"  sharpness={report['sharpness']}, remap: wert ≈ {report['a']:.2f} + {report['b']:.2f}·raw")
+check = engine.decide("produktion steht komplett still, alles down!")
+print(f"  Kontrolle 'produktion steht komplett still, sofort': urgency={check.urgency} (Ziel ~3.0)")
+check2 = engine.decide("routinefrage, kann warten")
+print(f"  Kontrolle 'routinefrage, kann warten': urgency={check2.urgency} (Ziel ~0.2)")
 
 # ============================================================================
-# 9. LATEZ-PROFIL
+# 10. LATEZ-PROFIL
 # ============================================================================
 print("\n" + "=" * 78)
 print("Latenzprofil (50 Durchläufe, median)")

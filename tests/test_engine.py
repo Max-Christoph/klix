@@ -185,12 +185,17 @@ class TestLatency:
         encoded = engine.backbone.encode("plc-34 error")
         import time
 
-        # Warmup (JIT/caches), then measured round.
+        # Warmup (JIT/caches), then measured rounds.
         for head in engine.heads:
             head.evaluate(encoded)
 
-        start = time.perf_counter()
-        for head in engine.heads:
-            head.evaluate(encoded)
-        elapsed_ms = (time.perf_counter() - start) * 1000
-        assert elapsed_ms < 1.0, f"Head evaluation took {elapsed_ms:.3f} ms"
+        # Median over several rounds to be robust against transient CPU load
+        # (a single cold round under load can exceed the budget spuriously).
+        samples = []
+        for _ in range(9):
+            start = time.perf_counter()
+            for head in engine.heads:
+                head.evaluate(encoded)
+            samples.append((time.perf_counter() - start) * 1000)
+        median_ms = sorted(samples)[len(samples) // 2]
+        assert median_ms < 1.0, f"Head evaluation took {median_ms:.3f} ms (median)"

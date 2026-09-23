@@ -165,3 +165,50 @@ class DecisionEngine:
         if not hasattr(head, "calibrate"):
             raise ValueError(f"Head '{head_name}' ({type(head).__name__}) has no calibrate().")
         return head.calibrate(self.backbone, samples, metric=metric)
+
+    def validate_anchors(self) -> list[dict]:
+        """Read-only anchor-quality report for all Choice heads.
+
+        Detects per head:
+        - overlapping classes (pairwise centroid cosine >= 0.75), with the
+          shared confuser terms and per-side sharpening hints
+        - misplaced anchors (closer to a foreign centroid than to their own)
+        - structural issues (classes with 1 anchor, duplicate anchors)
+
+        The report NEVER mutates anchors; applying suggestions stays with the
+        developer. Returns a list of findings dicts (see klix.validate).
+        """
+        if not self._compiled:
+            self.compile()
+        from klix.validate import validate_choice_head
+
+        report: list[dict] = []
+        for head in self.heads:
+            if hasattr(head, "options"):  # Choice-like heads only
+                report.extend(validate_choice_head(head))
+        return report
+
+    def validate_anchors_report(self) -> str:
+        """Formatted human-readable version of validate_anchors()."""
+        findings = self.validate_anchors()
+        if not findings:
+            return "All anchors look well separated. No findings."
+        lines = []
+        for f in findings:
+            if f["kind"] == "overlap":
+                marker = "!!" if f["severity"] == "high" else " ?"
+                lines.append(
+                    f"{marker} [{f['head']}] '{f['a']}' <-> '{f['b']}': "
+                    f"centroid cosine {f['centroid_cos']} ({f['severity']})"
+                )
+                if f["shared_terms"]:
+                    lines.append(f"      shared confusers: {', '.join(f['shared_terms'][:5])}")
+                if f["a_exclusive"]:
+                    lines.append(f"      sharpen '{f['a']}' with: {', '.join(f['a_exclusive'][:3])}")
+                if f["b_exclusive"]:
+                    lines.append(f"      sharpen '{f['b']}' with: {', '.join(f['b_exclusive'][:3])}")
+                for m in f["misplaced"][:3]:
+                    lines.append(f"      misplaced: {m['text']!r} ({m['from']}) sits closer to '{m['closer_to']}'")
+            else:
+                lines.append(f" ?  [{f['head']}] {f['message']}")
+        return "\n".join(lines)

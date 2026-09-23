@@ -1,4 +1,4 @@
-"""Tests für die Klix-Engine (pytest, vollständig offline)."""
+"""Tests for the Klix engine (pytest, fully offline)."""
 
 import numpy as np
 import pytest
@@ -8,24 +8,24 @@ from klix import BaseHead, Choice, DecisionEngine, Flag, Score
 
 @pytest.fixture(scope="module")
 def engine() -> DecisionEngine:
-    """Kompilierte Engine mit den drei Kern-Köpfen."""
+    """Compiled engine with the three core heads."""
     eng = DecisionEngine()
     eng.add_head(
         Choice(
             name="target",
             options={
-                "it_ops": ["VPN abgerissen", "Server down", "Rechner bootet nicht", "web-02 timeout"],
-                "ot_plant": ["Roboterzelle steht", "SPS Fehler", "plc-34 fehler", "Taktzeit deviation"],
-                "finance": ["Rechnung freigeben", "KST über Budget", "Skonto abziehen"],
-                "facility": ["Öllache Halle 2", "Heizung defekt", "Rutschgefahr Schmiermittel"],
+                "it_ops": ["VPN down", "server unreachable", "laptop won't boot", "web-02 timeout"],
+                "ot_plant": ["robot cell stopped", "PLC fault", "plc-34 error", "cycle time deviation"],
+                "finance": ["approve invoice", "cost center over budget", "apply early-payment discount"],
+                "facility": ["oil spill hall 2", "heating broken", "slip hazard lubricant"],
             },
         )
     )
     eng.add_head(
         Score(
             name="urgency",
-            low_anchors=["Routine-Wartung", "Informelle Frage", "Hat Zeit nächste Woche"],
-            high_anchors=["Notfall sofort", "Produktionsstillstand", "Akute Gefahr", "Kritischer Ausfall"],
+            low_anchors=["routine maintenance", "casual question", "can wait until next week"],
+            high_anchors=["emergency right now", "production line down", "acute danger", "critical failure"],
             min_val=0.0,
             max_val=3.0,
         )
@@ -33,9 +33,9 @@ def engine() -> DecisionEngine:
     eng.add_head(
         Flag(
             name="is_security",
-            true_anchors=["Hackerangriff", "Ransomware Befall", "Root login kompromittiert", "Datenabfluss"],
-            false_anchors=["Hardware kaputt", "Standard IT Problem", "Netzwerkstörung", "Alltägliche Anfrage"],
-            threshold=0.0,  # Threshold 0 => Wert immer True, prob steuert Detail
+            true_anchors=["hacker attack", "ransomware infection", "compromised root login", "data exfiltration"],
+            false_anchors=["hardware broken", "standard IT problem", "network outage", "everyday request"],
+            threshold=0.0,  # threshold 0 => value always True, probability drives detail
         )
     )
     eng.compile()
@@ -44,16 +44,16 @@ def engine() -> DecisionEngine:
 
 class TestBackbone:
     def test_encode_returns_normalized_dense(self, engine):
-        encoded = engine.backbone.encode("Server steht")
+        encoded = engine.backbone.encode("server is down")
         norm = np.linalg.norm(encoded.dense_vec)
         assert abs(norm - 1.0) < 1e-6
 
     def test_encode_sparse_available_after_compile(self, engine):
-        encoded = engine.backbone.encode("plc-34 fehler")
+        encoded = engine.backbone.encode("plc-34 error")
         assert encoded.sparse_vec is not None
 
     def test_shared_encoding_single_pass(self, engine):
-        """Ein encode() deckt alle Köpfe ab — Backbone wird pro decide() nur einmal benutzt."""
+        """One encode() covers all heads — the backbone is used only once per decide()."""
         before = engine.backbone.encode
         calls = {"n": 0}
 
@@ -63,7 +63,7 @@ class TestBackbone:
 
         engine.backbone.encode = counting_encode
         try:
-            engine.decide("SPS Fehler in Zelle 3")
+            engine.decide("PLC fault in cell 3")
             assert calls["n"] == 1
         finally:
             engine.backbone.encode = before
@@ -71,90 +71,88 @@ class TestBackbone:
 
 class TestChoice:
     def test_ot_ticket_routes_to_ot_plant(self, engine):
-        result = engine.decide("plc-34 meldet fehler, förderband steht sofort!")
+        result = engine.decide("plc-34 reports a fault, conveyor belt stopped immediately!")
         assert result.target == "ot_plant"
 
     def test_it_ticket_routes_to_it_ops(self, engine):
-        result = engine.decide("VPN bricht bei Homeoffice ständig ab")
+        result = engine.decide("VPN keeps dropping in home office")
         assert result.target == "it_ops"
 
     def test_finance_ticket_routes_to_finance(self, engine):
-        result = engine.decide("Rechnung 2024-118 bitte freigeben")
+        result = engine.decide("please approve invoice 2024-118")
         assert result.target == "finance"
 
     def test_scores_dict_contains_all_labels(self, engine):
-        result = engine.decide("Heizung defekt")
+        result = engine.decide("heating broken")
         scores = result.details("target")["scores"]
         assert set(scores.keys()) == {"it_ops", "ot_plant", "finance", "facility"}
         assert result.details("target")["confidence"] >= 0.0
 
     def test_keyword_boost_changes_score(self, engine):
-        """Sparse-Boost muss das Hybrid-Score gegenüber reinem Dense-Score anheben."""
-        result = engine.decide("plc-34 fehler")
+        """Sparse boost must raise the hybrid score above the pure dense score."""
+        result = engine.decide("plc-34 error")
         score = result.details("target")["score"]
-        encoded = engine.backbone.encode("plc-34 fehler")
+        encoded = engine.backbone.encode("plc-34 error")
         dense_sims = engine.heads[0].dense_matrix @ encoded.dense_vec
         dense_best = max(
             sim for sim, label in zip(dense_sims, engine.heads[0].label_map) if label == "ot_plant"
         )
-        assert score > dense_best  # Boost aktiv (exakter Worttreffer plc-34)
+        assert score > dense_best  # boost active (exact word hit plc-34)
 
     def test_add_head_invalidates_compilation(self, engine):
         engine.add_head(Choice(name="tmp", options={"a": ["x"]}))
         assert engine._compiled is False
-        # Für weitere Tests wieder sauber kompilieren lassen (decide compiliert selbst).
+        # Re-compile cleanly for subsequent tests (decide compiles itself).
         engine.decide("Test")
 
 
 class TestScore:
     def test_urgent_ticket_high_score(self, engine):
-        result = engine.decide("Produktion steht komplett, sofort Hilfe nötig!")
+        result = engine.decide("production completely stopped, need help right now!")
         assert result.urgency >= 2.0
 
     def test_routine_ticket_low_score(self, engine):
-        result = engine.decide("Routine-Wartung, hat Zeit nächste Woche")
+        result = engine.decide("routine maintenance, can wait until next week")
         assert result.urgency <= 1.5
 
     def test_score_within_bounds(self, engine):
-        for text in ["Notfall!!", "langweilige Frage", "Server brennt"]:
+        for text in ["emergency!!", "boring question", "server on fire"]:
             assert 0.0 <= engine.decide(text).urgency <= 3.0
 
 
 class TestFlag:
     def test_probability_in_unit_interval(self, engine):
-        prob = engine.decide("Ransomware auf Fileserver").details("is_security")["probability"]
+        prob = engine.decide("ransomware on file server").details("is_security")["probability"]
         assert 0.0 <= prob <= 1.0
 
     def test_security_text_raises_probability(self, engine):
-        prob_attack = engine.decide("Ransomware auf Fileserver").details("is_security")["probability"]
-        prob_boring = engine.decide("Maus-Ratte Kabelsalat unterm Schreibtisch").details("is_security")[
-            "probability"
-        ]
+        prob_attack = engine.decide("ransomware on file server").details("is_security")["probability"]
+        prob_boring = engine.decide("cable mess under the desk").details("is_security")["probability"]
         assert prob_attack > prob_boring
 
 
 class TestEngine:
     def test_decide_without_heads_raises(self):
-        with pytest.raises(ValueError, match="Keine Köpfe"):
+        with pytest.raises(ValueError, match="No heads"):
             DecisionEngine().decide("x")
 
     def test_details_unknown_head_empty(self, engine):
-        assert engine.decide("Test").details("gibtsnicht") == {}
+        assert engine.decide("Test").details("doesnotexist") == {}
 
     def test_unknown_attribute_raises(self, engine):
         result = engine.decide("Test")
         with pytest.raises(AttributeError):
-            _ = result.gibtsnicht
+            _ = result.doesnotexist
 
     def test_repr_contains_values(self, engine):
-        result = engine.decide("plc-34 fehler")
+        result = engine.decide("plc-34 error")
         rep = repr(result)
         assert "target=ot_plant" in rep
         assert "urgency=" in rep
         assert "is_security=" in rep
 
     def test_custom_head_integration(self, engine):
-        """BaseHead-Erweiterbarkeit: custom Kopf fügt sich ins Ergebnis ein."""
+        """BaseHead extensibility: custom head integrates into the result."""
 
         class LengthHead(BaseHead):
             def __init__(self):
@@ -170,24 +168,24 @@ class TestEngine:
                 return {"value": len(encoded.text)}
 
         engine.add_head(LengthHead())
-        result = engine.decide("Hallo Welt")
-        assert result.len == len("Hallo Welt")
-        # Aufräumen für nachfolgende Tests
+        result = engine.decide("Hello World")
+        assert result.len == len("Hello World")
+        # Clean up for subsequent tests
         engine.heads.pop()
         engine._compiled = False
 
 
 class TestLatency:
     def test_head_evaluation_under_1ms_for_3_heads(self, engine):
-        """Kopf-Evaluation (ohne Encoding) muss mit 3 Köpfen unter 1 ms liegen.
+        """Head evaluation (without encoding) must stay under 1 ms for 3 heads.
 
-        Aufteilung (gemessen, Windows/CPU): Choice-Sparse-Dot ~0.1 ms,
-        Dense-Dots je ~0.005 ms => 3 Köpfe ~0.6 ms, bleibt deutlich unter Budget.
+        Breakdown (measured, Windows/CPU): Choice sparse dot ~0.1 ms,
+        dense dots ~0.005 ms each => 3 heads ~0.6 ms, well within budget.
         """
-        encoded = engine.backbone.encode("plc-34 fehler")
+        encoded = engine.backbone.encode("plc-34 error")
         import time
 
-        # Warmup (JIT/Caches), dann gemessene Runde.
+        # Warmup (JIT/caches), then measured round.
         for head in engine.heads:
             head.evaluate(encoded)
 
@@ -195,4 +193,4 @@ class TestLatency:
         for head in engine.heads:
             head.evaluate(encoded)
         elapsed_ms = (time.perf_counter() - start) * 1000
-        assert elapsed_ms < 1.0, f"Kopf-Evaluation dauerte {elapsed_ms:.3f} ms"
+        assert elapsed_ms < 1.0, f"Head evaluation took {elapsed_ms:.3f} ms"

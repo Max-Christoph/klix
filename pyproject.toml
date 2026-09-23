@@ -1,11 +1,13 @@
 [project]
 name = "klix-engine"
-version = "0.1.2"
-description = "Entkoppelte Entscheidungs-Köpfe (Choice, Score, Flag) auf einem geteilten semantischen Backbone - lokal, deterministisch, ohne Modelltraining."
+version = "0.1.3"
+description = "Decoupled decision heads (Choice, Score, Flag) on a shared semantic backbone - local, deterministic, no model training."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
-authors = [{ name = "Max-Christoph Hänel" }]
+authors = [
+    { name = "Max-Christoph Hähnel", email = "m-c-haehnel@gmx.de" }
+]
 keywords = ["nlp", "decision-engine", "embeddings", "classification", "routing", "semantic-search"]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -17,7 +19,7 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
-    "Natural Language :: German",
+    "Natural Language :: English",
 ]
 dependencies = [
     "fastembed>=0.3,<1",

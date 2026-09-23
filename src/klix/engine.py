@@ -9,10 +9,11 @@ from klix.heads import BaseHead
 class DecisionResult:
     """Result of a `decide()` call; head values accessible as attributes."""
 
-    def __init__(self, text: str, latency_ms: float, head_data: dict):
+    def __init__(self, text: str, latency_ms: float, head_data: dict, engine=None):
         self.text = text
         self.latency_ms = latency_ms
         self.data = head_data
+        self._engine = engine
 
     def __getattr__(self, name: str):
         if name in self.data:
@@ -22,6 +23,23 @@ class DecisionResult:
     def details(self, name: str) -> dict:
         """Full result dict of a single head."""
         return self.data.get(name, {})
+
+    def explain(self, name: str) -> dict:
+        """Human-readable explanation of one head's decision.
+
+        Delegates to the head's ``explain(text, details)`` method. The Choice
+        head explains which keywords and which anchor drove the decision (exact
+        token attribution via the sparse channel); Score and Flag explain the
+        pole similarities. Raises ValueError for unknown heads.
+        """
+        if name not in self.data:
+            raise ValueError(f"Head '{name}' does not exist in this result.")
+        if self._engine is None:
+            raise ValueError("explain() is unavailable on this result (no engine reference).")
+        head = next((h for h in self._engine.heads if h.name == name), None)
+        if head is None or not hasattr(head, "explain_decision"):
+            return {"note": f"head '{name}' does not support explanations"}
+        return head.explain_decision(self.text, self.data.get(name, {}), backbone=self._engine.backbone)
 
     def __repr__(self):
         items = [f"{key}={value['value']}" for key, value in self.data.items()]
@@ -85,4 +103,25 @@ class DecisionEngine:
             results[head.name] = head.evaluate(encoded)
 
         elapsed_ms = (time.perf_counter() - start) * 1000
-        return DecisionResult(text=text, latency_ms=elapsed_ms, head_data=results)
+        return DecisionResult(text=text, latency_ms=elapsed_ms, head_data=results, engine=self)
+
+    def calibrate(self, head_name: str, samples: list, metric: str = "f1") -> dict:
+        """Learns decision parameters for one head from labeled validation samples.
+
+        - Flag: samples = [(text, bool)], calibrates ``threshold`` via the chosen
+          metric (f1|precision|recall|accuracy).
+        - Score: samples = [(text, float_target)], grid-searches ``sharpness``
+          and fits an affine remap (documented in Score.calibrate).
+        - Choice: samples = [(text, label_or_None)], calibrates ``reject_threshold``.
+
+        Returns the head's report dict; raises ValueError for unknown heads or
+        heads without a calibrate method (e.g. custom heads).
+        """
+        head = next((h for h in self.heads if h.name == head_name), None)
+        if head is None:
+            raise ValueError(f"Head '{head_name}' is not registered.")
+        if not self._compiled:
+            self.compile()
+        if not hasattr(head, "calibrate"):
+            raise ValueError(f"Head '{head_name}' ({type(head).__name__}) has no calibrate().")
+        return head.calibrate(self.backbone, samples, metric=metric)

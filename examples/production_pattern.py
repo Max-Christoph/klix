@@ -313,7 +313,67 @@ print(f"\nText  : {demo}")
 print(f"route : {res.route} | ticket_id: {res.ticket_id} | urgency: {res.urgency}")
 
 # ============================================================================
-# 7. LATEZ-PROFIL
+# 7. EXPLAIN - WARUM wurde so entschieden? (v0.4.0)
+# ============================================================================
+print("\n" + "=" * 78)
+print("res.explain() - Decision Attribution (Debugging in der Industrie)")
+print("=" * 78)
+
+klarer_fall = "die rechnung wurde doppelt abgebucht, bitte sofort prüfen"
+res = engine.decide(klarer_fall)
+exp = res.explain("route")
+print(f"\nText : {klarer_fall}")
+print(f"Route: {exp['value']}")
+for b in exp.get("because", []):
+    if b["kind"] == "semantic":
+        print(f"  semantisch : Anchor {b['anchor']!r} -> {b['similarity']:.0%} Übereinstimmung")
+    elif b["kind"] == "keyword":
+        print(f"  keyword    : {b['token']!r} (gewichteter Beitrag {b['weight']})")
+    elif b["kind"] == "rule":
+        print(f"  regel      : {b['rule']}")
+print(f"  runner-up  : {exp.get('runner_up')}")
+
+# ============================================================================
+# 8. CALIBRATE - Schwellenwerte aus Beispielen lernen (v0.4.0)
+# ============================================================================
+print("\n" + "=" * 78)
+print("engine.calibrate() - Threshold automatisch kalibrieren")
+print("=" * 78)
+
+flag_head = next(h for h in engine.heads if h.name == "is_security")
+print(f"Flag-Threshold vorher : {flag_head.threshold}")
+
+samples = [
+    ("ransomware hat unseren server verschlüsselt", True),
+    ("jemand hat sich in das admin konto eingeloggt", True),
+    ("phishing mail im postfach gefunden", True),
+    ("verdächtiger datenabfluss nachts um 3", True),
+    ("der drucker hat papierstau", False),
+    ("der monitor flackert manchmal", False),
+    ("das wlan ist langsam", False),
+    ("maus-kabel ist kaputt", False),
+]
+report = engine.calibrate("is_security", samples)
+print(f"Flag-Threshold nachher: {flag_head.threshold} "
+      f"(metric={report['metric']}, wert={report['value']}, n={report['n']})")
+if report.get("warning"):
+    print(f"  Hinweis: {report['warning']}")
+
+# Score-Kalibrierung: Sharpness + affine Remap aus Zielwerten lernen
+samples_urg = [
+    ("produktion steht komplett still", 3.0),
+    ("notfall, alles fällt aus", 3.0),
+    ("kritischer ausfall läuft gerade", 2.7),
+    ("routinefrage, keine eile", 0.2),
+    ("kann bis nächste woche warten", 0.1),
+    ("normale anfrage ohne priorität", 0.3),
+]
+report = engine.calibrate("urgency", samples_urg)
+print(f"Score-Kalibrierung    : sharpness={report['sharpness']}, "
+      f"remap a={report['a']:.2f} b={report['b']:.2f}")
+
+# ============================================================================
+# 9. LATEZ-PROFIL
 # ============================================================================
 print("\n" + "=" * 78)
 print("Latenzprofil (50 Durchläufe, median)")

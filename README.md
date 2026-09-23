@@ -109,8 +109,9 @@ Every head and the engine expose meaningful knobs:
 | Knob | Where | Effect |
 |------|-------|--------|
 | `options`, anchors | all heads | The schema itself — more/better example sentences are the main quality lever |
-| `classifier` | `Choice` | `"nearest"` (default) or `"linear"` — a logistic-regression probe trained on the (augmented) anchors at compile time. Learns a decision boundary that separates overlapping classes; measured +15 pts accuracy across 5 domains with no extra anchors. Inference stays a single matmul. |
+| `classifier` | `Choice` | `"nearest"` (default), `"linear"`, or `"auto"`. `"auto"` picks `"nearest"` for mixed-language anchors (robust) and `"linear"` for single-language (highest accuracy) |
 | `classifier_C` | `Choice` | Regularization strength for the linear probe (lower = more regularization, use with few anchors) |
+| `translate_fn` | `Choice` | Optional `(text, target_lang) -> str` hook: mirrors each anchor into the missing language at compile time, closing the cross-lingual gap without writing anchors twice |
 | `reject_anchors` | `Choice` | Texts matching these return `value=None` (don't-know instead of guess); with `classifier="linear"` they are learned as their own class |
 | `keyword_boost` | `Choice` | Weight of exact keyword hits (asset IDs like `plc-34`) vs. semantic similarity |
 | `aggregation` | `Score` | `"max"` (default) or `"topk"` — topk averages the best-k anchors per pole, robust against a single noisy anchor |
@@ -120,7 +121,7 @@ Every head and the engine expose meaningful knobs:
 | `aggregation` | `Flag` | `"max"` (default) or `"topk"` — topk averages the best-k anchors per pole, robust against a single noisy anchor |
 | `threshold` / `temp` | `Flag` | Decision cutoff and softmax temperature (lower = sharper) |
 | `model_name` | `DecisionEngine` | Any FastEmbed-compatible embedding model |
-| `stop_words` | `DecisionEngine` | Custom stopword list for the TF-IDF index (default: small German list) |
+| `stop_words` | `DecisionEngine` | Custom stopword list for the TF-IDF index (default: combined EN+DE list; pass `[]` to disable filtering) |
 | `evaluate(encoded)` | `BaseHead` subclass | Add entirely custom head types (regex, business rules, ...) |
 
 ## Custom Heads

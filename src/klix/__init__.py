@@ -3,7 +3,7 @@
 from klix.engine import DecisionEngine, DecisionResult
 from klix.heads import BaseHead, Choice, Flag, Score
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 
 __all__ = [
     "DecisionEngine",

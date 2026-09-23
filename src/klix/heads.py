@@ -48,19 +48,34 @@ class Choice(BaseHead):
     The option label with the most similar example sentences wins. Sparse
     similarity (exact word hits, e.g. asset IDs like `plc-34`) is added to the
     dense similarity, weighted by `keyword_boost`.
+
+    Optional `reject_anchors` describe what the head should NOT classify
+    (small talk, off-topic requests). When the best reject anchor matches more
+    strongly than any option, the head returns `value=None` — a "don't know"
+    signal instead of a forced guess. This catches clearly out-of-domain texts;
+    borderline cases still pass through (check `confidence`).
     """
 
-    def __init__(self, name: str, options: dict[str, list[str]], keyword_boost: float = 0.5):
+    def __init__(
+        self,
+        name: str,
+        options: dict[str, list[str]],
+        keyword_boost: float = 0.5,
+        reject_anchors: list[str] | None = None,
+    ):
         super().__init__(name)
         self.options = options
         self.keyword_boost = keyword_boost
+        self.reject_anchors = reject_anchors or []
+        self.reject_matrix: np.ndarray | None = None
         self.flat_texts: list[str] = []
         self.label_map: list[str] = []
         self.dense_matrix: np.ndarray | None = None
         self.sparse_matrix = None
 
     def get_reference_texts(self) -> list[str]:
-        return [text for examples in self.options.values() for text in examples]
+        texts = [text for examples in self.options.values() for text in examples]
+        return texts + self.reject_anchors
 
     def fit(self, backbone: HybridBackbone) -> None:
         self.flat_texts = []
@@ -73,6 +88,12 @@ class Choice(BaseHead):
         vecs = np.array(list(backbone.embed_model.embed(self.flat_texts)))
         self.dense_matrix = _normalize_rows(vecs)
         self.sparse_matrix = backbone.tfidf_vec.transform(self.flat_texts)
+
+        if self.reject_anchors:
+            r_v = np.array(list(backbone.embed_model.embed(self.reject_anchors)))
+            self.reject_matrix = _normalize_rows(r_v)
+        else:
+            self.reject_matrix = None
 
     def evaluate(self, encoded: EncodedInput) -> dict:
         dense_sims = self.dense_matrix @ encoded.dense_vec
@@ -95,6 +116,19 @@ class Choice(BaseHead):
         best_label = max(category_scores, key=category_scores.get)
         best_score = category_scores[best_label]
 
+        # Optional reject pole: wins against every option -> "don't know".
+        reject_sim = 0.0
+        if self.reject_matrix is not None:
+            reject_sim = float(np.max(self.reject_matrix @ encoded.dense_vec))
+            if reject_sim > best_score:
+                return {
+                    "value": None,
+                    "score": best_score,
+                    "confidence": 0.0,
+                    "scores": category_scores,
+                    "reject_score": reject_sim,
+                }
+
         # Margin to the runner-up as confidence calibration.
         sorted_scores = sorted(category_scores.values(), reverse=True)
         runner_up = sorted_scores[1] if len(sorted_scores) > 1 else 0.0
@@ -105,6 +139,7 @@ class Choice(BaseHead):
             "score": best_score,
             "confidence": confidence,
             "scores": category_scores,
+            "reject_score": reject_sim,
         }
 
 
@@ -114,6 +149,15 @@ class Score(BaseHead):
     The text is similarity-measured against low and high anchors; the difference
     passes through a sigmoid sharpening function and is mapped to
     [min_val, max_val].
+
+    `aggregation` controls how anchor similarities are pooled:
+    - `"max"` (default, backward compatible): single best anchor decides.
+    - `"topk"`: mean of the best `topk` anchors per pole — robust against a
+      single noisy anchor, recommended when you have 3+ anchors per pole.
+
+    Every result additionally carries a `coverage` value (the pooled similarity
+    to the better pole). Low coverage means the text did not resemble either
+    pole — the score is then mostly noise and should not be trusted.
     """
 
     def __init__(
@@ -124,6 +168,8 @@ class Score(BaseHead):
         min_val: float = 0.0,
         max_val: float = 3.0,
         sharpness: float = 8.0,
+        aggregation: str = "max",
+        topk: int = 2,
     ):
         super().__init__(name)
         self.low_anchors = low_anchors
@@ -131,6 +177,8 @@ class Score(BaseHead):
         self.min_val = min_val
         self.max_val = max_val
         self.sharpness = sharpness
+        self.aggregation = aggregation
+        self.topk = topk
         self.low_matrix: np.ndarray | None = None
         self.high_matrix: np.ndarray | None = None
 
@@ -145,9 +193,16 @@ class Score(BaseHead):
         self.high_matrix = _normalize_rows(high_v)
 
     def evaluate(self, encoded: EncodedInput) -> dict:
-        # Max similarity to both poles.
-        s_low = float(np.max(self.low_matrix @ encoded.dense_vec))
-        s_high = float(np.max(self.high_matrix @ encoded.dense_vec))
+        low_sims = self.low_matrix @ encoded.dense_vec
+        high_sims = self.high_matrix @ encoded.dense_vec
+
+        if self.aggregation == "topk":
+            k = max(1, min(self.topk, len(low_sims), len(high_sims)))
+            s_low = float(np.mean(np.sort(low_sims)[-k:]))
+            s_high = float(np.mean(np.sort(high_sims)[-k:]))
+        else:
+            s_low = float(np.max(low_sims))
+            s_high = float(np.max(high_sims))
 
         # Sigmoid-based scaling of the difference.
         diff = s_high - s_low
@@ -157,6 +212,7 @@ class Score(BaseHead):
         return {
             "value": round(float(calculated_score), 2),
             "raw_diff": diff,
+            "coverage": float(max(s_low, s_high)),
         }
 
 

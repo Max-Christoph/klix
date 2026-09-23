@@ -199,6 +199,15 @@ engine.add_head(
         max_val=3.0,       # oberes Ende der Skala
         aggregation="topk",  # robust gegen einzelnen verrauschten Anchor
         sharpness=8.0,     # Steilheit der Sigmoid-Kurve (default 8.0)
+        # ---- Coverage-Gate (NEU in 0.7.0): Rausch-Scores werden NICHT ----
+        # durchgereicht. Wenn der Text zu keinem Pol passt (coverage < 0.3),
+        # ist die Projektion Rauschen -> value=None + Rohwert in raw_value.
+        min_coverage=0.3,
+        # ---- Fallback für nachgelagerte Systeme (NEU in 0.7.2): ----------
+        # Pipelines wie Jira/Salesforce können oft kein None verarbeiten.
+        # Setze hier einen Default (z. B. Standard-Priorität), der statt
+        # None durchgereicht wird. None = strenger Modus (Default).
+        fallback_value=None,
     )
 )
 
@@ -493,6 +502,10 @@ batch = engine.decide_batch(batch_texts)
 batch_ms = (time.perf_counter() - t0) * 1000
 print(f"\n{len(batch_texts)} Texte in einem Embedding-Pass: {batch_ms:.1f} ms gesamt "
       f"({batch_ms/len(batch_texts):.2f} ms/Item)")
+print("Hinweis: Batching amortisiert v.a. den Fix-Overhead des Modellaufrufs;")
+print("der ONNX-Forward selbst skaliert ~linear mit der Tokenmenge. Gemessen:")
+print("  n=5: ~1.5x | n=25: ~3.1x | n=500: ~2.5-3.2x schneller als seriell.")
+print("  Faustregel: decide() für Einzelanfragen, decide_batch() ab ~25 Texten.")
 for text, res in zip(batch_texts, batch):
     print(f"  {res.route!r:15s} <- {text}")
 

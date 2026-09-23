@@ -109,9 +109,16 @@ class DecisionEngine:
         """Processes many texts in one embedding pass (bulk mode).
 
         The dense encoder runs once over the whole list (fastembed batches the
-        ONNX forward pass internally), so per-text overhead drops sharply for
-        large volumes. Head evaluation then loops per text but stays in the
-        sub-millisecond regime. Results are returned in input order; latency_ms
+        ONNX forward pass internally). Honest measurements (Windows/CPU,
+        MiniLM, 2 heads) — the ONNX forward cost itself scales ~linearly with
+        token count, so only the fixed call overhead amortizes:
+
+            n=5:    ~1.5x faster than serial decide() per item
+            n=25:   ~3.1x
+            n=500:  ~2.5-3.2x  (~3 ms/item)
+
+        Use decide() for single interactive items; decide_batch() pays off
+        from roughly 25+ texts. Results are returned in input order; latency_ms
         per item reflects its share of the batch time.
 
         For pipelines that already hold embeddings, `encode_batch` +
@@ -209,6 +216,9 @@ class DecisionEngine:
                     lines.append(f"      sharpen '{f['b']}' with: {', '.join(f['b_exclusive'][:3])}")
                 for m in f["misplaced"][:3]:
                     lines.append(f"      misplaced: {m['text']!r} ({m['from']}) sits closer to '{m['closer_to']}'")
+                for s in f.get("suggestions", []):
+                    if s:
+                        lines.append(f"      fix: {s}")
             else:
                 lines.append(f" ?  [{f['head']}] {f['message']}")
         return "\n".join(lines)

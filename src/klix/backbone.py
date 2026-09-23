@@ -45,6 +45,7 @@ class HybridBackbone:
         """Builds the sparse index over all reference texts registered in the heads."""
         if stop_words is None:
             stop_words = _DEFAULT_GERMAN_STOPWORDS
+        self.stop_words = stop_words
         self.tfidf_vec = TfidfVectorizer(
             analyzer="word",
             token_pattern=r"(?u)\b[\w-]+\b",

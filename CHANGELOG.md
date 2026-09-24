@@ -3,7 +3,7 @@
 All notable changes to klix are documented here. Format based on
 [Keep a Changelog](https://keepachangelog.com/); versioning: SemVer.
 
-## [Unreleased]
+## [0.8.0] - 2026-09-24
 
 ### Added
 - `classifier="hybrid"` (opt-in): logistic probe learns the dense/sparse

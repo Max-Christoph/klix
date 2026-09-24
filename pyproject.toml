@@ -1,6 +1,6 @@
 [project]
 name = "klix-engine"
-version = "0.8.0"
+version = "0.8.1"
 description = "Decoupled decision heads (Choice, Score, Flag) on a shared semantic backbone - local, deterministic, no model training."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -46,3 +46,9 @@ packages = ["src/klix"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Functional tests are the CI gate; timing-sensitive cases are excluded
+# by default and run explicitly via `-m benchmark` (see README "Development").
+markers = [
+    "benchmark: timing-sensitive tests (head latency, batch throughput) - excluded from CI gate",
+]
+addopts = "-m 'not benchmark'"

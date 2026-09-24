@@ -154,7 +154,9 @@ def main():
         avg_lat = np.mean(latencies[m])
         print(f"{m:14s} {avg_acc:>8.0%} {avg_lat:>15.1f} ms")
     print("-" * 78)
-    print("Note: embed-knn / klix-* include the ~10ms embedding forward pass;")
+    print("Note: embed-knn / klix-* include the embedding forward pass,")
+    print("which dominates latency (~50-90 ms per query on the dev")
+    print("workstation, 2026-09-24; hardware-dependent).")
     print("tfidf+lr does not (no embeddings) — that's its speed advantage.")
 
     # Setup effort (qualitative)

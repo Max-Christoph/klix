@@ -10,10 +10,41 @@ A text passes through the embedding model **exactly once** (dense + sparse), aft
 of heads (`Choice`, `Score`, `Flag`) operate on the precomputed vectors — each in its own
 mathematical space. No model training, no slot limits, fully offline and CPU-only.
 
+## Why klix — and when it isn't the right tool
+
+Klix is a **packaging** decision, not an algorithm decision. The core
+(embedding + KNN / logistic probe) is standard practice since
+sentence-transformers popularized it in 2019; you could write an equivalent
+~30-line snippet with `sentence-transformers` + `sklearn`. What klix adds is
+the product around that core:
+
+- a **declarative, reviewable schema** (`Choice` / `Score` / `Flag` heads)
+  that lives in the repo, doubles as documentation, and updates in
+  milliseconds — no training step, no model artifact per schema;
+- **honest uncertainty handling** out of the box (reject poles, `coverage`
+  signals, calibrated thresholds) instead of a forced guess;
+- **explainability** (token-level attribution) and **no ML infrastructure**:
+  no GPU, no API keys, fully offline after a one-time model cache.
+
+**Where it genuinely helps:** rapid prototyping of text-routing logic
+without labeled data and without an ML pipeline — e.g. coarsely sorting
+incoming tickets or fault reports into categories when you have neither the
+time nor the data volume for a trained model, and plain keyword matching is
+too brittle. Small volumes, clearly separable categories, no
+training-data-pipeline required.
+
+**Where it does not:** with a few hundred labeled examples per class, a
+trained classifier will beat it; and for a single throwaway routing problem,
+copy-pasting the 30-line KNN/LogReg snippet is simpler than adopting a
+library. Measured default mode is on par with a trivial dense Embed-KNN
+(72 % vs 78 % in the cross-domain benchmark) — the accuracy edge appears
+only in specific modes (`classifier="linear"` on single-language schemas:
+84 %). See the [Benchmarks](#benchmarks) section for the honest numbers.
+
 ## Architecture
 
 ```text
-Text ──► HybridBackbone (FastEmbed dense + TF-IDF sparse, once, ~10 ms)
+Text ──► HybridBackbone (FastEmbed dense + TF-IDF sparse, once, tens of ms)
               │
               ├──► Choice   (routing/classification: max-similarity + keyword boost)
               ├──► Score    (continuous axis: low/high anchors + sigmoid)
@@ -93,7 +124,7 @@ engine.compile()
 
 res = engine.decide("plc-34 reports a fault, conveyor belt stopped immediately!")
 
-print(res)                                   # e.g. <DecisionResult (11 ms): target=ot_plant, urgency=2.4, is_security=False>
+print(res)                                   # e.g. <DecisionResult (61 ms): target=ot_plant, urgency=2.4, is_security=False>
 print(res.target)                            # 'ot_plant'
 print(res.urgency)                           # continuous score between 0.0 and 3.0
 print(res.is_security)                       # True / False / None (neutral won)
@@ -156,11 +187,11 @@ class RegExExtractionHead(BaseHead):
 
 ## Production Pattern
 
-`examples/production_pattern.py` zeigt das komplette produktionsreife Muster in einer
-Datei: Choice/Score/Flag mit `classifier="auto"` und `translate_fn`, eine explizite
-Auffang-Klasse (`not_relevant`), das zweistufige Aktionsmuster (Security-Flag als
-Veto, Confidence-Gate, Auto-Schließen), ein eigener Kopf per `BaseHead`-Vererbung
-und die Interpretation aller Vertrauenssignale.
+`examples/production_pattern.py` shows the complete production-ready pattern in a
+single file: Choice/Score/Flag with `classifier="auto"` and `translate_fn`, an explicit
+catch-all class (`not_relevant`), the two-stage action pattern (security flag as
+veto, confidence gate, auto-close), a custom head via `BaseHead` subclassing,
+and the interpretation of all confidence signals.
 
 ```bash
 uv run python examples/production_pattern.py
@@ -177,22 +208,25 @@ trained/evaluated on the *same* labeled data (the anchors are the few-shot train
 meaning, anchors mixed EN/DE. Reproduce with:
 
 ```bash
-uv run python -c "import sys; sys.path.insert(0,'.'); sys.path.insert(0,'src'); from evals import benchmark_bilingual; benchmark_bilingual.main()"
+uv run python -m evals.benchmark_bilingual
 ```
 
 | Method | EN | DE | Combined |
 |---|---|---|---|
 | TF-IDF + LogReg | 8/10 | 6/10 | 14/20 |
 | Embed-KNN (dense) | 9/10 | 7/10 | **16/20** |
-| klix nearest | 9/10 | 6/10 | 15/20 |
-| klix nearest + topk2 | 9/10 | 6/10 | 15/20 |
-| klix linear | 10/10 | 5/10 | 15/20 |
+| klix nearest | 8/10 | 7/10 | 15/20 |
+| klix nearest + topk2 | 9/10 | 7/10 | 16/20 |
+| klix linear | 9/10 | 6/10 | 15/20 |
 
-**Latency per decision (CPU, includes the ~10 ms embedding forward pass):** all
-embedding-based methods ≈ 9–13 ms; TF-IDF+LogReg ≈ 0.9 ms (no embeddings).
+**Latency per decision (CPU, includes the embedding forward pass):**
+TF-IDF+LogReg ≈ 1–5 ms (no embeddings); embedding-based methods
+≈ 60–80 ms, dominated by the ~50–90 ms MiniLM forward pass. Measured
+2026-09-24 on the dev workstation; absolute values are
+hardware-dependent (see the version note below).
 
 **Reading this honestly:** on this *mixed-language, few-anchor* schema the
-`linear` probe overfits to English (100 % EN / 50 % DE). The dense Embed-KNN is
+`linear` probe overfits to English (90 % EN / 60 % DE). The dense Embed-KNN is
 the most language-robust. Recommendation: with few mixed-language anchors, use
 `classifier="nearest"`; the `linear` probe pays off on *single-language* schemas
 with several anchors per class (see the cross-domain result below).
@@ -200,22 +234,36 @@ with several anchors per class (see the cross-domain result below).
 ### Cross-domain routing (6 domains, 70 cases, mostly EN)
 
 `evals/benchmark.py` — HR, Finance, Image-captions, Tasks, Shop, and the
-LLM-guardrail scenario:
+LLM-guardrail scenario (n=70; note: five of the six domains are the same
+labeled sets used in the SetFit comparison below, plus the GUARD set):
 
 | Method | avg accuracy | median latency |
 |---|---|---|
-| TF-IDF + LogReg | 51 % | 0.9 ms |
-| Embed-KNN (dense) | 78 % | ~7 ms |
-| klix nearest | 76 % | ~9 ms |
-| **klix linear** | **86 %** | ~13 ms |
+| TF-IDF + LogReg | 51 % | ~1–5 ms |
+| Embed-KNN (dense) | 78 % | ~58 ms |
+| klix nearest | 72 % | ~71 ms |
+| **klix linear** | **84 %** | ~80 ms |
 
-Here `klix linear` is the clear accuracy winner (+8 pts over the nearest-anchor
-ceiling), at a still-CPU-friendly ~13 ms.
+Here `klix linear` is the accuracy winner (+12 pts over the nearest-anchor
+ceiling). Latency is dominated by the embedding forward pass and scales
+with hardware (measured on the dev workstation, 2026-09-24).
 
 **Statistical honesty:** with n=70, differences of 1–2 points between
 embedding-based rows are within the 95 % CI (roughly ±9 pts at n=70); the
 `klix linear` lead is the only row pair that separates clearly. Treat the
 table as directional, not as a ranking with that precision.
+
+**Version note (0.8.1):** the numbers above were re-measured 2026-09-24
+with the current FastEmbed release (0.8.x), which computes mean-pooled
+MiniLM embeddings (previously CLS pooling). On the fixed 60-case 5-domain
+set the klix accuracy is unchanged (nearest 41/60 = 68 %, linear 51/60 =
+85 %, verified via `evals/linear_sweep.py`); the `benchmark.py` row for
+`klix nearest` moved 76 % → 72 % and `klix linear` 86 % → 84 %, because
+that harness includes the GUARD set. Latency was re-measured as well:
+the ~10 ms claims of earlier README versions predate the current FastEmbed
+release; the forward pass now measures ~50–90 ms on the dev workstation —
+still CPU-only and offline, but expect tens of milliseconds per query on
+similar hardware.
 
 ### vs. SetFit (few-shot training, same examples)
 
@@ -285,23 +333,61 @@ substitutes.
   decisions (`HardNegativeStore`), review them by hand, attach them as
   counterexamples and recompile. **Honest measured effect (holdout eval,
   `evals/hard_negative_e2e.py`):** on cases the mining step never saw, the
-  gain is ≈0 (11/20 → 10/20 on n=20 holdout); the earlier +7 pts claim was
-  dominated by memorization of the mining set itself. The workflow is still
-  valuable as a *diagnosis* loop (it surfaces which label pairs the schema
-  confuses — fix those by adding/sharpening anchors), not as an automatic
-  accuracy lever.
+  gain is ≈0 (11/20 → 10/20 on n=20 holdout); an earlier reported +7 pts
+  was dominated by memorization of the mining set itself (corrected in
+  0.8.1). The workflow is still valuable as a *diagnosis* loop (it surfaces
+  which label pairs the schema confuses — fix those by adding/sharpening
+  anchors), not as an automatic accuracy lever.
+
+## Evaluation scripts (`evals/`)
+
+`evals/` is a **catalog**, not a test suite (functional tests live in
+`tests/`). Every script is runnable from the repo root via
+`uv run python -m evals.<name>` (module form, so package imports
+`from evals.X import ...` work).
+The table distinguishes *live results* (maintained, referenced from this
+README/CHANGELOG) from *historical* experiments (kept for reproducibility,
+results are snapshots in time — re-running may show different numbers).
+
+| Script | Purpose | Status |
+|---|---|---|
+| `benchmark.py` | Cross-domain routing (6 domains, 70 cases) — the README table | live |
+| `benchmark_bilingual.py` | Bilingual routing (EN/DE, 20 cases) — the README table | live |
+| `setfit_baseline.py` | SetFit few-shot comparison (n=60, leakage-verified) | live |
+| `hard_negative_e2e.py` | Holdout-verified hard-negative mining effect | live |
+| `eval_domains.py` | Labeled 5-domain corpus (60 cases) shared by several evals | live (data source) |
+| `variant_sweep.py` | Nearest/topk/coverage sweeps (pre-0.2 history) | historical |
+| `corpus_expansion.py` | 273-case paraphrase corpus + bootstrap CIs | historical |
+| `expanded_benchmark.py` | The expanded corpus benchmark | historical |
+| `linear_sweep.py`, `knob_sweep.py`, `bm25_sweep.py`, `hybrid_sweep.py`, `hybrid_bm25_sweep.py` | Probe / sparse-channel sweeps behind 0.2.x–0.8.0 | historical |
+| `charngram_experiment.py` | Did char-n-grams help the probe? (measured: no) | historical |
+| `verify_crosslingual.py`, `whatif.py`, `whatif_anchors.py`, `instrument.py` | Feature verification / what-if simulations | historical |
+| `eval_baseline.py`, `eval_after.py` | Pre/post head-feature comparisons | historical |
+| `bench_batch.py` | Batch-vs-serial latency measurement | historical |
+| `bug_hunt.py` | Edge-case hunting script (not a test file) | historical |
+| `export_datasets.py` | Export the labeled datasets to JSONL | historical |
+
+**Conventions:** scripts share the labeled datasets via package imports
+(`from evals.linear_sweep import ...`, `from evals.eval_domains import
+...`). Run them as modules from the repo root (`uv run python -m
+evals.<name>`). If you change a shared dataset, re-run the evals that
+depend on it.
 
 ## Development
 
 ```bash
 uv sync          # install dependencies
-uv run pytest    # run the test suite (fully offline)
+uv run pytest -q # functional test suite (fully offline, no timing gates)
+uv run pytest -q -m benchmark  # optional: latency/microbenchmark gates
 uv run python examples/demo.py
 ```
 
-The `evals/` directory contains a labeled evaluation harness (routing accuracy,
-score bands, flag behavior, out-of-domain rejection) — use it to measure changes
-to your anchor schemas.
+**Test-suite structure:** functional tests (`tests/`) are the CI gate and
+never assert wall-clock numbers. Timing-sensitive cases — head evaluation
+latency and batch throughput — are marked `@pytest.mark.benchmark` and
+excluded from the CI gate, because timing assertions under shared CPU load
+are inherently flaky and would mask real failures. Run them explicitly
+when you care about latency regressions locally.
 
 **Release chain (automated, no token):** bump the version in `pyproject.toml`
 and `__init__.py`, update `CHANGELOG.md`, commit, tag, push — GitHub Actions

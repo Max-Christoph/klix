@@ -144,8 +144,14 @@ class TestDecideBatch:
         eng = self._build()
         assert eng.decide_batch([]) == []
 
+    @pytest.mark.benchmark
     def test_batch_throughput_advantage(self):
-        """The batch embedding pass should beat serial decide() per item."""
+        """The batch embedding pass should beat serial decide() per item.
+
+        Timing gate — excluded from the CI test gate (run via
+        `pytest -m benchmark`): wall-clock comparisons under shared CPU load
+        are flaky by nature and would mask real functional failures.
+        """
         import time
 
         eng = self._build()

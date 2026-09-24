@@ -192,10 +192,10 @@ class DecisionEngine:
 
         start = time.perf_counter()
 
-        # 1. One-time vectorization (~10-12 ms).
+        # 1. One-time vectorization (~50-90 ms on the dev workstation).
         encoded = self.backbone.encode(text)
 
-        # 2. Evaluation of all heads (< 1 ms total), with head gating:
+        # 2. Evaluation of all heads (a few ms total), with head gating:
         #    a head whose suppress_when condition matches an earlier head's
         #    result is skipped (value=None, suppressed_by marker).
         results: dict[str, dict] = {}

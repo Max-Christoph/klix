@@ -3,7 +3,7 @@
 Question: does bm25 on top of topk3+coverage push past linear's 85%?
 Must NOT change anchors/test cases.
 """
-from linear_sweep import HR_OPTIONS, HR_TESTS, FIN_OPTIONS, FIN_TESTS, IMG_OPTIONS, IMG_CASES, TASK_OPTIONS, TASK_CASES, SHOP_OPTIONS, SHOP_CASES
+from evals.linear_sweep import HR_OPTIONS, HR_TESTS, FIN_OPTIONS, FIN_TESTS, IMG_OPTIONS, IMG_CASES, TASK_OPTIONS, TASK_CASES, SHOP_OPTIONS, SHOP_CASES
 
 from klix import DecisionEngine, Choice
 

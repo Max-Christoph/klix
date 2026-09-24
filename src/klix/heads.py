@@ -175,7 +175,7 @@ class BaseHead(ABC):
     A head is used in three phases:
     1. `get_reference_texts()` — collects reference texts for the TF-IDF index.
     2. `fit(backbone)` — precomputes all reference vectors (once).
-    3. `evaluate(encoded)` — evaluates per query, target < 0.1 ms.
+    3. `evaluate(encoded)` — evaluates per query, a few ms at most.
 
     Head gating (v0.8.0): pass ``suppress_when={other_head: {values}}`` to make
     this head conditional on another head's result — when the named head's

@@ -5,43 +5,51 @@
 [![CI](https://github.com/Max-Christoph/klix/actions/workflows/ci.yml/badge.svg)](https://github.com/Max-Christoph/klix/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Decoupled decision heads on a shared semantic backbone.
-A text passes through the embedding model **exactly once** (dense + sparse), after which any number
-of heads (`Choice`, `Score`, `Flag`) operate on the precomputed vectors — each in its own
-mathematical space. No model training, no slot limits, fully offline and CPU-only.
+**Sort text into categories, get yes/no flags, score on an axis — by writing
+example sentences instead of training a model.**
 
-## Why klix — and when it isn't the right tool
+```python
+from klix import DecisionEngine, Choice, Score, Flag
 
-Klix is a **packaging** decision, not an algorithm decision. The core
-(embedding + KNN / logistic probe) is standard practice since
-sentence-transformers popularized it in 2019; you could write an equivalent
-~30-line snippet with `sentence-transformers` + `sklearn`. What klix adds is
-the product around that core:
+engine = DecisionEngine()
+engine.add_head(Choice(name="queue", options={
+    "it_ops":   ["vpn down", "server unreachable", "laptop won't boot"],
+    "ot_plant": ["robot cell stopped", "PLC fault", "cycle time deviation"],
+    "facility": ["oil spill in hall 2", "heating broken"],
+}))
+engine.compile()
 
-- a **declarative, reviewable schema** (`Choice` / `Score` / `Flag` heads)
-  that lives in the repo, doubles as documentation, and updates in
-  milliseconds — no training step, no model artifact per schema;
-- **honest uncertainty handling** out of the box (reject poles, `coverage`
-  signals, calibrated thresholds) instead of a forced guess;
-- **explainability** (token-level attribution) and **no ML infrastructure**:
-  no GPU, no API keys, fully offline after a one-time model cache.
+res = engine.decide("plc-34 reports a fault, conveyor belt stopped")
+res.queue        # 'ot_plant'
+```
 
-**Where it genuinely helps:** rapid prototyping of text-routing logic
-without labeled data and without an ML pipeline — e.g. coarsely sorting
-incoming tickets or fault reports into categories when you have neither the
-time nor the data volume for a trained model, and plain keyword matching is
-too brittle. Small volumes, clearly separable categories, no
-training-data-pipeline required.
+No training run, no labelled dataset, no GPU, no API keys. The schema is a
+declarative list of example sentences that lives in your repo, reads like
+documentation, and changes in milliseconds — running fully offline on CPU.
 
-**Where it does not:** with a few hundred labeled examples per class, a
-trained classifier will beat it; and for a single throwaway routing problem,
-copy-pasting the 30-line KNN/LogReg snippet is simpler than adopting a
-library. Measured default mode is on par with a trivial dense Embed-KNN
-(72 % vs 78 % in the cross-domain benchmark) — the accuracy edge appears
-only in specific modes (`classifier="linear"` on single-language schemas:
-84 %). See the [Benchmarks](#benchmarks) section for the honest numbers.
+**Honest framing:** klix is *packaging*, not a novel algorithm — the core is
+embedding + nearest-anchor / logistic probe, standard since 2019. What it adds
+is the schema abstraction, uncertainty handling, and explainability around that
+core. Read [Why klix — and when it isn't the right
+tool](#why-klix--and-when-it-isnt-the-right-tool) before adopting it; that
+section states plainly where it wins, where a trained classifier wins, and
+where a copy-pasted 30-line snippet is the better choice.
 
-## Architecture
+## Installation
+
+```bash
+uv add klix-engine
+# or
+pip install klix-engine
+```
+
+On first use, FastEmbed downloads the `paraphrase-multilingual-MiniLM-L12-v2` model
+(~120 MB, one-time, then cached locally). Everything runs offline afterwards.
+
+## What you get
+
+Three head types, each in its own mathematical space. Register as many as you
+need — each text is embedded exactly once, so head count barely affects latency.
 
 ```text
 Text ──► HybridBackbone (FastEmbed dense + TF-IDF sparse, once, tens of ms)
@@ -62,17 +70,6 @@ Text ──► HybridBackbone (FastEmbed dense + TF-IDF sparse, once, tens of ms
   reports a `coverage` signal so you know when a score is noise.
 - **Language-agnostic anchors:** The backbone model is multilingual, so anchor
   sentences in any language work — German, English, mixed, whatever fits your domain.
-
-## Installation
-
-```bash
-uv add klix-engine
-# or
-pip install klix-engine
-```
-
-On first use, FastEmbed downloads the `paraphrase-multilingual-MiniLM-L12-v2` model
-(~120 MB, one-time, then cached locally). Everything runs offline afterwards.
 
 ## Quickstart
 
@@ -196,6 +193,45 @@ and the interpretation of all confidence signals.
 ```bash
 uv run python examples/production_pattern.py
 ```
+
+## Why klix — and when it isn't the right tool
+
+Klix is a **packaging** decision, not an algorithm decision. The core
+(embedding + KNN / logistic probe) is standard practice since
+sentence-transformers popularized it in 2019; you could write an equivalent
+~30-line snippet with `sentence-transformers` + `sklearn`. What klix adds is
+the product around that core:
+
+- a **declarative, reviewable schema** (`Choice` / `Score` / `Flag` heads)
+  that lives in the repo, doubles as documentation, and updates in
+  milliseconds — no training step, no model artifact per schema;
+- **honest uncertainty handling** out of the box (reject poles, `coverage`
+  signals, calibrated thresholds) instead of a forced guess;
+- **explainability** (token-level attribution) and **no ML infrastructure**:
+  no GPU, no API keys, fully offline after a one-time model cache.
+
+**Where it genuinely helps:** rapid prototyping of text-routing logic
+without labeled data and without an ML pipeline — e.g. coarsely sorting
+incoming tickets or fault reports into categories when you have neither the
+time nor the data volume for a trained model, and plain keyword matching is
+too brittle. Small volumes, clearly separable categories, no
+training-data-pipeline required.
+
+**Where it does not:** with a few hundred labeled examples per class, a
+trained classifier will beat it; and for a single throwaway routing problem,
+copy-pasting the 30-line KNN/LogReg snippet is simpler than adopting a
+library. Measured default mode is on par with a trivial dense Embed-KNN
+(72 % vs 78 % in the cross-domain benchmark) — the accuracy edge appears
+only in specific modes (`classifier="linear"` on single-language schemas:
+84 %). See the [Benchmarks](#benchmarks) section for the honest numbers.
+
+**One property to know before you design a schema:** not every question is a
+text question. Urgency, business impact, SLA-breach risk and customer tier are
+decided by *context* the message does not carry — four measured mechanisms
+against an urgency target all returned the same number. Use klix heads for what
+the wording *says* (category, topic, tone, whether something looks like an
+incident) and do the valuation in your application from real data. Details and
+the measured evidence: `Score` docstring, "WHEN NOT TO USE THIS HEAD".
 
 ## Benchmarks
 

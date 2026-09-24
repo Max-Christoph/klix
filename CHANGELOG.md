@@ -3,6 +3,30 @@
 All notable changes to klix are documented here. Format based on
 [Keep a Changelog](https://keepachangelog.com/); versioning: SemVer.
 
+## [0.8.3] - 2026-09-24
+
+### Documentation
+- **README restructured for a first-time reader.** The "Why klix — and when it
+  isn't the right tool" section (honest framing, "you could write the same in
+  30 lines", "a trained classifier will beat it") sat in the first 40 lines,
+  before the reader knew what the library did. Content is unchanged and
+  complete — only the order moved:
+  - **Now first:** one sentence stating what it does ("sort text into
+    categories, get yes/no flags, score on an axis — by writing example
+    sentences instead of training a model"), an 11-line runnable snippet with
+    its actual output, and the no-GPU/no-labels/offline property.
+  - **Moved down:** the honest framing, now *after* "What you get" and
+    "Quickstart", introduced as a single paragraph that links to the full
+    section (placed just before the Benchmarks, where the limits belong).
+  - **New, in the honest section:** a pointer that not every question is a
+    text question — urgency / business impact / SLA risk / customer tier are
+    decided by context the message does not carry, with a reference to the
+    `Score` docstring's measured evidence. This is the one design trap worth
+    knowing before writing a schema.
+- Both README code examples were executed and verified to produce exactly the
+  output the comments claim (`res.queue == 'ot_plant'`), since the first
+  snippet is the one thing a visitor may actually run.
+
 ## [0.8.2] - 2026-09-24
 
 ### Fixed

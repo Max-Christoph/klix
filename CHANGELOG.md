@@ -3,6 +3,39 @@
 All notable changes to klix are documented here. Format based on
 [Keep a Changelog](https://keepachangelog.com/); versioning: SemVer.
 
+## [0.8.2] - 2026-09-24
+
+### Fixed
+- **`translate_fn` failures are no longer silent.** A `translate_fn` that
+  raised was swallowed by a bare `except Exception: pass`; the schema was
+  then quietly weaker (no cross-lingual anchors) with no hint why. It still
+  never breaks `compile()` — best-effort remains the contract — but now
+  reports once per compile via `UserWarning`, naming the error type and how
+  many anchors went unmirrored. 7 new tests pin the behaviour, including the
+  counter-case (a translator returning `None` is not an error).
+- **`translate_fn` scope documented.** It only augments the
+  `classifier="linear"` / `"hybrid"` training matrix; on the `nearest` path
+  (the default) the hook is never called. Previously undocumented, so users
+  on `nearest` could reasonably expect cross-lingual mirroring that never
+  happened. Now stated in the README parameter table, in `Choice.__init__`,
+  and pinned by a regression test.
+
+### Documentation
+- **Benchmark tables now state the anchor count.** The cross-domain numbers
+  (72 % nearest / 84 % linear) were measured with **3 anchors per class**;
+  reading them without that context invites the wrong conclusion ("weak
+  engine" instead of "small anchor set"). A new table shows the same engine
+  at 3 / 9 anchors and with/without rules (57 % → 87 % → 93 % → 97 %), and
+  states plainly that anchor coverage is the dominant quality lever.
+- **`Score` docstring documents when NOT to use the head.** Four measured
+  mechanisms against a context-dependent target (urgency) all returned the
+  same number (9/20, 16→15/20, 11/20, 9/20) — the ceiling is structural.
+  The docstring now names the property classes that genuinely are text
+  properties (tone, specificity, scope) versus those decided by context the
+  message does not carry (urgency, business impact, SLA risk, compliance
+  exposure, customer tier), and gives the cheap self-check plus the correct
+  architecture (head supplies inputs, application does the valuation).
+
 ## [0.8.1] - 2026-09-24
 
 ### Changed

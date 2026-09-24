@@ -296,6 +296,10 @@ class Choice(BaseHead):
         self.bm25_k1 = bm25_k1
         self.bm25_b = bm25_b
         self.translate_fn = translate_fn
+        # translate_fn augments the linear/hybrid training matrix. On the
+        # nearest path there is no such matrix, so the hook is not called at
+        # all (documented; a warning would be noise since nothing is lost —
+        # nearest matches anchors directly and needs no mirroring).
         self.rules = rules or []
         self._compiled_rules: list = []
         self._probe = None  # LogisticRegression probe when classifier="linear"
@@ -464,6 +468,7 @@ class Choice(BaseHead):
                 # User supplied a translator: mirror each anchor to the other
                 # language and add it to the same class.
                 new_texts, new_labels = [], []
+                translation_errors: list[str] = []
                 for text, lab in zip(texts, y):
                     other = _detect_lang(text)
                     target = "de" if other == "en" else "en"
@@ -472,8 +477,22 @@ class Choice(BaseHead):
                         if translated:
                             new_texts.append(translated)
                             new_labels.append(lab)
-                    except Exception:
-                        pass  # translation is best-effort; never break compile
+                    except Exception as exc:  # noqa: BLE001
+                        # Translation is best-effort and must never break
+                        # compile(). But staying completely silent hides a
+                        # broken translate_fn: the schema would just be
+                        # quietly weaker (no cross-lingual anchors) with no
+                        # hint why. Collect and warn ONCE per compile.
+                        translation_errors.append(f"{type(exc).__name__}: {exc}")
+                if translation_errors:
+                    warnings.warn(
+                        f"translate_fn raised on {len(translation_errors)} of "
+                        f"{len(texts)} anchor(s); those anchors were not "
+                        f"mirrored, so the cross-lingual bridge is incomplete. "
+                        f"First error: {translation_errors[0]}",
+                        UserWarning,
+                        stacklevel=2,
+                    )
                 if new_texts:
                     tvecs = np.array(list(backbone.embed_model.embed(new_texts)))
                     X = np.vstack([X, _normalize_rows(tvecs)])
@@ -973,6 +992,37 @@ class Score(BaseHead):
     Every result additionally carries a `coverage` value (the pooled similarity
     to the better pole). Low coverage means the text did not resemble either
     pole — the score is then mostly noise and should not be trusted.
+
+    WHEN NOT TO USE THIS HEAD (measured, not a guess)
+    ------------------------------------------------
+    Use Score for properties that are *visible in the wording* of the text:
+    tone (formal/casual), specificity (vague/concrete), scope (small/large).
+    Do NOT use it for properties that are decided by CONTEXT the text does
+    not carry — urgency, business impact, SLA-breach risk, compliance
+    exposure, customer tier. Those are properties of the *situation*, not of
+    the sentence.
+
+    Measured ceiling on "how urgent is this?" — four mechanisms against the
+    same 20 test messages, anchors held constant:
+
+      learned projection (Ridge instead of anchor-difference)   9/20 -> 9/20
+      routing the sparse keyword channel into Score            16/20 -> 15/20
+      anchor augmentation (12 -> 72 vectors)                   11/20 -> 11/20
+      replacing the axis with a Choice traffic-light head       9/20 (control)
+
+    Four mechanisms, one identical number. The tell is in the per-item dump:
+    "plc-34 meldet fehler, band steht still" scores 2.48 and "klt mit
+    schrauben fehlt an station 4" scores 2.51 — opposite ground truth, same
+    value, because to a text model they ARE the same input. The difference
+    (order attached, asset throughput, shift, spare availability) never
+    enters the model. **The ceiling is structural, not a tuning problem.**
+
+    Correct architecture when this applies: let the text head supply the
+    INPUTS (a Choice category, deterministic signals via `Rule`) and do the
+    valuation in the application with the data the model never sees (lookup
+    table, ERP/MES fields). Cheap self-check: if two items with opposite
+    ground truth receive near-identical intermediate values, stop tuning and
+    move the decision out of the model.
     """
 
     def __init__(

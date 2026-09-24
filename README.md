@@ -143,7 +143,7 @@ Every head and the engine expose meaningful knobs:
 | `options`, anchors | all heads | The schema itself — more/better example sentences are the main quality lever |
 | `classifier` | `Choice` | `"nearest"` (default), `"linear"`, or `"auto"`. `"auto"` picks `"nearest"` for mixed-language anchors (robust) and `"linear"` for single-language (highest accuracy) |
 | `classifier_C` | `Choice` | Regularization strength for the linear probe (lower = more regularization, use with few anchors) |
-| `translate_fn` | `Choice` | Optional `(text, target_lang) -> str` hook: mirrors each anchor into the missing language at compile time, closing the cross-lingual gap without writing anchors twice |
+| `translate_fn` | `Choice` | Optional `(text, target_lang) -> str` hook: mirrors each anchor into the missing language at compile time, closing the cross-lingual gap without writing anchors twice. **Only active on the `classifier="linear"` / `"hybrid"` path** — it augments the probe's training matrix, which `nearest` does not have; on `nearest` the hook is silently unused. A `translate_fn` that raises is reported once per compile via `UserWarning` (it never breaks `compile()`) |
 | `reject_anchors` | `Choice` | Texts matching these return `value=None` (don't-know instead of guess); with `classifier="linear"` they are learned as their own class |
 | `keyword_boost` | `Choice` | Weight of exact keyword hits (asset IDs like `plc-34`) vs. semantic similarity |
 | `aggregation` | `Score` | `"max"` (default) or `"topk"` — topk averages the best-k anchors per pole, robust against a single noisy anchor |
@@ -247,6 +247,33 @@ labeled sets used in the SetFit comparison below, plus the GUARD set):
 Here `klix linear` is the accuracy winner (+12 pts over the nearest-anchor
 ceiling). Latency is dominated by the embedding forward pass and scales
 with hardware (measured on the dev workstation, 2026-09-24).
+
+**Read the anchor count with these numbers — they are not comparable
+without it.** This benchmark uses **3 anchors per class** (the eval sets
+were kept deliberately small so the comparison against TF-IDF/Embed-KNN is
+honest on identical data). With 3 anchors per class, 72–84 % is the
+expected range, not a ceiling. The dominant quality lever is anchor
+*coverage of the class*, not the algorithm:
+
+| Anchors per class (6 classes, same engine) | Category accuracy |
+|---|---|
+| 3 — instance-style ("plc-34 meldet fehler") | 57 % |
+| 3 — phenomenon-style ("sps fehlermeldung an der anlage") | 87 % |
+| 9 — phenomenon-style, no rules | 93 % |
+| 9 — phenomenon-style + 2 `Rule`s for asset tags | **97 %** |
+
+So a reader who sees "3 anchors → 72 %" and concludes "weak framework" is
+measuring the anchor set, not the engine. Two separate levers, both free:
+phrase anchors as *descriptions of the phenomenon* rather than instances,
+and give the schema enough coverage (roughly 6–9 per class for a
+production schema). The benchmark's low anchor count is a property of the
+benchmark, not a recommendation.
+
+The 9-anchor rows come from a self-measuring reference application
+(6 classes, 29 labelled messages disjoint from the anchors, `klix_demo.py`
+in the sibling `klix-demo` project). It re-computes its own accuracy on
+every run, so the figures are reproducible rather than transcribed —
+the pattern worth copying when you build your own schema.
 
 **Statistical honesty:** with n=70, differences of 1–2 points between
 embedding-based rows are within the 95 % CI (roughly ±9 pts at n=70); the

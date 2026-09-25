@@ -138,7 +138,7 @@ Every head and the engine expose meaningful knobs:
 | Knob | Where | Effect |
 |------|-------|--------|
 | `options`, anchors | all heads | The schema itself — more/better example sentences are the main quality lever |
-| `classifier` | `Choice` | `"nearest"` (default), `"linear"`, or `"auto"`. `"auto"` picks `"nearest"` for mixed-language anchors (robust) and `"linear"` for single-language (highest accuracy) |
+| `classifier` | `Choice` | `"nearest"` (default), `"linear"`, `"centroid"`, or `"auto"`. `"auto"` picks `"nearest"` for mixed-language anchors (robust) and `"linear"` for single-language (highest accuracy). **`"centroid"` scores against the mean anchor vector per label** — no training, fully deterministic, and measured to reach the trained probe's accuracy: cross-domain 71.4 % → 84.3 % (+12.9 pt, bootstrap CI [+2.9, +22.9]) and 273-case corpus 93.0 % → 96.7 % (+3.7 pt, CI [+1.5, +6.2]); neutral on the bilingual set |
 | `classifier_C` | `Choice` | Regularization strength for the linear probe (lower = more regularization, use with few anchors) |
 | `translate_fn` | `Choice` | Optional `(text, target_lang) -> str` hook: mirrors each anchor into the missing language at compile time, closing the cross-lingual gap without writing anchors twice. **Only active on the `classifier="linear"` / `"hybrid"` path** — it augments the probe's training matrix, which `nearest` does not have; on `nearest` the hook is silently unused. A `translate_fn` that raises is reported once per compile via `UserWarning` (it never breaks `compile()`) |
 | `reject_anchors` | `Choice` | Texts matching these return `value=None` (don't-know instead of guess); with `classifier="linear"` they are learned as their own class |
@@ -382,6 +382,12 @@ substitutes.
 
 - **`classifier="nearest"` (default)** — most robust with few or mixed-language
   anchors; always a safe baseline.
+- **`classifier="centroid"`** — cosine to the per-label mean anchor vector.
+  Deterministic, no training, and reaches the trained probe's accuracy on the
+  cross-domain and expanded corpora (see the `classifier` row in the
+  configuration table for the measured deltas with bootstrap CIs). Neutral on
+  the mixed-language bilingual set, so it is not a drop-in replacement for
+  `nearest` there.
 - **`classifier="linear"`** — highest accuracy on single-language schemas with
   3+ anchors per class; watch for overfitting with mixed-language few-shot data.
 - **`classifier="hybrid"`** — learned dense+sparse fusion; wins on keyword-rich

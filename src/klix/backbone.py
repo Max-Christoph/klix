@@ -68,6 +68,15 @@ class HybridBackbone:
     `smart_truncate=True` first tries the first paragraph/section break
     (support tickets almost always state their intent there) instead of a
     blunt character cut mid-sentence.
+
+    Embedding truncation (v0.8.4, opt-in): `truncate_dim` slices every dense
+    vector to N dimensions and re-normalizes (pure slice + L2 renorm — no
+    retraining, fully deterministic). This lowers cosine cost proportionally.
+    Measured on the repo's own corpora it improves `nearest` accuracy
+    consistently (60 cases 68.3% -> 76.7%, 70 cases 71.4% -> 77.1%,
+    273 cases 93.0% -> 94.9% at 64 dims), but the curve is NOT monotone on
+    the hard sets and the corpus is small — hence opt-in, not default, and
+    only tested with `classifier="nearest"`. See `evals/backbone_compare.py`.
     """
 
     def __init__(
@@ -75,12 +84,40 @@ class HybridBackbone:
         model_name: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
         max_chars: int | None = 2000,
         smart_truncate: bool = True,
+        truncate_dim: int | None = None,
     ):
         self.embed_model = TextEmbedding(model_name=model_name)
         self.tfidf_vec: TfidfVectorizer | None = None
         self.is_indexed = False
         self.max_chars = max_chars
         self.smart_truncate = smart_truncate
+        self.truncate_dim = truncate_dim
+
+        # Embedding truncation must apply to anchors AND queries. Heads build
+        # their reference matrices directly from `embed_model.embed`, so the
+        # wrap has to sit there — patching only encode() would leave anchors at
+        # full dimension and queries truncated, which cannot be compared.
+        # When truncate_dim is None the original generator is kept untouched.
+        if truncate_dim is not None:
+            orig_embed = self.embed_model.embed
+
+            def _truncating_embed(texts, *a, **kw):
+                batch = np.asarray(list(orig_embed(texts, *a, **kw)), dtype=np.float32)
+                processed = self._postprocess(batch)
+                yield from processed
+            self.embed_model.embed = _truncating_embed
+
+    def _postprocess(self, dense: np.ndarray) -> np.ndarray:
+        """Applies embedding truncation (MRL-style) and L2 normalization.
+
+        Slicing + re-normalizing is the standard Matryoshka procedure and needs
+        no training. Applied to anchors and queries alike, which is what makes
+        the comparison meaningful.
+        """
+        if self.truncate_dim is not None:
+            dense = dense[..., : self.truncate_dim]
+        norms = np.linalg.norm(dense, axis=-1, keepdims=True)
+        return dense / np.where(norms == 0, 1.0, norms)
 
     def _truncate(self, text: str) -> str:
         """Caps input length. smart mode prefers a paragraph/section break."""
@@ -116,7 +153,7 @@ class HybridBackbone:
     def encode(self, text: str) -> EncodedInput:
         """Produces both vectors in a single pass (input is truncated first)."""
         text = self._truncate(text)
-        vec = np.array(list(self.embed_model.embed([text]))[0])
+        vec = np.asarray(list(self.embed_model.embed([text]))[0], dtype=np.float32)
         norm = float(np.linalg.norm(vec))
         dense_norm = vec / (norm if norm > 0 else 1.0)
 
@@ -133,7 +170,7 @@ class HybridBackbone:
         if not texts:
             return []
         texts = [self._truncate(t) for t in texts]
-        dense = np.array(list(self.embed_model.embed(texts)))
+        dense = np.asarray(list(self.embed_model.embed(texts)), dtype=np.float32)
         norms = np.linalg.norm(dense, axis=1, keepdims=True)
         dense = dense / np.where(norms == 0, 1.0, norms)
         sparse = self.tfidf_vec.transform(texts) if self.is_indexed else None

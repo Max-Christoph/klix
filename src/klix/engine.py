@@ -67,11 +67,13 @@ class DecisionEngine:
         stop_words: list[str] | None = None,
         max_chars: int | None = 2000,
         smart_truncate: bool = True,
+        truncate_dim: int | None = None,
     ) -> None:
         self.backbone = HybridBackbone(
             model_name=model_name,
             max_chars=max_chars,
             smart_truncate=smart_truncate,
+            truncate_dim=truncate_dim,
         )
         self.stop_words = stop_words
         self.heads: list[BaseHead] = []

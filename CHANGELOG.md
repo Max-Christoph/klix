@@ -3,6 +3,55 @@
 All notable changes to klix are documented here. Format based on
 [Keep a Changelog](https://keepachangelog.com/); versioning: SemVer.
 
+## [0.8.4] - 2026-09-25
+
+### Added
+- `DecisionEngine(truncate_dim=N)` — opt-in embedding truncation (MRL-style:
+  slice + L2 renorm, no training, fully deterministic). Wired through
+  `HybridBackbone`, which wraps `embed_model.embed` so anchors and queries are
+  transformed identically. Verified: default `None` is unchanged behaviour;
+  `truncate_dim` reproduces the measured numbers exactly. 9 dedicated tests
+  (`tests/test_truncate_dim.py`).
+- `evals/backbone_compare.py` — backbone and embedding-transform shootout on the
+  repo's own corpora (60 frozen cases, 70-case harness, 273-case expanded
+  corpus). Answers three questions empirically instead of trusting MTEB
+  leaderboard numbers; the headline results are in the module docstring.
+
+### Measured (documented, not defaulted)
+- **Backbone swap rejected.** Granite-Embedding-97M-Multilingual-R2 was
+  evaluated as a drop-in replacement (registerable via FastEmbed's
+  `add_custom_model`, 98 MB quantized — less than half of MiniLM). Result on
+  the 60 frozen cases: nearest 42/60 = 70.0 % vs MiniLM 41/60 = 68.3 %
+  (+1.7 pt, inside the ±9 pt CI at n=70 → noise); linear 47/60 = 78.3 % vs
+  85.0 % (−6.7 pt, consistent across every domain). The loss is **not** a
+  hyperparameter artifact: sweeping `classifier_C` from 0.5 to 200 keeps
+  Granite at 78–80 % while MiniLM stays at 85 %. Its better MTEB *retrieval*
+  score does not transfer to few-anchor cosine classification.
+- **Whitening does not work at this anchor scale — and the reason is
+  structural.** With ~15 anchors in 384 dims the anchor covariance has rank 14
+  (370 dims carry zero anchor variance). ZCA therefore collapses all pairwise
+  cosine similarities to a single value (off-diagonal std = 0.0000), so
+  `nearest` degenerates to tie-breaking (accuracy unchanged at every dims
+  setting), and the `linear` probe drops from 96.7 % to 40.3 % because the
+  zero-variance dims are amplified 1000× as pure query noise. ZCA needs
+  `n_anchors >> dim` (rule of thumb ≥10×); here it is 15 vs 384. This is a
+  limit of the method at few-shot scale, not an implementation bug — hence no
+  `whitening=` parameter is added.
+- **Truncation (`truncate_dim`) is real but small, and kept opt-in.** Slicing
+  MiniLM embeddings + re-normalizing (pure slice + L2 renorm, deterministic)
+  improves accuracy consistently on all three corpora: 60 cases 68.3 % → 76.7 %,
+  70 cases 71.4 % → 77.1 %, 273 cases 93.0 % → 94.9 % (at 64 dims). The effect
+  is **not monotone** on the frozen sets (96 dims dips below 128 dims), so it is
+  documented as an opt-in knob rather than a new default — and it lowers cosine
+  cost proportionally, which is why it is worth having at all.
+- **Not testable / not practical (recorded so nobody re-researches it):**
+  `embeddinggemma-300m` is a gated model whose ONNX export needs a separate
+  309 MB external-data file that `model_file` cannot fetch;
+  `nomic-embed-text-v2-moe` is absent from FastEmbed (only v1/v1.5 ship), its
+  one ONNX repo holds no model files, and it *requires* task prefixes;
+  `Qwen3-Embedding-0.6B` needs a 613 MB quantized ONNX, `last_token` pooling
+  (FastEmbed offers CLS/MEAN/DISABLED only) and instruction prefixes.
+
 ## [0.8.3] - 2026-09-24
 
 ### Documentation

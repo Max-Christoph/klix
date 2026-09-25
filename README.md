@@ -150,6 +150,7 @@ Every head and the engine expose meaningful knobs:
 | `aggregation` | `Flag` | `"max"` (default) or `"topk"` — topk averages the best-k anchors per pole, robust against a single noisy anchor |
 | `threshold` / `temp` | `Flag` | Decision cutoff and softmax temperature (lower = sharper) |
 | `model_name` | `DecisionEngine` | Any FastEmbed-compatible embedding model |
+| `truncate_dim` | `DecisionEngine` | Opt-in: slice every dense vector to N dims + re-normalize (MRL-style, no training, deterministic). Lowers cosine cost proportionally. **Measured on the repo's own corpora it improves `nearest` accuracy consistently** (60 cases 68.3 % → 76.7 %, 70 cases 71.4 % → 77.1 %, 273 cases 93.0 % → 94.9 % at 64 dims) — but the curve is **not monotone** on the hard sets (96 dims dips below 128 dims) and the corpus is small, so it stays opt-in. Tested with `classifier="nearest"` only; not recommended together with the `linear` probe. See `evals/backbone_compare.py` |
 | `stop_words` | `DecisionEngine` | Custom stopword list for the TF-IDF index (default: extended EN+DE list filtering grammatical fillers; pass `[]` to disable filtering) |
 | `evaluate(encoded)` | `BaseHead` subclass | Add entirely custom head types (regex, business rules, ...) |
 | `rules` | `Choice` | Hard keyword/regex `Rule`s (force/boost) layered over the semantic decision |

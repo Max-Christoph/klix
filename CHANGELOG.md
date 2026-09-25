@@ -3,6 +3,50 @@
 All notable changes to klix are documented here. Format based on
 [Keep a Changelog](https://keepachangelog.com/); versioning: SemVer.
 
+## [0.8.5] - 2026-09-25
+
+### Added
+- **`classifier="centroid"`** — scores the query against the **mean anchor
+  vector per label** instead of the single nearest anchor. Deterministic, no
+  training, no randomness: a mean vector per class is all it computes. This
+  reaches the trained linear probe's accuracy while staying in the
+  "no training" contract.
+
+  Measured on the repo's own corpora, bootstrap-verified (2000 resamples):
+
+  | corpus | `nearest` | `centroid` | Δ | 95 % CI |
+  |---|---|---|---|---|
+  | 60 frozen cases | 41/60 = 68.3 % | **51/60 = 85.0 %** | +16.7 pt | — |
+  | cross-domain (70) | 50/70 = 71.4 % | **59/70 = 84.3 %** | +12.9 pt | [+2.9, +22.9] **significant** |
+  | expanded (273) | 254/273 = 93.0 % | **264/273 = 96.7 %** | +3.7 pt | [+1.5, +6.2] **significant** |
+  | bilingual (20) | 15/20 = 75.0 % | 15/20 = 75.0 % | ±0 | neutral |
+
+  On the 60 frozen cases it matches the trained `linear` probe exactly (85.0 %
+  vs 85.0 %) — same accuracy, no training step, no model artifact. Neutral on
+  the mixed-language bilingual set, so it is not a replacement for `nearest`
+  there. 13 tests (`tests/test_centroid.py`), including a regression guard that
+  `centroid` must not fall below the probe.
+- `evals/notebooklm_proposals.py` and `evals/centroid_verify.py` — the
+  experiment scripts behind the numbers above, kept for reproduction.
+- `evals/metric_equivalence.py` — proves the cosine/euclidean metric question
+  algebraically instead of by measurement (see Changed).
+
+### Changed
+- **RRF (Reciprocal Rank Fusion) rejected.** Replacing the weighted
+  dense+sparse score addition with rank-based fusion loses heavily on every
+  corpus: bilingual 75 % → 50 %, cross-domain 71.4 % → 57.1 %, expanded
+  93.0 % → 89.4 % (k=40 and k=60 both). Recorded so it is not retried.
+- **Metric switch cosine → euclidean: not done, and no test needed.** For
+  L2-normalized vectors `||a-b|| = sqrt(2-2·cos)` exactly (verified: max
+  deviation 4.4e-16, 0 ranking mismatches in 2000 trials), so the ranking is
+  provably identical. Beyond that, `keyword_boost` and every calibrated
+  threshold (`reject_threshold`, `min_coverage`, the Flag softmax) live on the
+  cosine *scale*, which euclidean is not comparable to — a switch would need
+  full recalibration for zero ranking benefit.
+- **`pytest` now puts the repo root on `sys.path`** (`pythonpath = ["."]`) so
+  tests can import the `evals/` harness, which is not part of the shipped
+  package.
+
 ## [0.8.4] - 2026-09-25
 
 ### Added

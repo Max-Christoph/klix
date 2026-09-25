@@ -3,6 +3,62 @@
 All notable changes to klix are documented here. Format based on
 [Keep a Changelog](https://keepachangelog.com/); versioning: SemVer.
 
+## [0.8.6] - 2026-09-25
+
+### Not adopted (measured, recorded so they are not retried)
+- **Squared-euclidean centroid scoring** — scoring against the class centroid
+  with `-||q-c||²` instead of `cos(q, c/||c||)`, on the theory that the
+  centroid's *norm* carries variance information that cosine divides away.
+  Measured against the shipped cosine centroid, bootstrap 3000 resamples:
+
+  | corpus | cosine | squared-L2 | diff | 95 % CI | verdict |
+  |---|---|---|---|---|---|
+  | bilingual (20) | 75.0 % | 70.0 % | −5.0 pt | [−15.0, +0.0] | not distinguishable |
+  | cross-domain (70) | 84.3 % | 85.7 % | +1.4 pt | [−2.9, +5.7] | not distinguishable |
+  | expanded (273) | 96.7 % | 97.1 % | +0.4 pt | [−0.7, +1.5] | not distinguishable |
+  | 60 frozen | 85.0 % | 86.7 % | +1.7 pt | one case | not distinguishable |
+
+  A control arm (squared L2 on the *unit-normalized* centroid) reproduces
+  cosine **exactly** on cross and expanded — identical per-item predictions —
+  which confirms the algebra and shows the norm term is the only difference.
+  The hypothesis is mathematically right; the effect is simply below the noise
+  floor at these anchor counts. No parameter added.
+- **Calibrated linear dense+sparse fusion** (`min-max` both channels, then
+  `S = α·dense + (1−α)·sparse`), as an alternative to `keyword_boost`:
+
+  | corpus | keyword_boost | α = 0.3 / 0.4 / 0.5 | 95 % CI (α=0.3) | verdict |
+  |---|---|---|---|---|
+  | bilingual (20) | 75.0 % | 75.0 % | — | neutral |
+  | cross-domain (70) | 71.4 % | 74.3 % | [+0.0, +7.1] | not distinguishable |
+  | expanded (273) | 93.0 % | 93.8 % | [+0.0, +1.8] | not distinguishable |
+  | 60 frozen | 68.3 % | 71.7 % | — | (directionally positive) |
+
+  Every point estimate is above `keyword_boost` and no corpus regresses, but
+  every CI includes zero. Notably α is **inert** — 0.3, 0.4 and 0.5 produce
+  identical accuracy on all four corpora, meaning the min-max normalization
+  dominates the mix and the fusion weight barely matters. Not adopted as a
+  default; kept as a documented, unconfirmed mild positive.
+- **Whitening — closed for good.** A second source puts the requirement at
+  ~800+ unlabeled background sentences for a stable covariance estimate. We do
+  not have that and will not build it; combined with the rank-deficiency
+  finding from 0.8.4 (15 anchors → rank 14 covariances), the approach is
+  dropped rather than deferred.
+- **LEALLA backbone — not pursued.** Available only via TensorFlow Hub or a
+  PyTorch conversion; using it would require a manual ONNX export through
+  `transformers` + `optimum`, i.e. exactly the heavy-dependency problem that
+  already disqualified `nomic-embed-text-v2-moe`. Nothing is built for it until
+  the export effort is justified on its own.
+- **NCMC (k-means sub-centroids, 2–3 per class)** — a real, established method,
+  but only worth testing if centroid misalignment is actually *observed*
+  (heterogeneous classes scoring badly). Not built preventively.
+- **"ProtoKNN (Cao et al., 2026)"** — the citation looks unreliable and
+  possibly misattributed. Not implemented; needs a verifiable DOI/link first.
+
+### Added
+- `evals/round2_p1.py` — the squared-euclidean experiment, runnable per corpus
+  (`uv run python -m evals.round2_p1 <corpus> <mode>`), with the measured
+  results in the module docstring.
+
 ## [0.8.5] - 2026-09-25
 
 ### Added

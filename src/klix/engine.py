@@ -68,6 +68,7 @@ class DecisionEngine:
         max_chars: int | None = 2000,
         smart_truncate: bool = True,
         truncate_dim: int | None = None,
+        sparse_fastpath: dict | bool | None = None,
     ) -> None:
         self.backbone = HybridBackbone(
             model_name=model_name,
@@ -78,6 +79,24 @@ class DecisionEngine:
         self.stop_words = stop_words
         self.heads: list[BaseHead] = []
         self._compiled = False
+        self._fastpath_enabled = bool(sparse_fastpath)
+        # Normalize the gate config; True uses the conservative defaults.
+        if sparse_fastpath is True:
+            self.sparse_fastpath_cfg = {
+                "min_sparse_score": 0.25, "min_margin": 0.5, "min_coverage": 0.5,
+                "min_abs_gap": 0.1,
+            }
+        elif isinstance(sparse_fastpath, dict):
+            self.sparse_fastpath_cfg = {
+                "min_sparse_score": 0.25, "min_margin": 0.5, "min_coverage": 0.5,
+                "min_abs_gap": 0.1,
+                **sparse_fastpath,
+            }
+        else:
+            self.sparse_fastpath_cfg = None
+        # Fast-path accounting, exposed for benchmarks and drift monitoring.
+        self.fastpath_hits = 0
+        self.fastpath_misses = 0
 
     def add_head(self, head: BaseHead) -> "DecisionEngine":
         """Registers a head (fluent, chainable)."""
@@ -97,6 +116,11 @@ class DecisionEngine:
         self.backbone.build_vocabulary(all_texts, stop_words=self.stop_words)
 
         for head in self.heads:
+            # Propagate the engine-level fast-path config to Choice heads so a
+            # single `DecisionEngine(sparse_fastpath=...)` switch covers the
+            # whole schema. Heads constructible standalone keep their own value.
+            if self.sparse_fastpath_cfg is not None and hasattr(head, "fastpath"):
+                head.fastpath = self.sparse_fastpath_cfg
             head.fit(self.backbone)
 
         self._compiled = True
@@ -148,6 +172,14 @@ class DecisionEngine:
                             for k, v in sorted(h.glossary.mapping.items())
                         }
                         if getattr(h, "glossary", None) is not None
+                        else None
+                    ),
+                    # Weighted expansion + fast path (v0.8.8): both change
+                    # decisions, so both belong in the hash.
+                    "glossary_weight": getattr(h, "glossary_weight", None),
+                    "fastpath": (
+                        {k: v for k, v in sorted(h.fastpath.items())}
+                        if getattr(h, "fastpath", None) is not None
                         else None
                     ),
                 })
@@ -205,6 +237,20 @@ class DecisionEngine:
 
         start = time.perf_counter()
 
+        # 0. Sparse fast path (v0.8.8, opt-in): try to answer from the keyword
+        #    channel alone BEFORE paying for the dense embedding forward pass
+        #    (~50-90 ms, the dominant cost). Only used when every registered
+        #    head can answer from sparse evidence; the gate is conservative and
+        #    a single miss falls through to the normal path.
+        if self._fastpath_enabled:
+            fast = self._try_fastpath(text)
+            if fast is not None:
+                self.fastpath_hits += 1
+                elapsed_ms = (time.perf_counter() - start) * 1000
+                return DecisionResult(text=text, latency_ms=elapsed_ms,
+                                      head_data=fast, engine=self)
+            self.fastpath_misses += 1
+
         # 1. One-time vectorization (~50-90 ms on the dev workstation).
         encoded = self.backbone.encode(text)
 
@@ -220,6 +266,35 @@ class DecisionEngine:
 
         elapsed_ms = (time.perf_counter() - start) * 1000
         return DecisionResult(text=text, latency_ms=elapsed_ms, head_data=results, engine=self)
+
+    def _try_fastpath(self, text: str) -> dict | None:
+        """Attempts a sparse-only answer for ALL heads; None if not decisive.
+
+        Every head must produce a confident sparse answer, otherwise the whole
+        call falls through. Partial answers would mix sparse and dense evidence
+        across heads, which silently changes semantics — so the fast path is
+        all-or-nothing.
+        """
+        results: dict[str, dict] = {}
+        for head in self.heads:
+            attempt = getattr(head, "sparse_fastpath", None)
+            if attempt is None:
+                return None  # head cannot answer without dense vectors
+            got = attempt(text)
+            if got is None:
+                return None
+            results[head.name] = got
+        return results
+
+    def fastpath_stats(self) -> dict:
+        """Hit/miss counters of the sparse fast path (read-only)."""
+        total = self.fastpath_hits + self.fastpath_misses
+        return {
+            "enabled": self._fastpath_enabled,
+            "hits": self.fastpath_hits,
+            "misses": self.fastpath_misses,
+            "hit_rate": (self.fastpath_hits / total) if total else 0.0,
+        }
 
     def decide_batch(self, texts: list[str]) -> list[DecisionResult]:
         """Processes many texts in one embedding pass (bulk mode).

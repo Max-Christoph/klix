@@ -3,6 +3,71 @@
 All notable changes to klix are documented here. Format based on
 [Keep a Changelog](https://keepachangelog.com/); versioning: SemVer.
 
+## [0.8.8] - 2026-09-25
+
+### Added
+- **Weighted glossary expansion (`glossary_weight=`, default 0.5).** The
+  v0.8.7 string concatenation had a structural flaw: the concatenated text is
+  L2-normalized as one document, so appending synonyms *reduced* the weight of
+  the text's own terms. Measured on a German anchor expanded with
+  same-language synonyms, its own query match fell from 0.972 to 0.673 and the
+  label flipped — that was the monolingual regression. Now the exact tokens
+  keep weight 1.0 and the glossary terms enter as `alpha * v_glossary` before
+  the final normalization, on the query side AND on the anchor rows.
+  `alpha=0` now leaves the sparse rows bit-identical to the no-glossary
+  baseline (pinned by test).
+
+  Measured (`evals/glossary_bench.py`, alpha sweep):
+
+  | group | baseline | alpha=0.5 | alpha=1.0 |
+  |---|---|---|---|
+  | EN anchors ← DE queries | 80.0 % | **100.0 %** | 100.0 % |
+  | DE anchors ← EN queries | 77.8 % | **88.9 %** | 88.9 % |
+  | DE anchors ← DE queries (control) | 100.0 % | **100.0 %** | 100.0 % |
+
+  The control group is the regression case from 0.8.7 — it now stays at
+  100.0 % for every alpha, i.e. **no regression**, and the cross-lingual gains
+  are intact. `glossary_weight` is part of `schema_hash()`.
+
+- **Sparse fast path (`DecisionEngine(sparse_fastpath=True)`).** Tries to answer
+  from the keyword channel alone *before* paying for the dense embedding
+  forward pass (~50-90 ms, the dominant cost). Three conservative gates: a
+  minimum boost-weighted sparse score, a minimum margin to the runner-up
+  (relative **and** absolute — the runner-up is often 0.0, which makes a purely
+  relative margin degenerate to 1.0), and a reject-pole check so off-domain
+  small talk never short-circuits. All-or-nothing across heads: a single head
+  that cannot answer sparsely makes the whole call fall through, because mixing
+  sparse and dense evidence across heads would silently change semantics.
+
+  Measured: **0.9 ms median on a fast-path hit vs 15.4 ms on the dense path
+  (~17×)**; the monolingual control group resolved 5 of 9 decisions via the
+  fast path with unchanged accuracy. Hit/miss counters are exposed via
+  `engine.fastpath_stats()`.
+
+- **Glossary composition API**: `Glossary.load(path_or_dict)` and
+  `glossary.merge(other)` — both return new objects, existing entries are
+  extended rather than overwritten, and the merge is deterministic.
+
+- **Explainability metadata** on every Choice result:
+  `details(head)["engine"]` is `"sparse_fastpath"` or `"dense_hybrid"`, and
+  `details(head)["matched_terms"]` lists the glossary terms that were active.
+
+### Changed
+- `Glossary.expand_terms(text, cross_lingual_only=False)` — the cross-lingual
+  filter skips same-language synonyms. On the anchor side this avoids
+  lengthening documents with terms that cannot bridge anything.
+- A small stdlib-only language guess (`glossary._guess_lang`) mirrors
+  `heads._detect_lang` so the glossary and the head agree on what counts as
+  "the other language". It is a heuristic, not a detector; a wrong guess merely
+  falls back to the previous behaviour.
+
+### Fixed
+- The v0.8.7 monolingual dilution, root-caused and pinned by tests:
+  the regression came from the **anchor** side (IDF shift), not the query side
+  as originally assumed. `evals/anchor_expansion_diag.py` and
+  `evals/query_only_verify.py` document the four candidate designs that were
+  measured before choosing the damped-anchor-row approach.
+
 ## [0.8.7] - 2026-09-25
 
 ### Added

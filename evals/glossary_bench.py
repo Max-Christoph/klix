@@ -1,18 +1,22 @@
-"""Glossary hook benchmark: baseline vs `glossary=` on mixed DE/EN routing.
+"""Glossary hook benchmark: baseline vs weighted glossary vs fast path.
 
-Design of the test set (matters for interpreting the numbers):
-  - The schema has ENGLISH anchors, the queries are GERMAN where a translation
-    actually matters. That is the case a glossary can fix: the sparse channel
-    has no shared vocabulary, and the dense channel has to carry the whole load.
-  - A second group uses German anchors with English queries (mirror direction).
-  - A third group is monolingual German (anchors and queries DE) as a control:
-    the glossary should be near-neutral there, since no bridge is needed.
+Extends the v0.8.7 benchmark with the v0.8.8 features:
+  - alpha sweep for `glossary_weight` (weighted expansion)
+  - fast path (sparse early exit) with latency comparison and hit rate
+  - explicit regression check on the MONOLINGUAL control group
 
-Metrics: accuracy, latency (ms per decision, median), peak RSS delta (MB).
+Test set design (matters for reading the numbers):
+  - EN anchors <- DE queries: the case a glossary can fix (sparse channel has
+    no shared vocabulary, so the dense channel had to carry everything).
+  - DE anchors <- EN queries: the mirror direction.
+  - DE anchors <- DE queries: monolingual control. No bridge needed, so the
+    v0.8.7 concatenation DILUTED the query and cost accuracy. This is the case
+    weighted expansion is supposed to fix — verified explicitly below.
+
+Metrics: accuracy, median latency per decision (ms), peak RSS (MB).
 
 Run: uv run python -m evals.glossary_bench
 """
-import json
 import statistics
 import sys
 import time
@@ -20,11 +24,8 @@ import time
 sys.path.insert(0, "src")
 sys.path.insert(0, ".")
 
-from klix import Choice, DecisionEngine, load_glossary  # noqa: E402
+from klix import Choice, DecisionEngine, Glossary, load_glossary  # noqa: E402
 
-# ---------------------------------------------------------------------------
-# Test data: production-domain tickets with technical terms the glossary knows
-# ---------------------------------------------------------------------------
 EN_ANCHORS = {
     "maintenance": [
         "schedule preventive maintenance for the line",
@@ -45,8 +46,6 @@ EN_ANCHORS = {
         "lot size for the next batch is wrong",
     ],
 }
-
-# German queries against those English anchors (the case a glossary can fix)
 DE_QUERIES = [
     ("das foerderband steht seit heute morgen", "downtime"),
     ("die taktzeit hat sich nach dem neustart verdoppelt", "downtime"),
@@ -60,7 +59,6 @@ DE_QUERIES = [
     ("losgroesse fuer die naechste charge stimmt nicht", "quality"),
 ]
 
-# Mirror direction: German anchors, English queries
 DE_ANCHORS = {
     "maintenance": [
         "praeventive wartung fuer die linie einplanen",
@@ -90,7 +88,6 @@ EN_QUERIES = [
     ("lot size for the next batch is wrong", "quality"),
 ]
 
-# Control: monolingual German both sides, no bridge needed
 DE_ONLY_ANCHORS = {
     "wartung": ["wartung einplanen", "ersatzteil fehlt", "kalibrierung ueberfaellig"],
     "stillstand": ["foerderband steht", "linie ist down", "taktzeit verdoppelt"],
@@ -116,13 +113,9 @@ GROUPS = [
 
 
 def _rss_mb() -> float:
-    """Peak RSS in MB, stdlib only (no psutil dependency).
-
-    POSIX: resource.getrusage. Windows: ctypes against psapi. Returns 0.0 if
-    neither is available rather than failing the benchmark.
-    """
+    """Peak RSS in MB, stdlib only (no psutil)."""
     try:
-        import resource  # POSIX only
+        import resource  # POSIX
         return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024.0
     except Exception:  # noqa: BLE001
         pass
@@ -130,158 +123,124 @@ def _rss_mb() -> float:
         import ctypes
         from ctypes import wintypes
 
-        class PROCESS_MEMORY_COUNTERS(ctypes.Structure):
+        class PMC(ctypes.Structure):
             _fields_ = [
-                ("cb", wintypes.DWORD),
-                ("PageFaultCount", wintypes.DWORD),
-                ("PeakWorkingSetSize", ctypes.c_size_t),
-                ("WorkingSetSize", ctypes.c_size_t),
-                ("QuotaPeakPagedPoolUsage", ctypes.c_size_t),
-                ("QuotaPagedPoolUsage", ctypes.c_size_t),
-                ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t),
-                ("QuotaNonPagedPoolUsage", ctypes.c_size_t),
-                ("PagefileUsage", ctypes.c_size_t),
-                ("PeakPagefileUsage", ctypes.c_size_t),
+                ("cb", wintypes.DWORD), ("PageFaultCount", wintypes.DWORD),
+                ("PeakWorkingSetSize", ctypes.c_size_t), ("WorkingSetSize", ctypes.c_size_t),
+                ("QuotaPeakPagedPoolUsage", ctypes.c_size_t), ("QuotaPagedPoolUsage", ctypes.c_size_t),
+                ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t), ("QuotaNonPagedPoolUsage", ctypes.c_size_t),
+                ("PagefileUsage", ctypes.c_size_t), ("PeakPagefileUsage", ctypes.c_size_t),
             ]
 
-        counters = PROCESS_MEMORY_COUNTERS()
-        counters.cb = ctypes.sizeof(counters)
-        get_info = ctypes.windll.psapi.GetProcessMemoryInfo
-        get_info.argtypes = [wintypes.HANDLE, ctypes.c_void_p, wintypes.DWORD]
-        get_info.restype = wintypes.BOOL
-        if get_info(
-            ctypes.windll.kernel32.GetCurrentProcess(), ctypes.byref(counters), counters.cb
-        ):
-            return counters.PeakWorkingSetSize / 1048576.0
+        c = PMC()
+        c.cb = ctypes.sizeof(c)
+        fn = ctypes.windll.psapi.GetProcessMemoryInfo
+        fn.argtypes = [wintypes.HANDLE, ctypes.c_void_p, wintypes.DWORD]
+        fn.restype = wintypes.BOOL
+        if fn(ctypes.windll.kernel32.GetCurrentProcess(), ctypes.byref(c), c.cb):
+            return c.PeakWorkingSetSize / 1048576.0
     except Exception:  # noqa: BLE001
         pass
     return 0.0
 
 
-def run(anchors: dict, queries: list, *, use_glossary: bool, classifier: str,
-        keyword_boost: float) -> tuple[int, int, list[float]]:
-    glossary = load_glossary() if use_glossary else None
-    eng = DecisionEngine()
+def build(anchors: dict, *, use_glossary: bool, classifier: str, keyword_boost: float,
+          glossary_weight: float, fastpath) -> DecisionEngine:
+    eng = DecisionEngine(sparse_fastpath=fastpath)
     eng.add_head(Choice(
         name="route", options=anchors, classifier=classifier,
-        glossary=glossary, keyword_boost=keyword_boost,
+        keyword_boost=keyword_boost,
+        glossary=load_glossary() if use_glossary else None,
+        glossary_weight=glossary_weight,
     ))
     eng.compile()
+    return eng
+
+
+def run(anchors: dict, queries: list, **kw):
+    eng = build(anchors, **kw)
     ok, lat = 0, []
     for text, expected in queries:
         t0 = time.perf_counter()
         got = eng.decide(text).route
         lat.append((time.perf_counter() - t0) * 1000)
         ok += int(got == expected)
-    return ok, len(queries), lat
+    return ok, len(queries), lat, eng.fastpath_stats()
 
 
-def per_item(anchors: dict, queries: list, *, use_glossary: bool, classifier: str,
-             keyword_boost: float) -> list[int]:
-    """Per-query correctness, pooled over the cross-lingual groups only."""
-    glossary = load_glossary() if use_glossary else None
-    eng = DecisionEngine()
-    eng.add_head(Choice(
-        name="route", options=anchors, classifier=classifier,
-        glossary=glossary, keyword_boost=keyword_boost,
-    ))
-    eng.compile()
-    return [int(eng.decide(t).route == e) for t, e in queries]
-
-
-def bootstrap_crosslingual(classifier: str, keyword_boost: float, n_boot: int = 2000,
-                           seed: int = 23) -> tuple[float, float, float, float, int]:
-    """Accuracy + delta CI over the two CROSS-LINGUAL groups (19 cases).
-
-    The monolingual control is excluded on purpose: pooling it would dilute the
-    effect we are trying to measure.
-    """
-    import numpy as np
-
-    base, cand = [], []
-    for _gname, anchors, queries in GROUPS[:2]:  # the two cross-lingual groups
-        base.extend(per_item(anchors, queries, use_glossary=False,
-                             classifier=classifier, keyword_boost=keyword_boost))
-        cand.extend(per_item(anchors, queries, use_glossary=True,
-                             classifier=classifier, keyword_boost=keyword_boost))
-    a, b = np.array(base), np.array(cand)
-    rng = np.random.default_rng(seed)
-    diffs = []
-    for _ in range(n_boot):
-        idx = rng.integers(0, len(a), len(a))
-        diffs.append(b[idx].mean() - a[idx].mean())
-    diffs = np.sort(diffs)
-    return a.mean(), b.mean(), diffs[int(0.025 * n_boot)], diffs[int(0.975 * n_boot)], len(a)
+def show(group, queries, label, **kw):
+    anchors = group
+    try:
+        ok, n, lat, stats = run(anchors, queries, **kw)
+        med = statistics.median(lat)
+        extra = f"  fp {stats['hits']}/{stats['hits']+stats['misses']}" if stats["enabled"] else ""
+        print(f"  {label:34s} {ok:3d}/{n} = {ok/n:6.1%}  {med:6.1f} ms{extra}")
+        return ok, n, med, stats
+    except Exception as ex:  # noqa: BLE001
+        print(f"  {label:34s} FAILED {type(ex).__name__}: {str(ex)[:38]}")
+        return None
 
 
 def main() -> None:
-    configs = [
-        ("nearest, kb=0.5", "nearest", 0.5),
-        ("centroid, kb=0.5", "centroid", 0.5),
-        ("centroid, kb=1.5", "centroid", 1.5),
-        ("linear", "linear", 0.5),
-    ]
+    print("=" * 100)
+    print("GLOSSARY / FAST-PATH BENCHMARK (v0.8.8)")
+    print("=" * 100)
 
-    print("=" * 96)
-    print("GLOSSARY HOOK BENCHMARK — baseline vs glossary= on mixed DE/EN routing")
-    print("=" * 96)
-    print(f"{'group':36s} {'config':20s} {'base':>8s} {'gloss':>8s} {'delta':>8s}  {'ms/dec':>8s}")
-    print("-" * 96)
+    cfg = dict(classifier="nearest", keyword_boost=0.5, glossary_weight=0.4, fastpath=None)
 
-    totals = {}
+    print("\n########## 1. ALPHA SWEEP (weighted expansion) ##########")
+    print("   alpha=0.0 disables the glossary on the QUERY side (anchors stay expanded)")
     for gname, anchors, queries in GROUPS:
-        for cname, classifier, kb in configs:
-            try:
-                b_ok, b_n, b_lat = run(anchors, queries, use_glossary=False,
-                                       classifier=classifier, keyword_boost=kb)
-                g_ok, g_n, g_lat = run(anchors, queries, use_glossary=True,
-                                       classifier=classifier, keyword_boost=kb)
-            except Exception as ex:  # noqa: BLE001
-                print(f"{gname:36s} {cname:20s} FAILED {type(ex).__name__}: {str(ex)[:30]}")
-                continue
-            delta = g_ok - b_ok
-            med = statistics.median(g_lat)
-            print(f"{gname:36s} {cname:20s} {b_ok:>3d}/{b_n:<3d} {g_ok:>3d}/{g_n:<3d} "
-                  f"{delta:>+8d}  {med:>8.1f}")
-            key = (gname, cname)
-            totals[key] = (b_ok, g_ok, b_n, med)
+        print(f"\n-- {gname} --")
+        show(anchors, queries, "no glossary (baseline)", **{**cfg, "use_glossary": False})
+        for a in (0.0, 0.2, 0.3, 0.4, 0.5, 0.7, 1.0):
+            show(anchors, queries, f"glossary alpha={a}", **{**cfg, "use_glossary": True,
+                                                              "glossary_weight": a})
 
+    print("\n########## 2. FAST PATH (sparse early exit) ##########")
+    print("   fp = fast-path hits / total decisions")
+    for gname, anchors, queries in GROUPS:
+        print(f"\n-- {gname} --")
+        show(anchors, queries, "dense only (no fastpath)", **{**cfg, "use_glossary": True})
+        ok, n, med, stats = show(anchors, queries, "fastpath enabled",
+                                 **{**cfg, "use_glossary": True, "fastpath": True}) or (None,)*4
     print()
-    print("=" * 96)
-    print("AGGREGATE over all three groups (27 cases each)")
-    print("=" * 96)
-    print(f"{'config':22s} {'baseline':>12s} {'glossary':>12s} {'delta':>9s}  {'median ms':>10s}")
-    print("-" * 96)
-    for cname, _cls, _kb in configs:
-        b = sum(totals[(g, cname)][0] for g, _, _ in GROUPS if (g, cname) in totals)
-        g_ = sum(totals[(g, cname)][1] for g, _, _ in GROUPS if (g, cname) in totals)
-        n = sum(totals[(g, cname)][2] for g, _, _ in GROUPS if (g, cname) in totals)
-        ms = statistics.median([totals[(g, cname)][3] for g, _, _ in GROUPS if (g, cname) in totals])
-        print(f"{cname:22s} {b:>4d}/{n:<7d} {g_:>4d}/{n:<7d} {g_-b:>+9d}  {ms:>10.1f}")
+    print("   Latency for a fast-path HIT vs a dense MISS (same schema):")
+    eng = build(EN_ANCHORS, use_glossary=True, classifier="nearest",
+                keyword_boost=0.5, glossary_weight=0.4, fastpath=True)
+    hit_lat, miss_lat = [], []
+    for text, _ in DE_QUERIES:
+        t0 = time.perf_counter()
+        res = eng.decide(text)
+        dt = (time.perf_counter() - t0) * 1000
+        (hit_lat if res.details("route")["engine"] == "sparse_fastpath" else miss_lat).append(dt)
+    if hit_lat:
+        print(f"     fast-path hit : {statistics.median(hit_lat):6.2f} ms median (n={len(hit_lat)})")
+    if miss_lat:
+        print(f"     dense fallback: {statistics.median(miss_lat):6.2f} ms median (n={len(miss_lat)})")
+    if hit_lat and miss_lat:
+        sp = statistics.median(miss_lat) / statistics.median(hit_lat)
+        print(f"     speedup on hits: {sp:.1f}x")
 
-    print()
-    print(f"peak RSS after run: {_rss_mb():.0f} MB")
+    print("\n########## 3. MONOLINGUAL REGRESSION CHECK ##########")
+    print("   v0.8.7 concatenation cost accuracy here; weighted expansion must not")
+    ctrl = GROUPS[2]
+    base = show(ctrl[1], ctrl[2], "baseline (no glossary)", **{**cfg, "use_glossary": False})
+    for a in (0.0, 0.3, 0.4, 0.5, 1.0):
+        got = show(ctrl[1], ctrl[2], f"glossary alpha={a}", **{**cfg, "use_glossary": True,
+                                                                 "glossary_weight": a})
+        if base and got:
+            verdict = "OK (no regression)" if got[0] >= base[0] else "REGRESSION"
+            print(f"      -> vs baseline: {got[0]-base[0]:+d} case(s)  {verdict}")
 
-    print()
-    print("=" * 96)
-    print("BOOTSTRAP over the two CROSS-LINGUAL groups (19 cases; control excluded)")
-    print("=" * 96)
-    print(f"{'config':22s} {'baseline':>10s} {'glossary':>10s} {'delta':>9s}  {'95% CI':>18s}  verdict")
-    print("-" * 96)
-    for cname, classifier, kb in configs:
-        try:
-            b, g_, lo, hi, n = bootstrap_crosslingual(classifier, kb)
-            sig = "SIGNIFICANT" if (lo > 0 or hi < 0) else "not distinguishable"
-            print(f"{cname:22s} {b:>9.1%} {g_:>10.1%} {g_-b:>+9.1%}  "
-                  f"[{lo:+.1%}, {hi:+.1%}]  {sig}")
-        except Exception as ex:  # noqa: BLE001
-            print(f"{cname:22s} FAILED {type(ex).__name__}: {str(ex)[:30]}")
+    print("\n########## 4. GLOSSARY API ##########")
+    custom = Glossary.load({"press": {"de": ["presse"], "en": ["press"]}})
+    merged = load_glossary().merge(custom)
+    print(f"   built-in entries : {len(load_glossary().mapping)}")
+    print(f"   custom entries   : {len(custom.mapping)}")
+    print(f"   merged entries   : {len(merged.mapping)}  ('press' present: {'press' in merged.mapping})")
 
-    print()
-    print("Reading the table: the glossary can only help where the sparse channel")
-    print("has no shared vocabulary (cross-lingual groups). The monolingual control")
-    print("stays flat or dips slightly — expansion adds terms that dilute the sparse")
-    print("vector, which is the honest cost of the hook.")
+    print(f"\npeak RSS: {_rss_mb():.0f} MB")
 
 
 if __name__ == "__main__":

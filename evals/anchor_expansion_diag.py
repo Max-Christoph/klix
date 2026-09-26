@@ -72,6 +72,12 @@ class NoAnchorExpansion(Choice):
 
 
 class SameLangStripped(Choice):
+    """Legacy demo of the removed `cross_lingual_only` switch.
+
+    v0.9.0 replaced the language guess behind it with a vocabulary-aware skip
+    (`vocab=`); this diagnostic harness is kept because it still documents the
+    v0.8.8 finding, not because the engine has a language branch.
+    """
     """Variant D: expand anchors, then drop same-language added terms.
 
     Approximates it by expanding only with the OTHER language's term list,
@@ -94,7 +100,7 @@ class SameLangStripped(Choice):
                 ) else "en"
 
             class _Strict(Glossary):
-                def expand_terms(self, text, cross_lingual_only=False):
+                def expand_terms(self, text, vocab=None, per_concept_topk=None):
                     tlang = _lang(text)
                     low = text.lower()
                     out = []

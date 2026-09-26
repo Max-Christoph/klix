@@ -15,10 +15,37 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 
 from klix.backbone import _DEFAULT_STOPWORDS, EncodedInput, HybridBackbone
+from klix.glossary import SparseQuery
 from klix.rules import Rule, compile_rules
+
+# Single tokenizer for all sparse/text helpers in this module (same pattern the
+# TF-IDF vectorizer uses, so tokenization never diverges between channels).
+_TOKEN_RE = re.compile(r"(?u)\b[\w-]+\b")
 
 # Sentinel class label for the optional reject class when classifier="linear".
 _REJECT_LABEL = "__klix_reject__"
+
+
+def _accepts_keyword(fn, name: str) -> bool:
+    """True if `fn` accepts `name` as a keyword argument.
+
+    Used to keep the v0.9.0 `sparse=` fast-path plumbing BACKWARD COMPATIBLE: a
+    custom `BaseHead` subclass written before this release has
+    `evaluate(self, encoded)` and would raise TypeError if the engine passed
+    `sparse=`. Probed once at construction instead of guessed per call.
+    """
+    if fn is None:
+        return False
+    import inspect
+
+    try:
+        params = inspect.signature(fn).parameters
+    except (TypeError, ValueError):  # builtins / C callables
+        return True
+    if name in params:
+        return True
+    return any(p.kind is inspect.Parameter.VAR_KEYWORD for p in params.values())
+
 
 
 def _bootstrap_ci(probs, y, threshold, metric_fn, n_boot: int = 300) -> tuple[float, float]:
@@ -53,67 +80,17 @@ def _bootstrap_ci(probs, y, threshold, metric_fn, n_boot: int = 300) -> tuple[fl
     return (round(float(lo), 4), round(float(hi), 4))
 
 
-# Cheap German-signal words (umlaut-free forms included). Used by _detect_lang
-# for classifier="auto" and cross-lingual mixup — a heuristic, not a detector.
-_GERMAN_SIGNAL_WORDS = [
-    "der", "die", "das", "und", "ist", "nicht", "eine", "ein", "mit", "für",
-    "auf", "nach", "von", "im", "in", "mein", "meine", "wurde", "wird", "haben",
-    "fehlt", "kaputt", "staendig", "bricht", "startet", "konto", "rechnung",
-    "bestellung", "heizung", "gehaltsabrechnung", "urlaub", "kreditkarte",
-    "erstattung", "verschluesselt", "loesegeld", "unbekannte", "einloggt",
-    "gutschrift", "doppelt", "abgebucht", "belastet", "monat", "kueche", "tropft",
-    "wlan", "verbindet", "bildschirm", "schwarz", "zerbrochen", "tuerknauf",
-    "elternzeit", "abrechnung", "stunden", "postfach", "dateien",
-]
-
-
-def _detect_lang(text: str) -> str:
-    """Cheap language heuristic for anchor texts.
-
-    Returns "de" if the text contains German-specific characters (umlauts/sharp-s)
-    or German signal words, else "en". Used only for `classifier="auto"` and
-    cross-lingual augmentation — not a general-purpose language detector. For
-    better detection, prefer supplying `translate_fn` or keeping anchors in one
-    language.
-    """
-    low = text.lower()
-    for ch in low:
-        if ch in "äöüß":
-            return "de"
-    words = re.findall(r"(?u)\b[\w-]+\b", low)
-    for w in words:
-        if w in _GERMAN_SIGNAL_WORDS:
-            return "de"
-    return "en"
-
-
-def _cross_lingual_mixup(X: np.ndarray, y: np.ndarray, texts: list[str]) -> tuple[np.ndarray, np.ndarray]:
-    """Augments each class with midpoints between its anchors in DIFFERENT languages.
-
-    When a class has anchors in both EN and DE, the embedding-space midpoint
-    between an English and a German anchor is a point that sits between the two
-    languages — teaching the downstream probe that the class is one cloud, not
-    two language-split clouds. This is the model-free part of cross-lingual
-    augmentation (real translation still requires `translate_fn`).
-    """
-    parts_x: list[np.ndarray] = [X]
-    parts_y: list[np.ndarray] = [y]
-    groups: dict[str, list[int]] = {}
-    for i, lab in enumerate(y):
-        groups.setdefault(lab, []).append(i)
-    for lab, idxs in groups.items():
-        langs = [_detect_lang(texts[i]) for i in idxs]
-        if len(set(langs)) <= 1:  # skip: class is single-language
-            continue
-        for a, lang_a in zip(idxs, langs):
-            for b, lang_b in zip(idxs, langs):
-                if lang_a != lang_b:
-                    mid = X[a] + X[b]
-                    n = float(np.linalg.norm(mid))
-                    mid = mid / n if n > 0 else mid
-                    parts_x.append(mid.reshape(1, -1))
-                    parts_y.append(np.array([lab]))
-    return np.vstack(parts_x), np.concatenate(parts_y)
+# NOTE (v0.9.0): the de/en heuristics that used to live here — `_detect_lang`,
+# `_GERMAN_SIGNAL_WORDS` and the `_cross_lingual_mixup` augmentation built on
+# them — are GONE. They were language-specific branches (a umlaut/signal-word
+# scan) whose only jobs were (a) driving `classifier="auto"` and (b) picking a
+# mirror language for `translate_fn`. Both are now explicit:
+#   * `classifier="centroid"` is the language-robust default that "auto" was
+#     trying to approximate; "auto" still parses as a deprecated alias.
+#   * `translate_fn` gets the mirror language from the caller
+#     (`translate_target=`, default None = let the callback decide).
+# The cross-lingual bridge itself is the glossary's job, and the glossary is a
+# flat, language-agnostic lookup (klix.glossary) — a fact, not a guess.
 
 
 def _augment_embeddings(
@@ -190,6 +167,10 @@ class BaseHead(ABC):
         self.suppress_when: dict[str, set] = {
             k: set(v) for k, v in (suppress_when or {}).items()
         }
+        # v0.9.0 plumbing: whether this head's evaluate() takes the `sparse=`
+        # hand-off. Probed once here so a subclass written against the old
+        # one-argument signature keeps working untouched.
+        self._evaluate_takes_sparse = _accepts_keyword(type(self).evaluate, "sparse")
 
     def is_suppressed(self, prior_results: dict) -> bool:
         """True if any suppression condition matches already-computed heads.
@@ -271,6 +252,7 @@ class Choice(BaseHead):
         bm25_k1: float = 1.5,
         bm25_b: float = 0.75,
         translate_fn=None,
+        translate_target: str | None = None,
         glossary=None,
         glossary_weight: float = 0.5,
         fastpath: dict | None = None,
@@ -305,11 +287,22 @@ class Choice(BaseHead):
         self.bm25_k1 = bm25_k1
         self.bm25_b = bm25_b
         self.translate_fn = translate_fn
-        # Glossary (v0.8.7, opt-in): a `klix.glossary.Glossary` instance whose
+        # Mirror language handed to `translate_fn` (v0.9.0). Explicit on purpose:
+        # the old code guessed it from the anchor text, which is exactly the
+        # language-specific branch this release removes. None = the callback
+        # decides (the documented default; a callback that needs the target
+        # gets whatever you pass here).
+        self.translate_target = translate_target
+        # Glossary (v0.8.7, opt-in; normalized in v0.9.0): `resolve_glossary`
+        # accepts a `Glossary`, a plain dict, or a JSON file path — all three
+        # work interchangeably, so wiring is never a format question. Its
         # expand_terms() adds cross-language synonyms to anchors (in fit) and
-        # queries (in evaluate). Deterministic, no model, no dependency. Unlike
-        # translate_fn this also works on `nearest` and `centroid`.
-        self.glossary = glossary
+        # queries (in evaluate). Deterministic, no model, no dependency, and
+        # (unlike translate_fn) language-agnostic: it works on `nearest`,
+        # `centroid`, everything.
+        from klix.glossary import resolve_glossary
+
+        self.glossary = resolve_glossary(glossary)
         # Weight of the glossary channel on the QUERY side (v0.8.8). The exact
         # tokens keep weight 1.0; glossary terms enter as alpha * v_glossary
         # before normalization. 0.0 disables the glossary on queries entirely
@@ -339,6 +332,11 @@ class Choice(BaseHead):
         self.dense_matrix: np.ndarray | None = None
         self.sparse_matrix = None
         self.tfidf = None  # per-head vectorizer (see _make_local_vectorizer)
+        # Tokens the anchors use themselves (no glossary terms); the skip set for
+        # glossary expansion. Filled in fit().
+        self._core_vocab: set[str] = set()
+        # Concept keys the last evaluated query matched (explainability only).
+        self._last_glossary_concepts: list[str] = []
 
     def get_reference_texts(self) -> list[str]:
         texts = [text for examples in self.options.values() for text in examples]
@@ -360,7 +358,7 @@ class Choice(BaseHead):
             if text not in bucket:
                 bucket.append(text)
 
-    def sparse_fastpath(self, text: str) -> dict | None:
+    def sparse_fastpath(self, text: str, sparse: "SparseQuery | None" = None) -> dict | None:
         """Sparse-only decision with a confidence gate (v0.8.8 fast path).
 
         Runs BEFORE the dense embedding call. If the keyword channel alone
@@ -370,6 +368,12 @@ class Choice(BaseHead):
 
         Returns a result dict with ``engine="sparse_fastpath"``, or None when
         the case is not clear enough (the caller then takes the normal path).
+
+        ``sparse`` (v0.9.0): an optional precomputed `SparseQuery`. The engine
+        builds it ONCE and hands the same object to this method and to
+        `evaluate()`, so a fast-path miss costs zero extra vectorization — the
+        query is vectorized exactly once per `decide()` call either way. Passing
+        None preserves the standalone behaviour (build it here and here only).
 
         Conservative by design: this is an optimization, not a second
         classifier. Rules are NOT applied here (they are regex-based and cheap,
@@ -385,31 +389,23 @@ class Choice(BaseHead):
         if not self._label_rows:
             return None
 
-        query_vec, coverage, matched = self._sparse_query_vec_weighted(text)
-        if not query_vec:
+        if sparse is None:
+            sparse = self._sparse_state(text)
+        if not sparse.vec:
             return None
         # Require the query to be mostly in-vocabulary: on off-language text the
         # sparse score is dominated by accidental substring hits.
-        if coverage < self.fastpath["min_coverage"]:
+        if sparse.coverage < self.fastpath["min_coverage"]:
             return None
 
-        cols = np.fromiter(query_vec.keys(), dtype=np.int64)
-        vals = np.fromiter(query_vec.values(), dtype=float)
-        row = csr_matrix(
-            (vals, (np.zeros(len(cols), dtype=int), cols)),
-            shape=(1, len(self._vocab)),
-        )
         bm25_query = None
         if self.sparse_metric == "bm25" and self._bm25_anchor_matrix is not None:
-            bm25_query = np.zeros(len(self._vocab))
-            for col in self._raw_query_counts(text):
-                bm25_query[col] = self._bm25_idf[col]
-            if matched and self.glossary_weight > 0.0:
-                for col in self._raw_query_counts(" ".join(matched)):
-                    bm25_query[col] += self.glossary_weight * self._bm25_idf[col]
+            bm25_query = self._bm25_query_vec(text, sparse)
             sparse_sims = self._bm25_anchor_matrix @ bm25_query
         else:
-            sparse_sims = np.asarray((row @ self.sparse_matrix.T).todense()).ravel()
+            sparse_sims = np.asarray(
+                (sparse.csr() @ self.sparse_matrix.T).todense()
+            ).ravel()
 
         # Pool per label — the dense contribution is unknown here, so this is
         # the keyword channel alone, which is deliberately the stricter signal.
@@ -442,7 +438,7 @@ class Choice(BaseHead):
                                  if reject_rows.shape[0] else 0.0)
             else:
                 reject_sparse = float(np.max(
-                    np.asarray((row @ self.reject_sparse_matrix.T).todense()).ravel()
+                    np.asarray((sparse.csr() @ self.reject_sparse_matrix.T).todense()).ravel()
                 ))
             if reject_sparse >= best_val:
                 return None
@@ -453,7 +449,8 @@ class Choice(BaseHead):
             "confidence": float(np.clip(rel_margin, 0.0, 1.0)),
             "scores": cats,
             "reject_score": 0.0,
-            "matched_terms": list(matched),
+            "matched_terms": list(sparse.matched),
+            "matched_concepts": list(getattr(self, "_last_glossary_concepts", [])),
             "engine": "sparse_fastpath",
         }
 
@@ -527,23 +524,37 @@ class Choice(BaseHead):
         # `translate_fn` does not cover this: it only runs on the linear/hybrid
         # path. Expansion is deterministic (sorted terms, no model).
         self._glossary_added: list[list[str]] = []
+        # --- Anchor-side glossary expansion, DAMPED (v0.8.8) -----------------
+        # Naive concatenation lengthens the anchor document, and TF-IDF scores
+        # are L2-normalized over the whole row — so appending synonyms shrinks
+        # the weight of the anchor's ORIGINAL terms. Measured effect: a German
+        # anchor 'wartung einplanen' expanded with 'instandhaltung reparatur'
+        # lost its own query match (0.972 -> 0.673) and the label flipped. That
+        # is the monolingual regression.
+        #
+        # Fix: keep the original text as the document (so the IDF and the term
+        # weights of the original words are untouched) and add the glossary
+        # terms as a SEPARATE, damped contribution to the sparse row.
+        # `glossary_weight` scales that contribution, so alpha=0 leaves anchor
+        # rows bit-identical to the no-glossary baseline.
+        #
+        # The skip set is `_core_vocab` — the tokens the anchors use THEMSELVES.
+        # That is the factual replacement for the removed `cross_lingual_only` /
+        # language-guess switch: a term an anchor already contains needs no
+        # bridge. It must NOT be the full `_vocab`, which also holds the
+        # glossary terms injected here (a query-side lookup would then skip the
+        # very terms it needs — subtle, and it broke the bridge when first tried).
+        self._glossary_added: list[list[str]] = []
         if self.glossary is not None:
-            # Anchor-side expansion, DAMPED (v0.8.8). Naive concatenation
-            # lengthens the anchor document, and TF-IDF scores are L2-normalized
-            # over the whole row — so appending synonyms shrinks the weight of
-            # the anchor's ORIGINAL terms. Measured effect: a German anchor
-            # 'wartung einplanen' expanded with 'instandhaltung reparatur' lost
-            # its own query match (0.972 -> 0.673) and the label flipped. That is
-            # the monolingual regression.
-            #
-            # Fix: keep the original text as the document (so the IDF and the
-            # term weights of the original words are untouched) and add the
-            # glossary terms as a SEPARATE, damped contribution to the sparse
-            # row. `glossary_weight` scales that contribution, so alpha=0 leaves
-            # anchor rows bit-identical to the no-glossary baseline.
             self._glossary_added = [
-                self.glossary.expand_terms(t, cross_lingual_only=True) for t in self.flat_texts
+                self.glossary.expand_terms(t, vocab=self._core_vocab) for t in self.flat_texts
             ]
+
+        # `_core_vocab`: every term the reference texts use THEMSELVES, and
+        # nothing else. Built before the glossary widens the vocabulary below.
+        self._core_vocab = set()
+        for _t in self.flat_texts + self.reject_anchors:
+            self._core_vocab.update(_TOKEN_RE.findall(_t.lower()))
 
         vecs = np.array(list(backbone.embed_model.embed(self.flat_texts)))
         self.dense_matrix = _normalize_rows(vecs)
@@ -643,14 +654,17 @@ class Choice(BaseHead):
             self.reject_matrix = None
             self.reject_sparse_matrix = None
 
-        # --- Resolve classifier="auto" -> "nearest" or "linear" -----------------
-        # If anchors are mixed-language (EN+DE), the linear probe overfits to the
-        # language with more anchors; nearest-anchor is more robust there. For
-        # single-language schemas, the probe is the accuracy winner.
+        # --- Resolve classifier="auto" -----------------------------------------
+        # `"auto"` is a DEPRECATED alias (v0.9.0 keeps it parsing so old schemas
+        # do not break) of the language-agnostic centroid classifier. It used to
+        # guess anchor languages to pick nearest-vs-linear, which was exactly the
+        # language-specific branch this release removes; and its "linear on
+        # single-language" half would now be actively harmful, because a broad
+        # glossary legitimately mixes languages in a perfectly monolingual
+        # schema — that is not a reason to switch classifiers.
         effective_classifier = self.classifier
         if effective_classifier == "auto":
-            langs = {_detect_lang(t) for t in self.flat_texts}
-            effective_classifier = "nearest" if len(langs) > 1 else "linear"
+            effective_classifier = "centroid"
         # --- Compile hard rules -----------------------------------------------
         # Rules are validated against the option labels so a typo in a rule's
         # label fails loudly at compile time, not silently at inference.
@@ -685,15 +699,16 @@ class Choice(BaseHead):
 
             # Cross-lingual augmentation: bridge language-split classes.
             if self.translate_fn is not None:
-                # User supplied a translator: mirror each anchor to the other
-                # language and add it to the same class.
+                # User supplied a translator: mirror each anchor and add the
+                # mirror to the same class. The target language is the caller's
+                # explicit choice (`translate_target`); with the default None the
+                # callback decides (e.g. a German-anchor schema passes "en").
+                # v0.9.0 removed the automatic de/en guess that used to pick this.
                 new_texts, new_labels = [], []
                 translation_errors: list[str] = []
                 for text, lab in zip(texts, y):
-                    other = _detect_lang(text)
-                    target = "de" if other == "en" else "en"
                     try:
-                        translated = self.translate_fn(text, target)
+                        translated = self.translate_fn(text, self.translate_target)
                         if translated:
                             new_texts.append(translated)
                             new_labels.append(lab)
@@ -719,9 +734,10 @@ class Choice(BaseHead):
                     y = np.concatenate([y, np.array(new_labels)])
                     texts = texts + new_texts  # keep texts aligned with X/y
 
-            # Cross-lingual mixup + standard augmentation.
-            X_cl, y_cl = _cross_lingual_mixup(X, y, texts)
-            X_aug, y_aug = _augment_embeddings(X_cl, y_cl)
+            # Standard augmentation on the (already cross-lingual) rows. The old
+            # `_cross_lingual_mixup` is gone with the language guess it needed;
+            # `_augment_embeddings` covers the same ground without one.
+            X_aug, y_aug = _augment_embeddings(X, y)
             self._probe = LogisticRegression(
                 C=self.classifier_C,
                 max_iter=1000,
@@ -740,16 +756,16 @@ class Choice(BaseHead):
                 from scipy.sparse import vstack as sp_vstack, csr_matrix as _csr
 
                 S = self.tfidf.transform(texts)  # reject rows: empty text -> zero row
-                if X_cl.shape[0] == len(texts):
-                    S_cl = S
+                if X_aug.shape[0] == len(texts):
+                    S_aug = S
                 else:
-                    n_extra = X_cl.shape[0] - len(texts)
+                    n_extra = X_aug.shape[0] - len(texts)
                     S_extra = _csr((n_extra, S.shape[1]))
-                    S_cl = sp_vstack([S, S_extra]).tocsr()
-                self._dense_dim = X_cl.shape[1]
-                X_comb = np.hstack([X_cl, np.asarray(S_cl.todense())])
+                    S_aug = sp_vstack([S, S_extra]).tocsr()
+                self._dense_dim = X_aug.shape[1]
+                X_comb = np.hstack([X_aug, np.asarray(S_aug.todense())])
                 X_comb = self._hybrid_augment(X_comb)
-                self._probe.fit(X_comb, y_cl)
+                self._probe.fit(X_comb, y_aug)
             else:
                 self._probe.fit(X_aug, y_aug)
             self._probe_labels = list(self._probe.classes_)
@@ -814,16 +830,65 @@ class Choice(BaseHead):
         vec, coverage, _terms = self._sparse_query_vec_weighted(text)
         return vec, coverage
 
+    def _sparse_state(self, text: str) -> "SparseQuery":
+        """Builds the per-text `SparseQuery` (vector, coverage, matched terms).
+
+        This is the ONE place a query is vectorized. `decide()` calls it once
+        and hands the result to the fast path AND to `evaluate()`, so a
+        fast-path miss never pays for a second vectorization (v0.9.0).
+        """
+        vec, coverage, matched = self._sparse_query_vec_weighted(text)
+        return SparseQuery(vec, coverage, matched, len(self._vocab))
+
+    def expand_query_terms(self, text: str) -> list[str]:
+        """Glossary synonyms `text` needs bridged (public, vocabulary-aware).
+
+        Uses `_core_vocab` (the anchors' own tokens), NOT the full vocabulary:
+        the latter also contains the anchor-side glossary terms, so it would
+        skip the very terms a foreign query needs. Exposed because
+        `Glossary.expand_terms(vocab=...)` has exactly this trap.
+        """
+        if self.glossary is None:
+            return []
+        return self.glossary.expand_terms(text, vocab=self._core_vocab)
+
+    def _bm25_query_vec(self, text: str, sparse: "SparseQuery") -> np.ndarray:
+        """BM25 query side: idf-weighted term set, glossary terms damped by alpha.
+
+        tf saturation happens on the ANCHOR side (baked into
+        `_bm25_anchor_matrix`), so the query side is a plain term set. The raw
+        token counts are cached on `sparse` because the reject pole in
+        `evaluate()` needs the exact same vector.
+        """
+        q = np.zeros(len(self._vocab))
+        for col in sparse.raw_counts_for(self, text):
+            q[col] = self._bm25_idf[col]
+        if sparse.matched and self.glossary_weight > 0.0:
+            for col in self._raw_query_counts(" ".join(sparse.matched)):
+                q[col] += self.glossary_weight * self._bm25_idf[col]
+        return q
+
     def _glossary_split(self, text: str) -> tuple[str, list[str]]:
         """Splits a query into (original_text, glossary_terms).
 
         Used by weighted expansion (v0.8.8): the glossary terms are vectorized
         separately so they can be damped instead of diluting the query's own
         tokens. Returns (text, []) when no glossary is configured.
+
+        v0.9.0: the head's own vocabulary is passed to `expand_terms`, so terms
+        the sparse channel already knows are skipped — no language guess, and
+        the monolingual baseline stays put even with a broad glossary.
+
+        Side effect used by explainability: the matched CONCEPTS are recorded on
+        `self._last_glossary_concepts`, because `matched_terms` must report what
+        the text meant in glossary terms — not merely the subset that still had
+        to be added (a term already in the vocabulary bridges nothing).
         """
         if self.glossary is None:
+            self._last_glossary_concepts = []
             return text, []
-        return text, self.glossary.expand_terms(text)
+        self._last_glossary_concepts = self.glossary.match_concepts(text)
+        return text, self.glossary.expand_terms(text, vocab=self._core_vocab)
 
     def _sparse_query_vec_weighted(
         self, text: str
@@ -862,7 +927,7 @@ class Choice(BaseHead):
 
     def _tfidf_vec_for(self, text: str) -> dict[int, float] | None:
         """Plain tf*idf, L2-normalized, over this head's vocabulary."""
-        tokens = re.findall(r"(?u)\b[\w-]+\b", text.lower())
+        tokens = _TOKEN_RE.findall(text.lower())
         if not tokens:
             return None
         counts: dict[int, float] = {}
@@ -880,14 +945,14 @@ class Choice(BaseHead):
 
     def _coverage_of(self, text: str) -> float:
         """Fraction of the text's tokens that this head's vocabulary knows."""
-        tokens = re.findall(r"(?u)\b[\w-]+\b", text.lower())
+        tokens = _TOKEN_RE.findall(text.lower())
         if not tokens:
             return 0.0
         return sum(1 for tok in tokens if tok in self._vocab) / len(tokens)
 
     def _raw_query_counts(self, text: str) -> dict[int, float]:
         """Raw in-vocabulary token counts (BM25 query side helper)."""
-        tokens = re.findall(r"(?u)\b[\w-]+\b", text.lower())
+        tokens = _TOKEN_RE.findall(text.lower())
         counts: dict[int, float] = {}
         for tok in tokens:
             col = self._vocab.get(tok)
@@ -1071,7 +1136,7 @@ class Choice(BaseHead):
             self._inv_vocab = {v: k for k, v in self._vocab.items()}
         return self._inv_vocab.get(col)
 
-    def evaluate(self, encoded: EncodedInput) -> dict:
+    def evaluate(self, encoded: EncodedInput, sparse: "SparseQuery | None" = None) -> dict:
         # --- Hard rules first: a force rule beats everything, including the ---
         # reject pole and reject_threshold (most explicit user signal).
         if self._compiled_rules:
@@ -1093,10 +1158,11 @@ class Choice(BaseHead):
             if self._effective_classifier == "hybrid":
                 # Hybrid: build the query's [dense | tfidf] feature row using
                 # the SAME vectorizer the probe was trained on.
-                query_vec, _cov = self._sparse_query_vec(encoded.text)
+                if sparse is None:
+                    sparse = self._sparse_state(encoded.text)
                 sparse_part = np.zeros(X_comb_dim := (self._probe.n_features_in_ - encoded.dense_vec.shape[0]))
-                if query_vec:
-                    for col, val in query_vec.items():
+                if sparse.vec:
+                    for col, val in sparse.vec.items():
                         if col < sparse_part.shape[0]:
                             sparse_part[col] = val
                 features = np.concatenate([encoded.dense_vec, sparse_part]).reshape(1, -1)
@@ -1138,31 +1204,22 @@ class Choice(BaseHead):
         # The dense vector came from the backbone and is unaffected: expansion
         # only touches the sparse channel, keeping the dense similarity a pure
         # semantic measure.
-        query_vec, query_coverage, matched_glossary = self._sparse_query_vec_weighted(encoded.text)
+        #
+        # v0.9.0: the engine passes the SparseQuery it already built for the
+        # fast-path gate, so a miss costs no second vectorization.
+        if sparse is None:
+            sparse = self._sparse_state(encoded.text)
+        query_vec, query_coverage, matched_glossary = sparse.vec, sparse.coverage, sparse.matched
 
         dense_sims = self.dense_matrix @ encoded.dense_vec
 
         if query_vec:
-            cols = np.fromiter(query_vec.keys(), dtype=np.int64)
-            vals = np.fromiter(query_vec.values(), dtype=float)
-            row = csr_matrix(
-                (vals, (np.zeros(len(cols), dtype=int), cols)),
-                shape=(1, len(self._vocab)),
-            )
             if self.sparse_metric == "bm25" and self._bm25_anchor_matrix is not None:
-                # BM25: query side is a term SET (idf-weighted); tf saturation
-                # happens on the anchor side (baked into _bm25_anchor_matrix).
-                # Glossary terms join the set at `glossary_weight` so the same
-                # damping applies as on the TF-IDF path.
-                bm25_query = np.zeros(len(self._vocab))
-                for col in self._raw_query_counts(encoded.text):
-                    bm25_query[col] = self._bm25_idf[col]
-                if matched_glossary and self.glossary_weight > 0.0:
-                    for col in self._raw_query_counts(" ".join(matched_glossary)):
-                        bm25_query[col] += self.glossary_weight * self._bm25_idf[col]
-                sparse_sims = self._bm25_anchor_matrix @ bm25_query
+                sparse_sims = self._bm25_anchor_matrix @ self._bm25_query_vec(encoded.text, sparse)
             else:
-                sparse_sims = np.asarray((row @ self.sparse_matrix.T).todense()).ravel()
+                sparse_sims = np.asarray(
+                    (sparse.csr() @ self.sparse_matrix.T).todense()
+                ).ravel()
         else:
             sparse_sims = np.zeros(self.sparse_matrix.shape[0])
 
@@ -1214,7 +1271,7 @@ class Choice(BaseHead):
             ce_dense = self._ce_matrix @ encoded.dense_vec
             if query_vec:
                 ce_sparse = np.asarray(
-                    (row @ self._ce_sparse.T).todense()
+                    (sparse.csr() @ self._ce_sparse.T).todense()
                 ).ravel()
             else:
                 ce_sparse = np.zeros(self._ce_matrix.shape[0])
@@ -1251,17 +1308,18 @@ class Choice(BaseHead):
                     # BM25 reject pole: score reject anchors with the same
                     # BM25 statistics; the reject rows sit after the option
                     # rows in the anchor matrix.
-                    qvec_raw = self._raw_query_counts(encoded.text)
-                    bm25_query = np.zeros(len(self._vocab))
-                    for col in qvec_raw:
-                        bm25_query[col] = self._bm25_idf[col]
+                    reject_bm25_q = self._bm25_query_vec(encoded.text, sparse)
                     n_real = self.sparse_matrix.shape[0]
                     reject_rows = self._bm25_anchor_matrix[n_real:]
-                    reject_sparse = float(np.max(reject_rows @ bm25_query)) if reject_rows.shape[0] else 0.0
+                    reject_sparse = float(np.max(reject_rows @ reject_bm25_q)) if reject_rows.shape[0] else 0.0
                 else:
-                    reject_sparse = np.asarray(
-                        (row @ self.reject_sparse_matrix.T).todense()
-                    ).ravel().max() if self.reject_sparse_matrix is not None else 0.0
+                    if self.reject_sparse_matrix is not None:
+                        qrow = sparse.csr()
+                        reject_sparse = (float(np.max(np.asarray(
+                            (qrow @ self.reject_sparse_matrix.T).todense()).ravel()))
+                            if qrow is not None else 0.0)
+                    else:
+                        reject_sparse = 0.0
             else:
                 reject_sparse = 0.0
             reject_sim = reject_dense + boost * reject_sparse
@@ -1295,9 +1353,12 @@ class Choice(BaseHead):
             "confidence": confidence,
             "scores": category_scores,
             "reject_score": reject_sim,
-            # Explainability (v0.8.8): which glossary terms were active and
-            # which path produced the decision.
+            # Explainability (v0.8.8, fixed in v0.9.0): the glossary CONCEPTS
+            # the text matched, plus the terms that had to be bridged. Concepts
+            # are the stable, human-readable signal; a term already present in
+            # the vocabulary needs no bridge and is not listed as one.
             "matched_terms": list(matched_glossary),
+            "matched_concepts": list(getattr(self, "_last_glossary_concepts", [])),
             "engine": "dense_hybrid",
         })
 
@@ -1403,7 +1464,7 @@ class Score(BaseHead):
         high_v = np.array(list(backbone.embed_model.embed(self.high_anchors)))
         self.high_matrix = _normalize_rows(high_v)
 
-    def evaluate(self, encoded: EncodedInput) -> dict:
+    def evaluate(self, encoded: EncodedInput, sparse=None) -> dict:
         low_sims = self.low_matrix @ encoded.dense_vec
         high_sims = self.high_matrix @ encoded.dense_vec
 
@@ -1631,7 +1692,7 @@ class Flag(BaseHead):
             return float(np.mean(np.sort(sims)[-k:]))
         return float(np.max(sims))
 
-    def evaluate(self, encoded: EncodedInput) -> dict:
+    def evaluate(self, encoded: EncodedInput, sparse=None) -> dict:
         s_true = self._pool(self.true_matrix, encoded.dense_vec)
         s_false = self._pool(self.false_matrix, encoded.dense_vec)
 

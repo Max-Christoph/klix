@@ -1,4 +1,4 @@
-"""Tests for the glossary hook (v0.8.7).
+"""Tests for the glossary hook (v0.8.7, updated in v0.9.0).
 
 Contract:
 - glossary=None (default) leaves behaviour unchanged
@@ -7,44 +7,63 @@ Contract:
 - the sparse channel gains cross-lingual matches (the whole point)
 - malformed glossary JSON fails loudly at load time
 - no new dependency: stdlib json/re only
+
+v0.9.0 note: `load_glossary()` (no argument) now loads the broad bundled basic
+vocabulary, which is generated offline by scripts/build_default_glossary.py and
+may be absent in a bare source checkout. The manufacturing production glossary
+lives in code as `klix.manufacturing_glossary()` (and as `glossary.json` behind
+`load_glossary(MANUFACTURING_GLOSSARY)`).
 """
 import json
 
 import pytest
 
-from klix import Choice, DecisionEngine, Glossary, load_glossary
+from klix import Choice, DecisionEngine, Glossary, load_glossary, manufacturing_glossary
+from klix.glossary import MANUFACTURING_GLOSSARY
+
+
+@pytest.fixture
+def g():
+    """The manufacturing production glossary (deterministic, always present)."""
+    return manufacturing_glossary()
 
 
 class TestGlossary:
-    def test_bundled_glossary_loads(self):
-        g = load_glossary()
-        assert len(g.mapping) >= 10
+    def test_manufacturing_preset_loads(self, g):
+        assert len(g.mapping) >= 16
         assert "conveyor" in g.mapping
 
-    def test_expand_adds_other_language_terms(self):
-        g = load_glossary()
+    def test_manufacturing_json_matches_code_preset(self, g):
+        """glossary.json stays in sync with the code preset (one truth)."""
+        from_file = load_glossary(MANUFACTURING_GLOSSARY)
+        assert from_file.mapping.keys() == g.mapping.keys()
+
+    def test_bundled_default_glossary_loads_when_generated(self):
+        try:
+            d = load_glossary()
+        except FileNotFoundError:
+            pytest.skip("bundled default_glossary.json not generated in this checkout")
+        assert len(d.mapping) >= 1000
+
+    def test_expand_adds_other_language_terms(self, g):
         out = g.expand("das foerderband steht")
         assert "conveyor" in out
         assert "conveyor belt" in out
 
-    def test_expand_is_deterministic(self):
-        g = load_glossary()
+    def test_expand_is_deterministic(self, g):
         text = "fehlercode E42 und ersatzteil fehlt"
         assert g.expand(text) == g.expand(text)
 
-    def test_expand_does_not_duplicate_present_terms(self):
-        g = load_glossary()
+    def test_expand_does_not_duplicate_present_terms(self, g):
         out = g.expand("conveyor belt stopped")
         # "conveyor" is already in the text, must not be appended again
         assert out.count("conveyor") == out.lower().count("conveyor")
         assert out.lower().split().count("conveyor") == 1
 
-    def test_expand_returns_text_unchanged_when_no_hit(self):
-        g = load_glossary()
+    def test_expand_returns_text_unchanged_when_no_hit(self, g):
         assert g.expand("happy birthday to the team") == "happy birthday to the team"
 
-    def test_empty_text_is_safe(self):
-        g = load_glossary()
+    def test_empty_text_is_safe(self, g):
         assert g.expand("") == ""
 
     def test_multiword_terms_match(self):
@@ -97,7 +116,7 @@ class TestGlossaryHook:
         eng = DecisionEngine()
         eng.add_head(Choice(
             name="r", options=self.EN, classifier=classifier, keyword_boost=kb,
-            glossary=load_glossary() if use_glossary else None,
+            glossary=manufacturing_glossary() if use_glossary else None,
         ))
         eng.compile()
         return sum(1 for t, e in self.DE_Q if eng.decide(t).r == e)
@@ -115,7 +134,7 @@ class TestGlossaryHook:
     def test_glossary_expands_anchor_vocabulary(self):
         """The sparse vocabulary must contain the mirrored terms."""
         eng = DecisionEngine()
-        eng.add_head(Choice(name="r", options=self.EN, glossary=load_glossary()))
+        eng.add_head(Choice(name="r", options=self.EN, glossary=manufacturing_glossary()))
         eng.compile()
         vocab = eng.heads[0]._vocab
         assert "foerderband" in vocab
@@ -139,14 +158,14 @@ class TestGlossaryHook:
     def test_works_with_linear_classifier(self):
         eng = DecisionEngine()
         eng.add_head(Choice(name="r", options=self.EN, classifier="linear",
-                            glossary=load_glossary()))
+                            glossary=manufacturing_glossary()))
         eng.compile()
         res = eng.decide("das foerderband steht")
         assert res.r in self.EN
 
     def test_batch_matches_serial(self):
         eng = DecisionEngine()
-        eng.add_head(Choice(name="r", options=self.EN, glossary=load_glossary()))
+        eng.add_head(Choice(name="r", options=self.EN, glossary=manufacturing_glossary()))
         eng.compile()
         texts = [t for t, _ in self.DE_Q]
         assert [b.r for b in eng.decide_batch(texts)] == [eng.decide(t).r for t in texts]
@@ -156,7 +175,7 @@ class TestGlossaryHook:
         def h(use: bool) -> str:
             eng = DecisionEngine()
             eng.add_head(Choice(name="r", options=self.EN,
-                                glossary=load_glossary() if use else None))
+                                glossary=manufacturing_glossary() if use else None))
             eng.compile()
             return eng.schema_hash()
         assert h(False) != h(True)

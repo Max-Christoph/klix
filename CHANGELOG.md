@@ -3,6 +3,79 @@
 All notable changes to klix are documented here. Format based on
 [Keep a Changelog](https://keepachangelog.com/); versioning: SemVer.
 
+## [0.9.0] - 2026-09-26
+
+Focus: **be a fast, lightweight decision engine — not a language framework.**
+Three changes, all measured, none adding a dependency.
+
+### Fixed
+- **Zero-cost fast path: the miss penalty is gone.** v0.8.8's sparse fast path
+  vectorized the query inside `sparse_fastpath()` and then *again* inside
+  `evaluate()` when the gate declined, so every miss paid ~1-2 ms on top of the
+  dense forward pass for nothing. `decide()` now builds the `SparseQuery` once
+  and hands the same object to the gate and to `evaluate(encoded, sparse=...)`.
+  A miss therefore vectorizes exactly as often as the baseline without a fast
+  path: once.
+
+### Changed
+- **Language-specific branches removed entirely.** `_guess_lang`,
+  `_detect_lang`, `_GERMAN_SIGNAL_WORDS`, `_cross_lingual_mixup` and the
+  `cross_lingual_only` expansion switch are gone. The glossary is now a flat,
+  language-agnostic lookup, and its one language-dependent decision is made on
+  *evidence* rather than a guess: a synonym the consumer's vocabulary already
+  knows is not expanded (it bridges nothing). The skip set is the anchors' own
+  tokens, not the full vocabulary — the latter already contains the anchor-side
+  glossary terms and would skip the very terms a foreign query needs.
+- **`classifier="auto"` is now a deprecated alias for `"centroid"`.** It used to
+  guess anchor languages to choose nearest-vs-linear. Its "linear on
+  single-language" half would be actively harmful now, because a broad glossary
+  legitimately mixes languages inside a monolingual schema — that is not a
+  reason to switch classifiers. Still parses, so old schemas keep working.
+- **`translate_fn` gets its mirror language explicitly** via `translate_target=`
+  (default `None` = the callback decides). No guessing from the anchor text.
+- Glossary expansion is **bounded and language-balanced**: at most
+  `per_concept_topk` (default 6) synonyms per matched concept — allocated
+  round-robin over the concept's ISO keys, so no language crowds out another —
+  and at most `max_added` overall. Round-robin fixed a real failure: with a pure
+  shortest-first pick, `"urgent"` returned three English terms and one German
+  one, wasting the cross-lingual bridge it exists for.
+- `matched_terms` reports the cross-language terms that were actually bridged;
+  the new **`matched_concepts`** field reports what the text meant in glossary
+  terms (stable, and populated even when no bridge was needed).
+
+### Added
+- **`klix.glossaries` — domain packs**, so the engine carries no vocabulary:
+  `empty()` (default), `manufacturing()` (the previous 16 production terms),
+  `workflow()` (generic routing: error/bug, urgent, cancel, help, approve, ...),
+  `default()` (the broad bundled vocabulary) and `merge_all(*packs)`.
+- **`DecisionEngine(glossary=...)`** — wire one glossary for the whole schema
+  instead of repeating it per head. A head constructed with its own glossary
+  keeps it (explicit wins).
+- **Flexible glossary input** everywhere: `Choice(glossary=...)` and
+  `DecisionEngine(glossary=...)` accept a `dict`, a JSON file path, a `Glossary`
+  or `None` via the new `resolve_glossary()`. A wrong type fails loudly.
+- **`Glossary.validate(anchors=None)`** — structural report: duplicate terms,
+  circular/ambiguous mappings (one term under two concepts), homograph conflicts
+  (same word, different languages, different concepts) and collisions between
+  glossary tokens and anchor text. Read-only; also exposed as
+  `DecisionEngine.validate_glossary()`.
+- **`Glossary.match_concepts()`**, `Choice.expand_query_terms()` and
+  `SparseQuery` as documented public seams.
+- **Broad bundled DE↔EN basic vocabulary** (`data/default_glossary.json`),
+  generated offline by `scripts/build_default_glossary.py`. Source is
+  **Wikidata (CC0 1.0)** — see `DATA_SOURCES.md` for why OMW and MUSE were
+  rejected (NLTK's `omw-1.4` ships no German at all, and the OMW sets that
+  exist are mostly CC BY-SA / CeCILL-C, which cannot go into an MIT package).
+
+### Notes
+- No new dependency. `pyproject.toml` dependencies are unchanged; the glossary
+  is pure stdlib (`json`, `re`).
+- `load_glossary()` (no argument) now loads the broad bundled vocabulary. The
+  manufacturing pack is `klix.manufacturing_glossary()` (or
+  `load_glossary(MANUFACTURING_GLOSSARY)` for the JSON copy).
+- `schema_hash()` covers the glossary that actually reached a head, so an unused
+  engine-level glossary does not perturb it.
+
 ## [0.8.8] - 2026-09-25
 
 ### Added

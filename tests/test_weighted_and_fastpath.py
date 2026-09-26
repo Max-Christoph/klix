@@ -11,7 +11,12 @@ Contract:
 import numpy as np
 import pytest
 
-from klix import Choice, DecisionEngine, Glossary, load_glossary
+from klix import (
+    Choice,
+    DecisionEngine,
+    Glossary,
+    manufacturing_glossary,
+)
 
 EN = {
     "downtime": ["conveyor belt stopped", "production line is down", "cycle time doubled"],
@@ -41,21 +46,24 @@ class TestGlossaryWeight:
         mirrored terms, which is what makes alpha=0 still helpful (verified:
         4/4 here vs 3/4 without any glossary). What alpha=0 does guarantee is
         that the query's own tokens are not diluted.
+
+        v0.9.0: expansion is vocabulary-aware, so synonyms the ANCHORS already
+        use are not re-added (they bridge nothing). `match_concepts` reports the
+        matched concept regardless.
         """
         eng = DecisionEngine()
-        eng.add_head(Choice(name="r", options=EN, glossary=load_glossary(),
+        eng.add_head(Choice(name="r", options=EN, glossary=manufacturing_glossary(),
                             glossary_weight=0.0))
         eng.compile()
         head = eng.heads[0]
-        # the query vector must contain no glossary term when alpha=0
-        vec, _cov, terms = head._sparse_query_vec_weighted("ersatzteil fehlt")
-        assert terms  # the glossary DID match...
-        assert "foerderband" in head._vocab  # ...vocabulary knows the terms...
+        assert head.glossary.match_concepts("ersatzteil fehlt") == ["spare_part"]
+        assert head.expand_query_terms("ersatzteil fehlt")  # bridge is needed
+        assert "foerderband" in head._vocab  # vocabulary knows the bridged terms
 
     def test_weight_zero_query_vector_equals_plain_vector(self):
         """The decisive property: with alpha=0 the query vector is untouched."""
         eng = DecisionEngine()
-        eng.add_head(Choice(name="r", options=EN, glossary=load_glossary(),
+        eng.add_head(Choice(name="r", options=EN, glossary=manufacturing_glossary(),
                             glossary_weight=0.0))
         eng.compile()
         head = eng.heads[0]
@@ -66,7 +74,7 @@ class TestGlossaryWeight:
     def test_weight_zero_but_anchors_still_expanded(self):
         """alpha only damps the QUERY side; anchors stay expanded."""
         eng = DecisionEngine()
-        eng.add_head(Choice(name="r", options=EN, glossary=load_glossary(),
+        eng.add_head(Choice(name="r", options=EN, glossary=manufacturing_glossary(),
                             glossary_weight=0.0))
         eng.compile()
         assert "foerderband" in eng.heads[0]._vocab
@@ -74,28 +82,28 @@ class TestGlossaryWeight:
     def test_positive_weight_still_bridges(self):
         """The cross-lingual gain must survive weighting."""
         without = _acc()
-        weighted = _acc(glossary=load_glossary(), glossary_weight=0.4)
+        weighted = _acc(glossary=manufacturing_glossary(), glossary_weight=0.4)
         assert weighted >= without
 
     def test_default_weight_is_documented_value(self):
         eng = DecisionEngine()
-        eng.add_head(Choice(name="r", options=EN, glossary=load_glossary()))
+        eng.add_head(Choice(name="r", options=EN, glossary=manufacturing_glossary()))
         assert eng.heads[0].glossary_weight == 0.5
 
     def test_expand_terms_matches_expand_suffix(self):
-        g = load_glossary()
+        g = manufacturing_glossary()
         text = "das foerderband steht"
         terms = g.expand_terms(text)
         assert terms
         assert g.expand(text) == text + " " + " ".join(terms)
 
     def test_expand_terms_empty_without_hit(self):
-        assert load_glossary().expand_terms("happy birthday") == []
+        assert manufacturing_glossary().expand_terms("happy birthday") == []
 
 
 class TestGlossaryComposition:
     def test_merge_returns_new_object(self):
-        a = load_glossary()
+        a = manufacturing_glossary()
         b = Glossary({"press": {"de": ["presse"], "en": ["press"]}})
         merged = a.merge(b)
         assert merged is not a
@@ -116,18 +124,18 @@ class TestGlossaryComposition:
 
     def test_merge_rejects_non_glossary(self):
         with pytest.raises(TypeError, match="expects a Glossary"):
-            load_glossary().merge({"not": "a glossary"})
+            manufacturing_glossary().merge({"not": "a glossary"})
 
     def test_load_accepts_dict(self):
         g = Glossary.load({"press": {"de": ["presse"], "en": ["press"]}})
         assert "press" in g.mapping
 
     def test_load_accepts_glossary_identity(self):
-        g = load_glossary()
+        g = manufacturing_glossary()
         assert Glossary.load(g) is g
 
     def test_merged_glossary_works_in_engine(self):
-        merged = load_glossary().merge(Glossary({"press": {"de": ["presse"], "en": ["press"]}}))
+        merged = manufacturing_glossary().merge(Glossary({"press": {"de": ["presse"], "en": ["press"]}}))
         eng = DecisionEngine()
         eng.add_head(Choice(name="r", options={"a": ["press is stuck"]}, glossary=merged))
         eng.compile()
@@ -142,7 +150,15 @@ class TestSparseFastpath:
 
     def _eng(self, **kw) -> DecisionEngine:
         eng = DecisionEngine(**kw)
-        eng.add_head(Choice(name="r", options=self.OPT, glossary=load_glossary()))
+        eng.add_head(Choice(name="r", options=self.OPT,
+                            glossary=kw.pop("head_glossary", None)))
+        eng.compile()
+        return eng
+
+    def _eng_g(self, **kw) -> DecisionEngine:
+        """Same schema, manufacturing glossary wired explicitly."""
+        eng = DecisionEngine(**kw)
+        eng.add_head(Choice(name="r", options=self.OPT, glossary=manufacturing_glossary()))
         eng.compile()
         return eng
 
@@ -161,7 +177,7 @@ class TestSparseFastpath:
         eng = self._eng(sparse_fastpath=True)
         from klix import Choice as _C
         eng2 = DecisionEngine(sparse_fastpath=True)
-        eng2.add_head(_C(name="r", options=self.OPT, glossary=load_glossary()))
+        eng2.add_head(_C(name="r", options=self.OPT, glossary=manufacturing_glossary()))
         eng2.compile()
         res = eng2.decide("conveyor belt stopped")
         assert res.latency_ms < 20, f"fast path took {res.latency_ms:.1f} ms"
@@ -213,7 +229,7 @@ class TestSparseFastpath:
     def test_linear_classifier_never_uses_fastpath(self):
         eng = DecisionEngine(sparse_fastpath=True)
         eng.add_head(Choice(name="r", options=self.OPT, classifier="linear",
-                            glossary=load_glossary()))
+                            glossary=manufacturing_glossary()))
         eng.compile()
         res = eng.decide("conveyor belt stopped")
         assert res.details("r")["engine"] in ("dense_hybrid", "sparse_fastpath")
@@ -222,7 +238,7 @@ class TestSparseFastpath:
         """A Score head cannot answer sparsely -> whole call takes dense path."""
         from klix import Score
         eng = DecisionEngine(sparse_fastpath=True)
-        eng.add_head(Choice(name="r", options=self.OPT, glossary=load_glossary()))
+        eng.add_head(Choice(name="r", options=self.OPT, glossary=manufacturing_glossary()))
         eng.add_head(Score(name="urgency", low_anchors=["routine"],
                            high_anchors=["emergency"]))
         eng.compile()
@@ -232,12 +248,31 @@ class TestSparseFastpath:
 
 class TestExplainabilityMetadata:
     def test_matched_terms_present(self):
+        """Term-level metadata: which cross-language terms had to be bridged."""
         eng = DecisionEngine()
-        eng.add_head(Choice(name="r", options=EN, glossary=load_glossary()))
+        eng.add_head(Choice(name="r", options=EN, glossary=manufacturing_glossary()))
         eng.compile()
         d = eng.decide("das foerderband steht").details("r")
         assert "matched_terms" in d
         assert any("conveyor" in t for t in d["matched_terms"])
+
+    def test_matched_concepts_present(self):
+        """Concept-level metadata: what the text meant in glossary terms.
+
+        This is the stable signal. `matched_terms` is empty when the query word
+        is already in the sparse vocabulary (no bridge needed) — concepts are
+        reported either way.
+        """
+        eng = DecisionEngine()
+        eng.add_head(Choice(name="r", options=EN, glossary=manufacturing_glossary()))
+        eng.compile()
+        # 'conveyor belt' IS in the anchor vocabulary -> no term to bridge...
+        d = eng.decide("conveyor belt stopped").details("r")
+        assert d["matched_concepts"] == ["conveyor"]
+        # ...and a German query matches the same concept, this time bridging
+        d2 = eng.decide("das foerderband steht").details("r")
+        assert d2["matched_concepts"] == ["conveyor"]
+        assert any("conveyor" in t for t in d2["matched_terms"])
 
     def test_matched_terms_empty_without_glossary(self):
         eng = DecisionEngine()
@@ -260,17 +295,18 @@ class TestSchemaHashConsistency:
         return eng.schema_hash()
 
     def test_glossary_weight_changes_hash(self):
-        assert self._hash(glossary=load_glossary(), glossary_weight=0.0) != \
-               self._hash(glossary=load_glossary(), glossary_weight=0.9)
+        assert self._hash(glossary=manufacturing_glossary(), glossary_weight=0.0) != \
+               self._hash(glossary=manufacturing_glossary(), glossary_weight=0.9)
 
     def test_fastpath_config_changes_hash(self):
-        a = self._hash(glossary=load_glossary(), engine_kw={"sparse_fastpath": True})
-        b = self._hash(glossary=load_glossary(), engine_kw={"sparse_fastpath": {"min_margin": 0.9}})
+        a = self._hash(glossary=manufacturing_glossary(), engine_kw={"sparse_fastpath": True})
+        b = self._hash(glossary=manufacturing_glossary(),
+                       engine_kw={"sparse_fastpath": {"min_margin": 0.9}})
         assert a != b
 
     def test_hash_stable_across_recompiles(self):
         eng = DecisionEngine(sparse_fastpath=True)
-        eng.add_head(Choice(name="r", options=EN, glossary=load_glossary()))
+        eng.add_head(Choice(name="r", options=EN, glossary=manufacturing_glossary()))
         eng.compile()
         first = eng.schema_hash()
         eng._compiled = False

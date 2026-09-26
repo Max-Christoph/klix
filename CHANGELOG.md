@@ -11,11 +11,24 @@ Three changes, all measured, none adding a dependency.
 ### Fixed
 - **Zero-cost fast path: the miss penalty is gone.** v0.8.8's sparse fast path
   vectorized the query inside `sparse_fastpath()` and then *again* inside
-  `evaluate()` when the gate declined, so every miss paid ~1-2 ms on top of the
-  dense forward pass for nothing. `decide()` now builds the `SparseQuery` once
-  and hands the same object to the gate and to `evaluate(encoded, sparse=...)`.
-  A miss therefore vectorizes exactly as often as the baseline without a fast
-  path: once.
+  `evaluate()` when the gate declined, so every miss paid for a second query
+  vectorization on top of the dense forward pass. `decide()` now builds the
+  `SparseQuery` once and hands the same object to the gate and to
+  `evaluate(encoded, sparse=...)`. A miss therefore vectorizes exactly as often
+  as the baseline without a fast path: once (pinned by build-count tests, not by
+  wall-clock).
+
+  Cost of the eliminated work, measured directly (`evals/fastpath_overhead.py`,
+  n=300): **0.060 ms median / 0.086 ms p95** per sparse-state build. The removed
+  duplicate was therefore ~0.06 ms per miss — *not* the 1-2 ms assumed when this
+  task was scoped.
+
+  On method: a miss-vs-baseline wall-clock comparison cannot resolve this. The
+  ONNX dense forward pass (~10-30 ms) dominates and its variance exceeds the
+  effect, so the measured **sign flips between runs** (both −18.4 ms and +7.9 ms
+  were observed for identical code on this host). The build count is the
+  deterministic evidence. Fast-path hit latency is clear regardless:
+  ~0.46-0.50 ms median vs a dense fallback in the tens of ms.
 
 ### Changed
 - **Language-specific branches removed entirely.** `_guess_lang`,

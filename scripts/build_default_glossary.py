@@ -50,12 +50,27 @@ characters collapsed to ``_`` — deterministic and human-readable, so the file
 stays diffable and reviewable. Any number of ISO-639-1 keys per concept is
 allowed; this build emits ``de`` and ``en``.
 
-Determinism
------------
-Every query carries ``ORDER BY``, so pagination is stable across runs (verified:
-two identical limit/offset runs return byte-identical rows). Raw responses are
-cached under ``.hermes/glossary_cache/`` keyed by a hash of the query, so
-re-running the build is offline and produces the identical file.
+Determinism — what is and is not guaranteed
+-------------------------------------------
+* **Query-level: yes.** Every query carries ``ORDER BY``, so pagination is stable
+  (verified: two identical limit/offset runs return byte-identical rows).
+* **Cache-level: yes.** Raw responses are cached under
+  ``.hermes/glossary_cache/`` keyed by a hash of the query, and cache reads/
+  writes are corruption-tolerant + atomic. A build replayed entirely from a
+  complete cache reproduces the same file.
+* **Whole-artifact: NO — do not claim otherwise.** A live build is NOT
+  bit-reproducible. Deep class subtrees intermittently time out on the Wikidata
+  Query Service (HTTP 504/429); the builder logs the class as SKIPPED and keeps
+  going, and because it stops once ``--target`` concepts are collected, a run
+  that loses more classes can finish earlier and land on a *different, slightly
+  smaller* concept set. Measured: the committed artifact has 10,134 concepts; a
+  re-run that skipped one extra deep class produced 10,049. Both are valid
+  glossaries; they are not the same file.
+
+  Consequence for releases: the generated JSON is an ARTEFACT and must be
+  regenerated and reviewed as a diff, not silently assumed to match a previous
+  build. ``build_meta.json`` (written next to the glossary) records the exact
+  per-class outcome, source, licence and counts so any shipped file is auditable.
 
 Licence
 -------
@@ -69,6 +84,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import sys
 import time
@@ -238,12 +254,29 @@ def concept_key(en_term: str) -> str:
 # ---------------------------------------------------------------------------
 
 def sparql(query: str, retries: int = 3, timeout: int = 240) -> list[dict]:
-    """Runs one SPARQL query with caching + retry; returns the bindings."""
+    """Runs one SPARQL query with caching + retry; returns the bindings.
+
+    Cache robustness (learned the hard way — an earlier revision died with an
+    unexplained `JSONDecodeError: Invalid control character` deep in a build):
+
+    * Writes are ATOMIC (temp file + `os.replace`). A build that is interrupted
+      must never leave a half-written cache file behind, and two builds running
+      against the same cache directory must not interleave writes to the same
+      key — the lexeme pages are shared between runs with different targets, so
+      this is a real collision, not a theoretical one.
+    * Reads are TOLERANT: an unreadable cache entry is treated as a cache MISS
+      and simply re-fetched. A corrupt cache is a wasted request, never a fatal
+      build error.
+    """
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     key = hashlib.sha256(query.encode("utf-8")).hexdigest()[:16]
     cache_file = CACHE_DIR / f"{key}.json"
     if cache_file.exists():
-        return json.loads(cache_file.read_text(encoding="utf-8"))
+        try:
+            return json.loads(cache_file.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, UnicodeDecodeError, OSError):
+            # Corrupt/partial entry: ignore it and fetch again below.
+            cache_file.unlink(missing_ok=True)
 
     url = ENDPOINT + "?" + urllib.parse.urlencode({"query": query})
     req = urllib.request.Request(url, headers={
@@ -255,7 +288,9 @@ def sparql(query: str, retries: int = 3, timeout: int = 240) -> list[dict]:
         try:
             with urllib.request.urlopen(req, timeout=timeout) as resp:
                 bindings = json.loads(resp.read().decode("utf-8"))["results"]["bindings"]
-            cache_file.write_text(json.dumps(bindings, ensure_ascii=False), encoding="utf-8")
+            tmp = cache_file.with_suffix(f".{os.getpid()}.tmp")
+            tmp.write_text(json.dumps(bindings, ensure_ascii=False), encoding="utf-8")
+            os.replace(tmp, cache_file)  # atomic on the same filesystem
             return bindings
         except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, KeyError) as exc:
             last = exc
@@ -403,6 +438,11 @@ def build(target_concepts: int, page: int, domain: dict, max_terms: int,
           quiet: bool = False):
     stop = _stopwords() | FUNCTION_WORD_EXTRA
     asm = Assembler(max_terms, domain=domain)
+    # Per-class outcome, for build_meta.json: which classes contributed how many
+    # concepts, and which were lost to query-service timeouts. This is the record
+    # that makes a shipped artefact auditable (the run outcome legitimately
+    # varies — see the module docstring on determinism).
+    class_log: dict = {"contributed": {}, "skipped": []}
 
     def log(*a):
         if not quiet:
@@ -445,13 +485,16 @@ def build(target_concepts: int, page: int, domain: dict, max_terms: int,
             except RuntimeError as exc:
                 # A deep class subtree can exceed the query service's timeout
                 # (WDQS returns 504). That is not a build failure: the lexeme
-                # route and the other classes already carry the vocabulary.
+                # route and the other classes already carry the vocabulary. It
+                # IS recorded, because it changes the resulting artefact.
+                class_log["skipped"].append({"class": name, "qid": cls, "reason": str(exc)})
                 log(f"  [{name:16s}] SKIPPED (query service) — {exc}")
                 continue
+            class_log["contributed"][name] = {"qid": cls, "scanned": scanned}
             log(f"  [{name:16s}] concepts {len(asm.out):6d}  scanned {scanned:5d}  "
                 f"terms {sum(len(t) for v in asm.out.values() for t in v.values()):6d}")
 
-    return asm.finalize(), asm.stats
+    return asm.finalize(), asm.stats, class_log
 
 
 def main() -> int:
@@ -481,8 +524,8 @@ def main() -> int:
     t0 = time.perf_counter()
     print("Building klix default glossary")
     print("  source : Wikidata (CC0 1.0) — lexemes (POS-tagged) + curated item classes")
-    data, stats = build(args.target, args.page, domain, args.max_terms,
-                        use_items=not args.no_items, quiet=args.quiet)
+    data, stats, class_log = build(args.target, args.page, domain, args.max_terms,
+                                   use_items=not args.no_items, quiet=args.quiet)
     dt = time.perf_counter() - t0
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
@@ -503,6 +546,33 @@ def main() -> int:
     print(f"  file                 : {args.out}  ({size_str})")
     print(f"  budget               : {'OK' if size_mb <= 2.0 else 'OVER'} vs 2 MB target")
     print(f"  build time           : {dt:.1f}s")
+
+    # Provenance: which classes actually contributed, and which were lost to
+    # query-service timeouts. Without this a shipped file cannot be audited,
+    # because the outcome legitimately varies between runs (see module docstring).
+    meta = {
+        "source": "Wikidata (CC0 1.0) — lexemes (POS-tagged) + curated item classes",
+        "generator": "scripts/build_default_glossary.py",
+        "target_concepts": args.target,
+        "page_size": args.page,
+        "max_terms_per_concept": args.max_terms,
+        "item_classes": not args.no_items,
+        "concepts": len(data),
+        "terms": n_terms,
+        "size_bytes": size_bytes,
+        "pairs_added": stats["added"],
+        "synonyms_merged": stats["merged_synonym"],
+        "dropped_homograph_conflicts": stats["dropped_conflict"],
+        "dropped_filtered": stats["dropped_filter"],
+        "classes_skipped": class_log["skipped"],
+        "classes_contributed": class_log["contributed"],
+        "build_seconds": round(dt, 1),
+    }
+    meta_path = args.out.with_name("build_meta.json")
+    meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=2, sort_keys=True),
+                         encoding="utf-8")
+    print(f"  provenance           : {meta_path.name} "
+          f"({len(meta['classes_skipped'])} class(es) skipped)")
     return 0
 
 

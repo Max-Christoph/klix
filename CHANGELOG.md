@@ -66,6 +66,18 @@ Three changes, all measured, none adding a dependency.
   **Wikidata (CC0 1.0)** — see `DATA_SOURCES.md` for why OMW and MUSE were
   rejected (NLTK's `omw-1.4` ships no German at all, and the OMW sets that
   exist are mostly CC BY-SA / CeCILL-C, which cannot go into an MIT package).
+  Shipped: **10134 concepts / 23663 terms / 0.62 MB**, `validate()` → 0 findings.
+  Size chosen from the measured curve (`evals/glossary_footprint.py`): 10k
+  concepts is the largest point satisfying load, RAM and term-count budgets
+  together; 13.8k overshot the load budget.
+- **`data/build_meta.json`** — build provenance next to the artefact (source,
+  licence, per-class contributed/skipped outcome, counts). The generated JSON is
+  **NOT bit-reproducible** and is documented as such: deep class subtrees
+  intermittently time out on the Wikidata Query Service, and since the builder
+  stops at the target count, a run that loses one extra class lands on a
+  different (slightly smaller) concept set — measured 10134 vs 10049 for two
+  runs. Query ordering and the on-disk cache *are* reproducible; the assembled
+  artefact is not, so it is regenerated and reviewed as a diff.
 
 ### Notes
 - No new dependency. `pyproject.toml` dependencies are unchanged; the glossary
@@ -75,6 +87,10 @@ Three changes, all measured, none adding a dependency.
   `load_glossary(MANUFACTURING_GLOSSARY)` for the JSON copy).
 - `schema_hash()` covers the glossary that actually reached a head, so an unused
   engine-level glossary does not perturb it.
+- The glossary build's SPARQL cache is now corruption-tolerant (a bad entry is a
+  cache miss, not a fatal error) with atomic writes. An early build died with an
+  unexplained `JSONDecodeError` from a partially written entry; pinned by
+  `scripts/verify_cache_robustness.py`.
 
 ## [0.8.8] - 2026-09-25
 

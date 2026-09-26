@@ -17,12 +17,35 @@ time or at import time — `pip install klix-engine` is fully offline.
 `default_glossary.json` is **generated**, not hand-maintained. Regenerate with:
 
 ```bash
-uv run python scripts/build_default_glossary.py
+uv run python scripts/build_default_glossary.py     # writes the glossary + build_meta.json
 ```
 
-The build is deterministic (every SPARQL query carries an `ORDER BY`, and raw
-responses are cached under `.hermes/glossary_cache/`), so re-running it on the
-same Wikidata snapshot produces a byte-identical file.
+### What is reproducible, and what is not
+
+* **Query-level ordering: reproducible.** Every SPARQL query carries an `ORDER BY`,
+  so pagination is stable — two identical limit/offset runs return byte-identical
+  rows.
+* **Cache-level: reproducible.** Raw responses are cached under
+  `.hermes/glossary_cache/` (keyed by a hash of the query; reads are
+  corruption-tolerant, writes atomic). A build replayed from a complete cache
+  yields the same file.
+* **The whole artefact: NOT bit-reproducible.** Deep class subtrees intermittently
+  time out on the Wikidata Query Service (HTTP 504/429). The builder logs the
+  class as skipped and continues, and because it stops once the target concept
+  count is reached, a run that loses one extra class can finish earlier and land
+  on a **different, slightly smaller** concept set. Measured: the shipped artefact
+  has **10,134** concepts; a re-run that skipped one additional deep class
+  produced **10,049**. Both are valid glossaries — they are not the same file.
+
+So treat the generated JSON as an artefact to be regenerated *and reviewed as a
+diff*, not as something that can be assumed to match a previous build.
+`build_meta.json` sits next to it and records the exact per-class outcome
+(contributed vs. skipped), the source, the licence and the counts, so a shipped
+file can be audited after the fact.
+
+The shipped v0.9.0 file has 7 classes recorded as skipped (materials,
+substances, processes, qualities, computer_terms, animals, buildings) — the
+lexeme route and the other 21 classes carry the vocabulary.
 
 ## Why Wikidata and not OMW / MUSE
 

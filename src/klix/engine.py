@@ -139,6 +139,17 @@ class DecisionEngine:
                     "bm25_b": h.bm25_b,
                     "counterexamples": {k: sorted(v) for k, v in h.counterexamples.items()},
                     "rules": sorted(rule.describe() for _regex, rule in h._compiled_rules),
+                    # Glossary (v0.8.7): it changes decisions, so it must be
+                    # part of the schema hash or historical results stop being
+                    # reproducible. Sorted for canonical form.
+                    "glossary": (
+                        {
+                            k: {lang: sorted(terms) for lang, terms in sorted(v.items())}
+                            for k, v in sorted(h.glossary.mapping.items())
+                        }
+                        if getattr(h, "glossary", None) is not None
+                        else None
+                    ),
                 })
             elif isinstance(h, Score):
                 state.update({

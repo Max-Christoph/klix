@@ -1,0 +1,66 @@
+{
+  "conveyor": {
+    "de": ["foerderband", "förderband", "transportband"],
+    "en": ["conveyor belt", "conveyor"]
+  },
+  "cycle_time": {
+    "de": ["taktzeit", "zykluszeit"],
+    "en": ["cycle time", "cycle-time"]
+  },
+  "downtime": {
+    "de": ["stillstand", "ausfallzeit", "anlagenstillstand"],
+    "en": ["downtime", "line stoppage"]
+  },
+  "maintenance": {
+    "de": ["wartung", "instandhaltung", "reparatur"],
+    "en": ["maintenance", "service", "repair"]
+  },
+  "spare_part": {
+    "de": ["ersatzteil", "ersatzteile"],
+    "en": ["spare part", "spare parts"]
+  },
+  "shift": {
+    "de": ["schicht", "schichtbetrieb"],
+    "en": ["shift", "work shift"]
+  },
+  "hydraulic": {
+    "de": ["hydraulik", "hydrauliköl", "hydraulikoel"],
+    "en": ["hydraulic", "hydraulic oil"]
+  },
+  "pneumatic": {
+    "de": ["pneumatik", "druckluft"],
+    "en": ["pneumatic", "compressed air"]
+  },
+  "sensor": {
+    "de": ["sensor", "sensorik", "messfuehler"],
+    "en": ["sensor", "sensing"]
+  },
+  "calibration": {
+    "de": ["kalibrierung", "justierung"],
+    "en": ["calibration", "adjustment"]
+  },
+  "scrap": {
+    "de": ["ausschuss", "fehlteil"],
+    "en": ["scrap", "reject part"]
+  },
+  "warehouse": {
+    "de": ["lager", "lagerbestand", "materiallager"],
+    "en": ["warehouse", "inventory", "stock"]
+  },
+  "safety_guard": {
+    "de": ["schutzgitter", "schutztuer", "schutztür"],
+    "en": ["safety guard", "safety door"]
+  },
+  "error_code": {
+    "de": ["fehlercode", "stoerungscode", "störungscode"],
+    "en": ["error code", "fault code"]
+  },
+  "commissioning": {
+    "de": ["inbetriebnahme", "inbetriebsetzung"],
+    "en": ["commissioning", "startup"]
+  },
+  "batch": {
+    "de": ["charge", "losgroesse", "losgröße"],
+    "en": ["batch", "lot size"]
+  }
+}

@@ -38,6 +38,30 @@ __all__ = ["Glossary", "load_glossary", "DEFAULT_GLOSSARY"]
 
 DEFAULT_GLOSSARY = Path(__file__).with_name("glossary.json")
 
+# Language signals, stdlib only. Mirrors klix.heads._detect_lang's approach
+# (umlauts/sharp-s + a small function-word list) so the two stay consistent.
+_DE_SIGNALS = (
+    "ä", "ö", "ü", "ß",
+    "der", "die", "das", "und", "ist", "nicht", "eine", "mit", "für", "auf",
+    "von", "im", "mein", "meine", "wurde", "wird", "fehlt", "steht", "bitte",
+)
+
+
+def _guess_lang(text: str) -> str:
+    """Cheap 'de' vs 'en' guess for a short text. Heuristic, not a detector.
+
+    Only used to decide which glossary terms are cross-lingual (so
+    same-language synonyms can be skipped). A wrong guess degrades to the
+    previous behaviour, never breaks anything.
+    """
+    low = text.lower()
+    if any(ch in low for ch in "äöüß"):
+        return "de"
+    words = re.findall(r"(?u)\b[\w-]+\b", low)
+    if any(w in _DE_SIGNALS for w in words):
+        return "de"
+    return "en"
+
 
 class Glossary:
     """Canonical-term -> per-language synonyms, with deterministic expansion.
@@ -81,11 +105,21 @@ class Glossary:
     def canonical_for(self, token: str) -> str | None:
         return self._index.get(token.lower())
 
-    def expand(self, text: str) -> str:
-        """Returns `text` plus the cross-language terms it triggers.
+    def expand_terms(self, text: str, cross_lingual_only: bool = False) -> list[str]:
+        """Returns ONLY the cross-language terms a text triggers (not the text).
 
-        Terms already present are not duplicated; the appended block is sorted
-        so the output is deterministic (important for the schema hash).
+        Split out from `expand()` so callers can weight the added terms
+        separately from the original ones (v0.8.8 weighted expansion): naive
+        concatenation lets the foreign terms dilute the query's own tokens
+        after L2 normalization, which cost accuracy on monolingual input.
+
+        `cross_lingual_only=True` appends only terms whose language DIFFERS
+        from the text's own language. Same-language synonyms add no bridging
+        power (the original words already match) while lengthening the
+        document, which shifts IDF weights and measurably cost accuracy on
+        monolingual schemas. Used by the anchor-side expansion.
+
+        Deterministic: sorted by canonical key, longest phrases first.
         """
         low = text.lower()
         hits: set[str] = set()
@@ -99,31 +133,80 @@ class Glossary:
                 hits.add(canon)
 
         if not hits:
-            return text
+            return []
 
+        text_lang = _guess_lang(low) if cross_lingual_only else None
         added: list[str] = []
         for canon in sorted(hits):
-            for _lang, terms in sorted(self.mapping[canon].items()):
+            for lang, terms in sorted(self.mapping[canon].items()):
+                if cross_lingual_only and lang == text_lang:
+                    continue
                 for term in terms:
                     if term.lower() not in low and term not in added:
                         added.append(term)
             # Only add the canonical key if it reads like a real term.
             if "_" not in canon and canon.lower() not in low and canon not in added:
                 added.append(canon)
+        return added[: self.max_added]
+
+    def expand(self, text: str, cross_lingual_only: bool = False) -> str:
+        """Returns `text` plus the cross-language terms it triggers.
+
+        Terms already present are not duplicated; the appended block is sorted
+        so the output is deterministic (important for the schema hash).
+        `cross_lingual_only=True` skips same-language synonyms (see
+        `expand_terms`).
+        """
+        added = self.expand_terms(text, cross_lingual_only=cross_lingual_only)
         if not added:
             return text
-        return text + " " + " ".join(added[: self.max_added])
+        return text + " " + " ".join(added)
+
+    # -- composition -------------------------------------------------------
+    def merge(self, other: "Glossary") -> "Glossary":
+        """Returns a NEW glossary with `other`'s terms merged in (self wins).
+
+        Term lists are unioned per language and canonical key; existing entries
+        are extended rather than replaced, so a user glossary adds vocabulary
+        on top of the built-in one instead of overwriting it. Deterministic.
+        """
+        if not isinstance(other, Glossary):
+            raise TypeError(f"merge() expects a Glossary, got {type(other).__name__}")
+        merged: dict[str, dict[str, list[str]]] = {
+            k: {lang: list(terms) for lang, terms in v.items()} for k, v in self.mapping.items()
+        }
+        for canonical, langs in other.mapping.items():
+            bucket = merged.setdefault(canonical, {})
+            for lang, terms in langs.items():
+                existing = bucket.setdefault(lang, [])
+                for term in terms:
+                    if term not in existing:
+                        existing.append(term)
+        return Glossary(merged, max_added=max(self.max_added, other.max_added))
+
+    @classmethod
+    def load(cls, source, max_added: int = 12) -> "Glossary":
+        """Builds a Glossary from a path OR a plain dict.
+
+        Accepts an already-built Glossary (returned as-is) so callers can pass
+        either form to `Choice(glossary=...)` interchangeably.
+        """
+        if isinstance(source, cls):
+            return source
+        if isinstance(source, dict):
+            return cls(source, max_added=max_added)
+        data = json.loads(Path(source).read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            raise ValueError(f"glossary must be a JSON object, got {type(data).__name__}")
+        for key, langs in data.items():
+            if not isinstance(langs, dict):
+                raise ValueError(f"glossary[{key!r}] must map language -> list, got {type(langs).__name__}")
+            for lang, terms in langs.items():
+                if not isinstance(terms, list) or not all(isinstance(t, str) for t in terms):
+                    raise ValueError(f"glossary[{key!r}][{lang!r}] must be a list of strings")
+        return cls(data, max_added=max_added)
 
 
 def load_glossary(path: str | Path = DEFAULT_GLOSSARY, max_added: int = 12) -> Glossary:
     """Loads a glossary JSON file. Raises on malformed input (fail loud)."""
-    data = json.loads(Path(path).read_text(encoding="utf-8"))
-    if not isinstance(data, dict):
-        raise ValueError(f"glossary must be a JSON object, got {type(data).__name__}")
-    for key, langs in data.items():
-        if not isinstance(langs, dict):
-            raise ValueError(f"glossary[{key!r}] must map language -> list, got {type(langs).__name__}")
-        for lang, terms in langs.items():
-            if not isinstance(terms, list) or not all(isinstance(t, str) for t in terms):
-                raise ValueError(f"glossary[{key!r}][{lang!r}] must be a list of strings")
-    return Glossary(data, max_added=max_added)
+    return Glossary.load(path, max_added=max_added)

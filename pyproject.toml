@@ -1,6 +1,6 @@
 [project]
 name = "klix-engine"
-version = "0.8.6"
+version = "0.8.7"
 description = "Decoupled decision heads (Choice, Score, Flag) on a shared semantic backbone - local, deterministic, no model training."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -43,6 +43,8 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/klix"]
+# Ship the bundled glossary JSON (Hatchling includes only .py by default).
+artifacts = ["src/klix/glossary.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

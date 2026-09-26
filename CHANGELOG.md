@@ -3,6 +3,57 @@
 All notable changes to klix are documented here. Format based on
 [Keep a Changelog](https://keepachangelog.com/); versioning: SemVer.
 
+## [0.8.7] - 2026-09-25
+
+### Added
+- **`glossary=` hook for deterministic cross-lingual routing.**
+  `klix.glossary.Glossary` + `load_glossary()` load a canonical → `{de, en}`
+  term map from JSON. The synonyms are appended to **anchors** (in `fit()`) and
+  to **queries** (in `evaluate()`), so the *sparse keyword channel* gains a
+  cross-lingual bridge. Stdlib only (`json`, `re`), no model, no new
+  dependency, fully deterministic.
+
+  **Why it was needed:** the sparse vocabulary is built from the anchor texts
+  alone, so a German query term (`foerderband`) could never match an English
+  anchor (`conveyor`). The dense channel had to carry the whole load.
+  `translate_fn` does **not** close this gap — it is only consulted on the
+  `classifier="linear"` / `"hybrid"` path, never on `nearest` or `centroid`,
+  which are the modes the cross-lingual benchmark runs on.
+
+  Measured on a mixed DE/EN production-ticket set (bootstrap, 2000 resamples),
+  cross-lingual groups only (19 cases):
+
+  | classifier | baseline | with glossary | delta | 95 % CI | verdict |
+  |---|---|---|---|---|---|
+  | `nearest`, kb=0.5 | 78.9 % | **100.0 %** | +21.1 pt | [+5.3, +42.1] | **significant** |
+  | `centroid`, kb=0.5 | 73.7 % | **94.7 %** | +21.1 pt | [+5.3, +42.1] | **significant** |
+  | `centroid`, kb=1.5 | 73.7 % | **94.7 %** | +21.1 pt | [+5.3, +42.1] | **significant** |
+  | `linear` | 73.7 % | 84.2 % | +10.5 pt | [+0.0, +26.3] | not distinguishable |
+
+  Monolingual German control (DE anchors + DE queries, 9 cases): stays flat to
+  ±1 case, as expected — no bridge is needed, and expansion dilutes the sparse
+  vector slightly, which is the honest cost of the hook. Latency is unchanged
+  (median decide 10–17 ms, dominated by the embedding pass); peak RSS 777 MB in
+  the benchmark process (model weights included).
+
+- Bundled `src/klix/glossary.json` with 16 production-domain terms (conveyor,
+  cycle_time, downtime, maintenance, spare_part, shift, hydraulic, pneumatic,
+  sensor, calibration, scrap, warehouse, safety_guard, error_code,
+  commissioning, batch). Replace it with your own schema's vocabulary; the
+  loader validates the shape and fails loudly on malformed input.
+- `evals/glossary_bench.py` — the benchmark behind the table above (baseline
+  vs hook, per group and aggregate, with the bootstrap CI). Cross-platform RSS
+  measurement without `psutil` (POSIX `getrusage` / Windows `psapi`).
+- 20 tests (`tests/test_glossary.py`).
+
+### Fixed
+- **`schema_hash()` now includes the glossary.** The hash documents itself as
+  covering "every input that determines decisions"; a glossary changes them, so
+  omitting it would have silently broken the reproducibility guarantee
+  (log a hash, get different decisions later with the same hash). Caught by the
+  dedicated test before release. The glossary state is hashed in canonical
+  (sorted) form.
+
 ## [0.8.6] - 2026-09-25
 
 ### Not adopted (measured, recorded so they are not retried)

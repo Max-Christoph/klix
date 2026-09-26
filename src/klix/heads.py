@@ -271,6 +271,7 @@ class Choice(BaseHead):
         bm25_k1: float = 1.5,
         bm25_b: float = 0.75,
         translate_fn=None,
+        glossary=None,
         rules: list[Rule] | None = None,
         suppress_when: dict[str, set | list] | None = None,
     ):
@@ -302,6 +303,11 @@ class Choice(BaseHead):
         self.bm25_k1 = bm25_k1
         self.bm25_b = bm25_b
         self.translate_fn = translate_fn
+        # Glossary (v0.8.7, opt-in): a `klix.glossary.Glossary` instance whose
+        # expand() adds cross-language synonyms to anchors (in fit) and queries
+        # (in evaluate). Deterministic, no model, no dependency. Unlike
+        # translate_fn this also works on `nearest` and `centroid`.
+        self.glossary = glossary
         # translate_fn augments the linear/hybrid training matrix. On the
         # nearest path there is no such matrix, so the hook is not called at
         # all (documented; a warning would be noise since nothing is lost —
@@ -345,6 +351,16 @@ class Choice(BaseHead):
             for example in examples:
                 self.flat_texts.append(example)
                 self.label_map.append(label)
+
+        # Glossary expansion (opt-in, v0.8.7): mirror each anchor into its
+        # synonyms in the other language so the SPARSE channel can match
+        # cross-lingually too. Without this the TF-IDF vocabulary is built from
+        # the anchor texts alone, and a German query term can never hit an
+        # English anchor — the keyword channel silently contributes nothing.
+        # `translate_fn` does not cover this: it only runs on the linear/hybrid
+        # path. Expansion is deterministic (sorted terms, no model).
+        if self.glossary is not None:
+            self.flat_texts = [self.glossary.expand(t) for t in self.flat_texts]
 
         vecs = np.array(list(backbone.embed_model.embed(self.flat_texts)))
         self.dense_matrix = _normalize_rows(vecs)
@@ -860,6 +876,14 @@ class Choice(BaseHead):
                 "reject_score": float(label_probs.get(_REJECT_LABEL, 0.0)),
             }, clip_to=1.0)
 
+        # --- Glossary expansion on the query side (opt-in, v0.8.7) ----------
+        # Applied BEFORE the sparse vector is built so the keyword channel sees
+        # the cross-language terms. The dense vector came from the backbone and
+        # is unaffected, which is deliberate: `expand()` only adds terms, so the
+        # dense similarity stays a pure semantic measure while the sparse
+        # channel gains the cross-lingual bridge.
+        query_text = self.glossary.expand(encoded.text) if self.glossary is not None else encoded.text
+
         dense_sims = self.dense_matrix @ encoded.dense_vec
 
         # Hand-rolled TF-IDF query vector (same math as sklearn, ~40x faster:
@@ -868,7 +892,7 @@ class Choice(BaseHead):
         # sparse_metric="bm25": the query's raw term counts are scored against
         # the precomputed BM25 anchor matrix instead (query side: idfBM25 per
         # matched term; anchor side: length-normalized tf saturation).
-        query_vec, query_coverage = self._sparse_query_vec(encoded.text)
+        query_vec, query_coverage = self._sparse_query_vec(query_text)
         if query_vec:
             cols = np.fromiter(query_vec.keys(), dtype=np.int64)
             vals = np.fromiter(query_vec.values(), dtype=float)
@@ -879,7 +903,7 @@ class Choice(BaseHead):
             if self.sparse_metric == "bm25" and self._bm25_anchor_matrix is not None:
                 # BM25: query side is a term SET (idf-weighted); tf saturation
                 # happens on the anchor side (baked into _bm25_anchor_matrix).
-                qvec_raw = self._raw_query_counts(encoded.text)
+                qvec_raw = self._raw_query_counts(query_text)
                 bm25_query = np.zeros(len(self._vocab))
                 for col in qvec_raw:
                     bm25_query[col] = self._bm25_idf[col]

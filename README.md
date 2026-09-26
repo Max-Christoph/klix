@@ -141,6 +141,7 @@ Every head and the engine expose meaningful knobs:
 | `classifier` | `Choice` | `"nearest"` (default), `"linear"`, `"centroid"`, or `"auto"`. `"auto"` picks `"nearest"` for mixed-language anchors (robust) and `"linear"` for single-language (highest accuracy). **`"centroid"` scores against the mean anchor vector per label** — no training, fully deterministic, and measured to reach the trained probe's accuracy: cross-domain 71.4 % → 84.3 % (+12.9 pt, bootstrap CI [+2.9, +22.9]) and 273-case corpus 93.0 % → 96.7 % (+3.7 pt, CI [+1.5, +6.2]); neutral on the bilingual set |
 | `classifier_C` | `Choice` | Regularization strength for the linear probe (lower = more regularization, use with few anchors) |
 | `translate_fn` | `Choice` | Optional `(text, target_lang) -> str` hook: mirrors each anchor into the missing language at compile time, closing the cross-lingual gap without writing anchors twice. **Only active on the `classifier="linear"` / `"hybrid"` path** — it augments the probe's training matrix, which `nearest` does not have; on `nearest` the hook is silently unused. A `translate_fn` that raises is reported once per compile via `UserWarning` (it never breaks `compile()`) |
+| `glossary` | `Choice` | Optional `klix.Glossary` (or `load_glossary()`): a deterministic canonical→{de,en} term map whose synonyms are appended to anchors **and** queries, so the *keyword* channel can match cross-lingually. No model, stdlib only, and unlike `translate_fn` it also works on `nearest` and `centroid`. Measured on cross-lingual routing (19 cases, bootstrap): `nearest` 78.9 % → 100 %, `centroid` 73.7 % → 94.7 %, both +21.1 pt with CI [+5.3, +42.1] **significant**. A monolingual control set stays flat (±1 case), since no bridge is needed there. Ships a bundled `glossary.json` (16 production terms) you can replace with your own |
 | `reject_anchors` | `Choice` | Texts matching these return `value=None` (don't-know instead of guess); with `classifier="linear"` they are learned as their own class |
 | `keyword_boost` | `Choice` | Weight of exact keyword hits (asset IDs like `plc-34`) vs. semantic similarity |
 | `aggregation` | `Score` | `"max"` (default) or `"topk"` — topk averages the best-k anchors per pole, robust against a single noisy anchor |
@@ -158,6 +159,48 @@ Every head and the engine expose meaningful knobs:
 | `res.explain(head)` | `DecisionResult` | Token-level attribution: which keywords and which anchor drove the decision |
 | `engine.decide_batch(texts)` | `DecisionEngine` | Bulk mode: one embedding pass for the whole list — per-item overhead drops sharply for large volumes |
 | `engine.validate_anchors()` | `DecisionEngine` | Read-only anchor-quality report: overlapping classes (centroid cosine), shared confuser terms, sharpening hints, misplaced and duplicate anchors. `validate_anchors_report()` returns a formatted string |
+
+## Cross-lingual routing with a glossary
+
+The sparse channel builds its vocabulary from the anchors alone, so a German
+query term can never match an English anchor — the dense channel carries the
+whole load. `translate_fn` does not fix this (it only runs on the `linear` /
+`hybrid` path). A **glossary** does, deterministically and without a model:
+
+```python
+from klix import DecisionEngine, Choice, load_glossary
+
+engine = DecisionEngine()
+engine.add_head(Choice(
+    name="target",
+    options={"ot_plant": ["conveyor belt stopped", "cycle time doubled"],
+             "maintenance": ["spare part missing", "sensor calibration overdue"]},
+    glossary=load_glossary(),   # bundled 16-term DE/EN production glossary
+))
+engine.compile()
+
+engine.decide("das foerderband steht").target   # 'ot_plant' (baseline: wrong)
+engine.decide("ersatzteil fehlt").target        # 'maintenance'
+```
+
+Write your own mapping and pass it to `Glossary(...)`:
+
+```json
+{
+  "conveyor":   {"de": ["foerderband", "transportband"], "en": ["conveyor belt"]},
+  "cycle_time": {"de": ["taktzeit", "zykluszeit"],       "en": ["cycle time"]}
+}
+```
+
+`Glossary.expand(text)` appends the other-language synonyms to a text; klix runs
+it on anchors at compile time and on every query, so both channels stay
+consistent. Expansion is sorted and repeatable — the glossary is part of
+`schema_hash()`, so logged decisions reproduce exactly.
+
+**Honest cost:** on monolingual text the hook is neutral to slightly negative
+(expansion dilutes the sparse vector without adding a bridge), which is why it
+is opt-in rather than default. The measured gain applies to cross-lingual
+schemas — see the `glossary` row in the configuration table.
 
 ## Custom Heads
 

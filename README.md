@@ -138,12 +138,15 @@ Every head and the engine expose meaningful knobs:
 | Knob | Where | Effect |
 |------|-------|--------|
 | `options`, anchors | all heads | The schema itself — more/better example sentences are the main quality lever |
-| `classifier` | `Choice` | `"nearest"` (default), `"linear"`, `"centroid"`, or `"auto"`. `"auto"` picks `"nearest"` for mixed-language anchors (robust) and `"linear"` for single-language (highest accuracy). **`"centroid"` scores against the mean anchor vector per label** — no training, fully deterministic, and measured to reach the trained probe's accuracy: cross-domain 71.4 % → 84.3 % (+12.9 pt, bootstrap CI [+2.9, +22.9]) and 273-case corpus 93.0 % → 96.7 % (+3.7 pt, CI [+1.5, +6.2]); neutral on the bilingual set |
+| `classifier` | `Choice` | `"nearest"` (default), `"linear"`, `"centroid"`, or `"auto"`. `"auto"` is a **deprecated alias for `"centroid"`** (v0.9.0): it used to guess anchor languages to pick nearest-vs-linear, and that heuristic is gone. **`"centroid"` scores against the mean anchor vector per label** — no training, fully deterministic, and measured to reach the trained probe's accuracy: cross-domain 71.4 % → 84.3 % (+12.9 pt, bootstrap CI [+2.9, +22.9]) and 273-case corpus 93.0 % → 96.7 % (+3.7 pt, CI [+1.5, +6.2]); neutral on the bilingual set |
 | `classifier_C` | `Choice` | Regularization strength for the linear probe (lower = more regularization, use with few anchors) |
-| `translate_fn` | `Choice` | Optional `(text, target_lang) -> str` hook: mirrors each anchor into the missing language at compile time, closing the cross-lingual gap without writing anchors twice. **Only active on the `classifier="linear"` / `"hybrid"` path** — it augments the probe's training matrix, which `nearest` does not have; on `nearest` the hook is silently unused. A `translate_fn` that raises is reported once per compile via `UserWarning` (it never breaks `compile()`) |
-| `glossary` | `Choice` | Optional `klix.Glossary` (or `load_glossary()`): a deterministic canonical→{de,en} term map whose synonyms are appended to anchors **and** queries, so the *keyword* channel can match cross-lingually. No model, stdlib only, and unlike `translate_fn` it also works on `nearest` and `centroid`. Measured on cross-lingual routing: `nearest` 80 % → 100 % / 78 % → 89 % on the two cross-lingual groups, with the monolingual control unchanged at 100 % |
+| `translate_fn` | `Choice` | Optional `(text, target_lang) -> str` hook: mirrors each anchor into the missing language at compile time, closing the cross-lingual gap without writing anchors twice. The target language comes from `translate_target=` (default `None` = the callback decides) — v0.9.0 removed the automatic de/en guess. **Only active on the `classifier="linear"` / `"hybrid"` path** — it augments the probe's training matrix, which `nearest` does not have; on `nearest` the hook is silently unused. A `translate_fn` that raises is reported once per compile via `UserWarning` (it never breaks `compile()`) |
+| `translate_target` | `Choice` | Language handed to `translate_fn`, e.g. `"en"` for a German-anchor schema. `None` (default) passes `None` — the callback decides. Explicit on purpose: no language guessing anywhere in the engine |
+| `glossary` | `Choice`, `DecisionEngine` | Optional **flat, language-agnostic** term map whose synonyms are bridged on anchors **and** queries, so the *keyword* channel can match cross-lingually. Accepts a `dict`, a **JSON file path**, a `klix.Glossary` or `None` (all equivalent). Set it on the engine to cover every head at once. No model, stdlib only, works on `nearest`, `centroid` and `linear`. Any number of ISO-639-1 keys per concept: `{"CONCEPT": {"de": [...], "en": [...], "fr": [...]}}` |
+| `matched_concepts` | `Choice` result | The glossary concepts a query matched — the stable explanation of *what a text meant in glossary terms*. Populated even when no bridge was needed. `matched_terms` lists the cross-language terms that had to be added |
+| `per_concept_topk` | `Glossary` | Max synonyms bridged per matched concept (default `6`), allocated round-robin over the concept's languages so no language crowds out another. Plus a hard `max_added` overall. This is what keeps a 20k-concept glossary safe |
 | `glossary_weight` | `Choice` | Weight of the glossary channel (default `0.5`). Exact tokens keep weight 1.0; glossary terms enter as `alpha · v_glossary` before normalization — on queries *and* on anchor rows. `0.0` leaves the sparse vectors identical to the no-glossary baseline. Compose glossaries via `Glossary.load(...)` / `glossary.merge(other)` |
-| `sparse_fastpath` | `DecisionEngine` | Opt-in early exit: answer from the keyword channel alone *before* the dense embedding pass. Three conservative gates (sparse score, margin relative **and** absolute, reject-pole check) and all-or-nothing across heads. Measured **0.9 ms on a hit vs 15.4 ms** on the dense path (~17×). Counters via `engine.fastpath_stats()`; per-result provenance in `details(head)["engine"]` (`"sparse_fastpath"` / `"dense_hybrid"`) |
+| `sparse_fastpath` | `DecisionEngine` | Opt-in early exit: answer from the keyword channel alone *before* the dense embedding pass. Three conservative gates (sparse score, margin relative **and** absolute, reject-pole check) and all-or-nothing across heads. Counters via `engine.fastpath_stats()`; per-result provenance in `details(head)["engine"]` (`"sparse_fastpath"` / `"dense_hybrid"`). **v0.9.0: a miss costs nothing.** The query is vectorized once in `decide()` and the same `SparseQuery` is handed to the gate and to `evaluate()`, so a miss vectorizes exactly as often as a schema *without* the fast path — the v0.8.8 double vectorization (~1-2 ms) is gone |
 | `reject_anchors` | `Choice` | Texts matching these return `value=None` (don't-know instead of guess); with `classifier="linear"` they are learned as their own class |
 | `keyword_boost` | `Choice` | Weight of exact keyword hits (asset IDs like `plc-34`) vs. semantic similarity |
 | `aggregation` | `Score` | `"max"` (default) or `"topk"` — topk averages the best-k anchors per pole, robust against a single noisy anchor |
@@ -161,6 +164,8 @@ Every head and the engine expose meaningful knobs:
 | `res.explain(head)` | `DecisionResult` | Token-level attribution: which keywords and which anchor drove the decision |
 | `engine.decide_batch(texts)` | `DecisionEngine` | Bulk mode: one embedding pass for the whole list — per-item overhead drops sharply for large volumes |
 | `engine.validate_anchors()` | `DecisionEngine` | Read-only anchor-quality report: overlapping classes (centroid cosine), shared confuser terms, sharpening hints, misplaced and duplicate anchors. `validate_anchors_report()` returns a formatted string |
+| `glossary.validate(anchors=None)` | `Glossary` | Read-only structural report: duplicate terms, circular/ambiguous mappings (one term under two concepts), homograph conflicts (same word, different languages, different concepts) and collisions between glossary tokens and anchor text. Also `engine.validate_glossary()` |
+| `klix.manufacturing_glossary()` / `workflow_glossary()` / `default_glossary()` / `empty_glossary()` / `merge_all(...)` | `klix.glossaries` | Domain packs, so the engine carries no vocabulary. `manufacturing()` = the 16 production terms, `workflow()` = generic routing (error/bug, urgent, cancel, help, approve, ...), `default()` = the broad bundled DE↔EN vocabulary, `empty()` = the default (pure dense+TF-IDF) |
 
 ## Cross-lingual routing with a glossary
 
@@ -170,39 +175,54 @@ whole load. `translate_fn` does not fix this (it only runs on the `linear` /
 `hybrid` path). A **glossary** does, deterministically and without a model:
 
 ```python
-from klix import DecisionEngine, Choice, load_glossary
+from klix import DecisionEngine, Choice
+from klix.glossaries import manufacturing, workflow, merge_all
 
 engine = DecisionEngine()
 engine.add_head(Choice(
     name="target",
     options={"ot_plant": ["conveyor belt stopped", "cycle time doubled"],
              "maintenance": ["spare part missing", "sensor calibration overdue"]},
-    glossary=load_glossary(),   # bundled 16-term DE/EN production glossary
 ))
 engine.compile()
 
-engine.decide("das foerderband steht").target   # 'ot_plant' (baseline: wrong)
-engine.decide("ersatzteil fehlt").target        # 'maintenance'
+# one glossary for the whole schema, or per head — both work
+engine = DecisionEngine(glossary=merge_all(manufacturing(), workflow()))
 ```
 
-Write your own mapping and pass it to `Glossary(...)`:
+Pass a **dict**, a **JSON file path**, a `Glossary` or `None` — all equivalent:
 
 ```json
 {
   "conveyor":   {"de": ["foerderband", "transportband"], "en": ["conveyor belt"]},
-  "cycle_time": {"de": ["taktzeit", "zykluszeit"],       "en": ["cycle time"]}
+  "cycle_time": {"de": ["taktzeit", "zykluszeit"],       "en": ["cycle time"]},
+  "urgent":     {"de": ["dringend", "eilig"],            "en": ["urgent", "asap"]}
 }
 ```
 
-`Glossary.expand(text)` appends the other-language synonyms to a text; klix runs
-it on anchors at compile time and on every query, so both channels stay
-consistent. Expansion is sorted and repeatable — the glossary is part of
-`schema_hash()`, so logged decisions reproduce exactly.
+```python
+engine = DecisionEngine(glossary="my_glossary.json")   # path
+engine = DecisionEngine(glossary={"conveyor": {...}})  # dict
+```
 
-**Honest cost:** on monolingual text the hook is neutral to slightly negative
-(expansion dilutes the sparse vector without adding a bridge), which is why it
-is opt-in rather than default. The measured gain applies to cross-lingual
-schemas — see the `glossary` row in the configuration table.
+The lookup is **flat and language-agnostic**: `word -> concept -> synonyms`. The
+engine never guesses which language a text is in (v0.9.0 removed the last de/en
+heuristics). Its one language-dependent decision is made on evidence instead —
+a synonym the anchors already use is not bridged, because it bridges nothing:
+
+```python
+glossary.expand_terms("conveyor belt stopped", vocab=head._core_vocab)
+# -> [] : the anchors already contain "conveyor belt"; nothing to bridge
+```
+
+Expansion is bounded (at most `per_concept_topk` per matched concept, allocated
+round-robin across languages, plus a global `max_added`), sorted and repeatable —
+the glossary is part of `schema_hash()`, so logged decisions reproduce exactly.
+
+**Honest cost:** on monolingual text the hook is neutral (v0.8.7 diluted the
+sparse vector; v0.8.8's damping plus the vocabulary-aware skip fixed that). The
+measured gain applies to cross-lingual schemas — see the `glossary` row in the
+configuration table.
 
 ## Custom Heads
 

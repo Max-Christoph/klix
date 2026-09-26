@@ -30,7 +30,15 @@ class TestBilingualStopwords:
 
 
 class TestClassifierAuto:
-    def test_auto_picks_nearest_for_mixed_language(self):
+    """`classifier="auto"` is a DEPRECATED alias for `centroid` (v0.9.0).
+
+    It used to guess anchor languages to pick nearest-vs-linear. The
+    language-specific branch is gone; "auto" now resolves to the
+    language-agnostic centroid classifier, which is the robustness `auto` was
+    reaching for. Kept parsing so old schemas do not break.
+    """
+
+    def test_auto_resolves_to_centroid_on_mixed_language(self):
         eng = DecisionEngine()
         eng.add_head(
             Choice(
@@ -43,9 +51,14 @@ class TestClassifierAuto:
             )
         )
         eng.compile()
-        assert eng.heads[0]._effective_classifier == "nearest"
+        assert eng.heads[0]._effective_classifier == "centroid"
 
-    def test_auto_picks_linear_for_single_language(self):
+    def test_auto_resolves_to_centroid_on_single_language(self):
+        """The old heuristic switched to `linear` here — deliberately dropped.
+
+        A broad glossary legitimately mixes languages inside a monolingual
+        schema, and that must never flip the classifier.
+        """
         eng = DecisionEngine()
         eng.add_head(
             Choice(
@@ -58,7 +71,7 @@ class TestClassifierAuto:
             )
         )
         eng.compile()
-        assert eng.heads[0]._effective_classifier == "linear"
+        assert eng.heads[0]._effective_classifier == "centroid"
 
 
 class TestTranslateFn:
@@ -86,6 +99,7 @@ class TestTranslateFn:
                 },
                 classifier="linear",
                 translate_fn=fake_translate,
+                translate_target="en",
             )
         )
         eng.compile()
@@ -105,6 +119,34 @@ class TestTranslateFn:
         )
         eng.compile()
         assert eng.decide("alpha").c == "a"
+
+    def test_translate_target_is_passed_through_verbatim(self):
+        """No language guessing: the callback receives exactly what was set."""
+        seen: list = []
+
+        def spy(text, target):
+            seen.append(target)
+            return None
+
+        eng = DecisionEngine()
+        eng.add_head(Choice(name="c", options={"a": ["alpha"], "b": ["beta"]},
+                            classifier="linear", translate_fn=spy,
+                            translate_target="fr"))
+        eng.compile()
+        assert seen and set(seen) == {"fr"}
+
+    def test_translate_target_defaults_to_none(self):
+        seen: list = []
+
+        def spy(text, target):
+            seen.append(target)
+            return None
+
+        eng = DecisionEngine()
+        eng.add_head(Choice(name="c", options={"a": ["alpha"], "b": ["beta"]},
+                            classifier="linear", translate_fn=spy))
+        eng.compile()
+        assert seen and set(seen) == {None}
 
 
 class TestFlagCalibration:

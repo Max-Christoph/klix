@@ -69,6 +69,7 @@ class DecisionEngine:
         smart_truncate: bool = True,
         truncate_dim: int | None = None,
         sparse_fastpath: dict | bool | None = None,
+        glossary=None,
     ) -> None:
         self.backbone = HybridBackbone(
             model_name=model_name,
@@ -80,6 +81,11 @@ class DecisionEngine:
         self.heads: list[BaseHead] = []
         self._compiled = False
         self._fastpath_enabled = bool(sparse_fastpath)
+        # Engine-level glossary (v0.9.0): wire ONE glossary for the whole schema
+        # instead of repeating it per head. Accepts None / dict / JSON path /
+        # Glossary, like Choice(glossary=...). Propagated in compile(); a head
+        # that was constructed with its own glossary keeps it (explicit wins).
+        self.glossary = glossary
         # Normalize the gate config; True uses the conservative defaults.
         if sparse_fastpath is True:
             self.sparse_fastpath_cfg = {
@@ -115,12 +121,20 @@ class DecisionEngine:
 
         self.backbone.build_vocabulary(all_texts, stop_words=self.stop_words)
 
+        # Engine-level glossary: normalize once, then hand it to every Choice
+        # head that did not bring its own (explicit head config wins).
+        from klix.glossary import resolve_glossary
+
+        engine_glossary = resolve_glossary(self.glossary)
+
         for head in self.heads:
             # Propagate the engine-level fast-path config to Choice heads so a
             # single `DecisionEngine(sparse_fastpath=...)` switch covers the
             # whole schema. Heads constructible standalone keep their own value.
             if self.sparse_fastpath_cfg is not None and hasattr(head, "fastpath"):
                 head.fastpath = self.sparse_fastpath_cfg
+            if engine_glossary is not None and hasattr(head, "glossary") and head.glossary is None:
+                head.glossary = engine_glossary
             head.fit(self.backbone)
 
         self._compiled = True
@@ -224,6 +238,9 @@ class DecisionEngine:
             "max_chars": self.backbone.max_chars,
             "smart_truncate": self.backbone.smart_truncate,
             "heads": [_head_state(h) for h in self.heads],
+            # Schema-level glossary (v0.9.0) only counts when it actually reached
+            # a head; the per-head entry above is the source of truth, and this
+            # keeps an unused engine-level default from changing the hash.
         }
         blob = _json.dumps(payload, sort_keys=True, ensure_ascii=False, default=str)
         return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:16]
@@ -237,13 +254,21 @@ class DecisionEngine:
 
         start = time.perf_counter()
 
-        # 0. Sparse fast path (v0.8.8, opt-in): try to answer from the keyword
+        # 0. Sparse state (v0.9.0): the query is vectorized EXACTLY ONCE here and
+        #    the resulting SparseQuery is shared by the fast-path gate and the
+        #    normal head evaluation. Before this, a fast-path miss vectorized
+        #    the query a second time inside evaluate() — that was the entire
+        #    miss penalty. Only built when at least one head can use it, so the
+        #    common (no-glossary, no-fastpath) path stays as lean as before.
+        sparse_state = self._make_sparse_state(text)
+
+        # 1. Sparse fast path (v0.8.8, opt-in): try to answer from the keyword
         #    channel alone BEFORE paying for the dense embedding forward pass
         #    (~50-90 ms, the dominant cost). Only used when every registered
         #    head can answer from sparse evidence; the gate is conservative and
         #    a single miss falls through to the normal path.
         if self._fastpath_enabled:
-            fast = self._try_fastpath(text)
+            fast = self._try_fastpath(text, sparse_state)
             if fast is not None:
                 self.fastpath_hits += 1
                 elapsed_ms = (time.perf_counter() - start) * 1000
@@ -251,10 +276,10 @@ class DecisionEngine:
                                       head_data=fast, engine=self)
             self.fastpath_misses += 1
 
-        # 1. One-time vectorization (~50-90 ms on the dev workstation).
+        # 2. One-time vectorization (~50-90 ms on the dev workstation).
         encoded = self.backbone.encode(text)
 
-        # 2. Evaluation of all heads (a few ms total), with head gating:
+        # 3. Evaluation of all heads (a few ms total), with head gating:
         #    a head whose suppress_when condition matches an earlier head's
         #    result is skipped (value=None, suppressed_by marker).
         results: dict[str, dict] = {}
@@ -262,12 +287,36 @@ class DecisionEngine:
             if head.is_suppressed(results):
                 results[head.name] = {"value": None, "suppressed_by": sorted(head.suppress_when)}
             else:
-                results[head.name] = head.evaluate(encoded)
+                # Custom BaseHead subclasses may predate the `sparse=` plumbing;
+                # passing it blind would turn a working schema into a TypeError.
+                pre = sparse_state.get(head.name) if sparse_state else None
+                if pre is not None and getattr(head, "_evaluate_takes_sparse", True):
+                    results[head.name] = head.evaluate(encoded, sparse=pre)
+                else:
+                    results[head.name] = head.evaluate(encoded)
 
         elapsed_ms = (time.perf_counter() - start) * 1000
         return DecisionResult(text=text, latency_ms=elapsed_ms, head_data=results, engine=self)
 
-    def _try_fastpath(self, text: str) -> dict | None:
+    def _make_sparse_state(self, text: str):
+        """SparseQuery per Choice head, or None when no head could use one.
+
+        A head uses it only if it has a glossary configured (the sparse channel
+        matters then) or the fast path is armed. Skipping the lookup otherwise
+        keeps the no-glossary/no-fastpath path byte-identical in cost to v0.8.8.
+        """
+        needs = self._fastpath_enabled or any(
+            getattr(h, "glossary", None) is not None for h in self.heads
+        )
+        if not needs:
+            return None
+        return {
+            h.name: h._sparse_state(text)
+            for h in self.heads
+            if hasattr(h, "_sparse_state")
+        }
+
+    def _try_fastpath(self, text: str, sparse_state=None) -> dict | None:
         """Attempts a sparse-only answer for ALL heads; None if not decisive.
 
         Every head must produce a confident sparse answer, otherwise the whole
@@ -280,7 +329,11 @@ class DecisionEngine:
             attempt = getattr(head, "sparse_fastpath", None)
             if attempt is None:
                 return None  # head cannot answer without dense vectors
-            got = attempt(text)
+            pre = sparse_state.get(head.name) if sparse_state else None
+            if pre is not None and getattr(head, "_evaluate_takes_sparse", True):
+                got = attempt(text, sparse=pre)
+            else:
+                got = attempt(text)
             if got is None:
                 return None
             results[head.name] = got
@@ -333,11 +386,16 @@ class DecisionEngine:
         results: list[DecisionResult] = []
         for text, encoded in zip(texts, encoded_list):
             head_data: dict[str, dict] = {}
+            st = self._make_sparse_state(text)
             for head in self.heads:
                 if head.is_suppressed(head_data):
                     head_data[head.name] = {"value": None, "suppressed_by": sorted(head.suppress_when)}
                 else:
-                    head_data[head.name] = head.evaluate(encoded)
+                    pre = st.get(head.name) if st else None
+                    if pre is not None and getattr(head, "_evaluate_takes_sparse", True):
+                        head_data[head.name] = head.evaluate(encoded, sparse=pre)
+                    else:
+                        head_data[head.name] = head.evaluate(encoded)
             results.append(DecisionResult(text=text, latency_ms=0.0, head_data=head_data, engine=self))
 
         elapsed_ms = (time.perf_counter() - start) * 1000
@@ -388,6 +446,24 @@ class DecisionEngine:
             if hasattr(head, "options"):  # Choice-like heads only
                 report.extend(validate_choice_head(head))
         return report
+
+    def validate_glossary(self, anchors: bool = True) -> list[dict]:
+        """Structural report on the glossary actually in effect (v0.9.0).
+
+        Delegates to `Glossary.validate()` of the first Choice head that has a
+        glossary, with the schema's own anchors passed in so token collisions
+        between glossary vocabulary and anchor/criteria text are reported too.
+        Read-only: the glossary is never modified.
+
+        Returns a list of finding dicts; an empty list means "no findings".
+        """
+        if not self._compiled:
+            self.compile()
+        head = next((h for h in self.heads if getattr(h, "glossary", None) is not None), None)
+        if head is None:
+            return []
+        anchor_arg = head.options if anchors else None
+        return head.glossary.validate(anchors=anchor_arg)
 
     def validate_anchors_report(self) -> str:
         """Formatted human-readable version of validate_anchors()."""
@@ -445,6 +521,7 @@ class DecisionEngine:
             "max_chars": self.backbone.max_chars,
             "smart_truncate": self.backbone.smart_truncate,
             "tfidf_vec": self.backbone.tfidf_vec,
+            "glossary": self.glossary,
             "heads": self.heads,
         }
         joblib.dump(state, path, compress=3)
@@ -460,6 +537,7 @@ class DecisionEngine:
             stop_words=state["stop_words"],
             max_chars=state["max_chars"],
             smart_truncate=state["smart_truncate"],
+            glossary=state.get("glossary"),
         )
         # NOTE: the embedding model re-instantiates here (~1-2 s cold start
         # for ONNX session init, but no anchor re-embedding).

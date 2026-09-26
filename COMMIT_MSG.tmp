@@ -1,0 +1,87 @@
+v0.9.0: zero-cost fast path, language-agnostic flat glossary, domain packs
+
+FOCUS: be a fast, lightweight decision engine — not a language framework.
+No new dependency (declared deps unchanged: fastembed, numpy, scikit-learn).
+
+1) Zero-cost fast path — the miss penalty is gone.
+   v0.8.8 vectorized the query inside sparse_fastpath() and then AGAIN inside
+   evaluate() whenever the gate declined, so every miss paid ~1-2 ms on top of
+   the dense pass for nothing. decide() now builds one SparseQuery and hands the
+   same object to the gate and to evaluate(encoded, sparse=...). Verified by
+   instrumentation, not assertion: 1 build per decide() on hit AND on miss
+   (tests/test_v090.py::TestFastpathVectorReuse, benchmark section 2).
+   Measured: hit 0.499 ms median vs dense fallback 19.2 ms (~39x); miss 19.2 ms
+   vs baseline-without-fastpath 37.6 ms — a miss is NOT slower.
+
+   Backward compatibility: passing `sparse=` blind would raise TypeError on every
+   custom BaseHead subclass written against the old signature. BaseHead probes
+   _accepts_keyword once at construction; the engine passes it only when accepted.
+
+2) Language-specific branches removed entirely.
+   _guess_lang, _detect_lang, _GERMAN_SIGNAL_WORDS, _cross_lingual_mixup and the
+   cross_lingual_only switch are gone. The glossary is a flat, language-agnostic
+   lookup; its one language-dependent decision is made on EVIDENCE, not a guess:
+   synonyms the anchors already use are not bridged. The skip set is _core_vocab
+   (the anchors' OWN tokens) — NOT the full _vocab, which already holds the
+   anchor-side glossary terms and would skip the very terms a foreign query
+   needs (this subtlety broke the bridge when first implemented; caught by tests).
+   classifier="auto" is now a deprecated alias for "centroid"; translate_fn gets
+   its mirror language explicitly via translate_target=.
+
+3) Glossary modularised + validated.
+   klix.glossary keeps only the mechanism; klix.glossaries holds the packs:
+   empty() (default), manufacturing() (the 16 production terms), workflow()
+   (generic routing), default() (broad bundled vocabulary), merge_all().
+   Choice(glossary=...) and DecisionEngine(glossary=...) accept dict | path |
+   Glossary | None. Expansion is bounded (per_concept_topk, round-robin over the
+   concept's languages, plus max_added) — the round-robin fixed a real failure
+   where "urgent" yielded three English terms and one German one.
+   Glossary.validate(anchors=None) reports duplicates, genuine circular
+   mappings, homographs and anchor collisions. New matched_concepts metadata.
+
+   Load path: the index build costs ~2.5x the JSON parse, so load_glossary()
+   defers it to the first lookup (is_indexed exposes the state).
+
+4) Broad bundled DE<->EN vocabulary (data/default_glossary.json).
+   Source: Wikidata (CC0 1.0) — see DATA_SOURCES.md. NLTK's omw-1.4 was rejected
+   because it ships NO German at all, and the OMW sets that exist are mostly
+   CC BY-SA / CeCILL-C (share-alike vs. this package's MIT). Two routes:
+   POS-tagged lexemes (noun/verb/adjective, so no name noise) + curated item
+   classes. Deterministic (ORDER BY, on-disk response cache); deep class subtrees
+   that exceed the WDQS timeout are skipped and reported, not fatal.
+
+   10134 concepts / 23663 terms / 0.62 MB, validate() -> 0 findings.
+   Size chosen from the measured curve (evals/glossary_footprint.py): 10k concepts
+   is the largest point satisfying load, RAM and term-count budgets together;
+   13.8k overshot the load budget.
+
+5) Bugs found by the suite while building this (all fixed + pinned):
+   - Score.evaluate/Flag.evaluate did not accept the new kwarg, breaking every
+     mixed Choice+Score/Flag schema.
+   - NameError 'row' in the reject pole (twice) and in the hard-negative penalty
+     after the vectorization refactor.
+   - Glossary.validate() produced 287 false positives (a term colliding only with
+     another concept's synthetic KEY is not an ambiguous mapping).
+   - The builder tracked term owners PER LANGUAGE, allowing the same word to be
+     German in one concept and English in another — 287 genuine ambiguities.
+     Now one owner per term across both languages.
+   - The benchmark had a label mismatch (DE-anchor group scored 0% for every pack)
+     and inflated baseline timings (sequential instead of interleaved runs).
+
+   test_centroid's `centroid >= linear` became a 1-case tolerance with the reason
+   recorded in the test: removing _cross_lingual_mixup changed the LINEAR probe's
+   training set (superset), shifting its boundary on 1 of 60 frozen cases.
+
+TESTS: 307 passed, 0 failed (was 242 passed at v0.8.8).
+
+FOOTPRINT (Windows/CPython 3.11, MiniLM):
+  glossary load, fresh process                8.5 ms   (budget 20 ms)
+  glossary load, in the 3.4 GB bench process  27.4 ms  <- reported, not hidden
+  1st lookup (index build, deferred)          44 ms
+  RAM deep-size                               5.68 MB  (budget 10 MB)
+  file size                                   0.62 MB  (budget 2 MB)
+
+ACCURACY (evals/v090_bench.py):
+  EN anchors <- DE queries (cross-lingual)  77.3% -> 86.4%   (+2 cases)
+  EN anchors <- EN queries (monolingual)   100.0% -> 100.0%  (no regression)
+  DE anchors <- EN queries (cross-lingual)  76.9% -> 84.6%   (+1 case)

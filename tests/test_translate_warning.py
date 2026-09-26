@@ -124,7 +124,12 @@ def test_translate_fn_is_ignored_on_nearest_path():
 
 
 def test_translate_fn_runs_on_linear_path():
-    """Gegenprobe: auf dem linear-Pfad wird der Hook tatsaechlich aufgerufen."""
+    """Gegenprobe: auf dem linear-Pfad wird der Hook tatsaechlich aufgerufen.
+
+    v0.9.0: die Zielsprache wird NICHT mehr geraten, sondern explizit ueber
+    `translate_target` gesetzt (hier "en"). Ohne Angabe bekommt der Hook
+    `None` und entscheidet selbst -- siehe test_translate_target_defaults_to_none.
+    """
     aufrufe = []
 
     def zaehlender_translate(text, target):
@@ -133,13 +138,13 @@ def test_translate_fn_runs_on_linear_path():
 
     eng = DecisionEngine()
     eng.add_head(Choice(name="k", options=OPT, classifier="linear",
-                        translate_fn=zaehlender_translate))
+                        translate_fn=zaehlender_translate, translate_target="en"))
     eng.compile()
 
     assert len(aufrufe) > 0, "translate_fn muss auf dem linear-Pfad laufen"
-    # Jeder Aufruf spiegelt in die jeweils andere Sprache.
+    # Jeder Aufruf erhaelt exakt die konfigurierte Zielsprache.
     for text, target in aufrufe:
-        assert target in ("de", "en")
+        assert target == "en"
 
 
 def test_no_translate_fn_no_warning():

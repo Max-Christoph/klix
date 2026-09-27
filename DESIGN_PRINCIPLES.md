@@ -149,7 +149,8 @@ being re-measured, and several were wrong the first time:
 | "fast-path miss costs 1–2 ms" | the eliminated duplicate vectorisation costs **0.026 ms** median / 0.042 ms p95 (n=300) |
 | "miss is 18.4 ms faster than baseline" | the sign flipped between runs (+7.9 ms) — not resolvable on this host |
 | "20 % glossary error rate" | came from a failure-enriched probe; not the file's rate |
-| "38.8 % error rate" | scored by key, counting correct mappings as errors → corrected to 6.6 % |
+| "38.8 % error rate" | scored by key, counting correct mappings as errors → corrected to 8.4 % |
+| "6.6 % wrong-mapping rate" | true of a 310-term denominator; the same measurement over 768 curated terms gives **8.4 %** |
 | "glossary build is deterministic/byte-identical" | a re-run produced 10,049 concepts instead of 10,134 |
 | "all 40 probe terms lack a Wikidata sense" | the query was broken; ~11 had a technical sense |
 | "5.3 % of concepts are proper names" | produced by an ad-hoc command, not a script; a written criterion gives **8.2 %** (`evals/glossary_noise.py`) |

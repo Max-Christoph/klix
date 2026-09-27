@@ -37,7 +37,7 @@ per-term provenance — a later, separate problem. It is not pre-built.
 
 | File | Content | Origin | Licence |
 |---|---|---|---|
-| `data/curated_glossary.json` | **The default.** 124 concepts (manufacturing, IT, everyday office) × DE/EN, hand-written | klix author — **original work** | **MIT** |
+| `data/curated_glossary.json` | **The default.** 362 concepts (44 manufacturing, 186 IT, 132 everyday/support/mail) × DE/EN, hand-written | klix author — **original work** | **MIT** |
 | `data/curated_domains.json` | Domain of each curated concept, as free `tags` metadata | klix author | MIT |
 | `data/glossary.schema.json` | The documented document format (JSON Schema, versioned) | klix author | MIT |
 | `data/default_glossary.json` | Broad DE↔EN vocabulary, ~10k concepts, generated offline. **Opt-in** (`broad()`) | [Wikidata](https://www.wikidata.org) | **CC0 1.0** |
@@ -62,9 +62,32 @@ the scoring:
 | Domain | curated terms tested | wrong mappings (auto) | coverage of curated terms |
 |---|---|---|---|
 | manufacturing | 110 | **3.5 %** | 48 % |
-| IT | 94 | **8.3 %** | 26 % |
-| everyday | 106 | **10.0 %** | 38 % |
-| **overall** | **310** | **6.6 %** | 39 % |
+| IT | 369 | **11.6 %** | 19 % |
+| everyday | 289 | **9.4 %** | 22 % |
+| **overall** | **768** | **8.4 %** | 25 % |
+
+This table measures the **generated** (`broad()`) vocabulary against the curated
+list as ground truth. The figures moved when the curated list grew from 124 to
+362 concepts: the earlier 6.6 % was measured against 310 curated terms, the
+current 8.4 % against 768. The growth added vocabulary Wikidata covers badly
+(IT and everyday), so a larger, more demanding denominator raises the measured
+rate. Neither number is wrong; they answer the same question over different
+populations — which is exactly why the denominator is stated.
+
+The expanded curated list itself was measured separately, on a **new random
+sample** (`evals/curated_error_rate_new.py`, seed 20260928, n=160 of 362 drawn at
+random — deliberately not the 310 terms above, which are now known cases):
+
+| Domain | sampled | externally attested | ratio |
+|---|---|---|---|
+| manufacturing | 16 | 7 | 44 % |
+| IT | 73 | 19 | 26 % |
+| everyday | 71 | 20 | 28 % |
+| **overall** | **160** | **46** | **28.7 %** |
+
+*Attested* means the German term has a Wikidata lexeme whose `P5137` sense links
+to an item — i.e. the concept is externally attested at all, not that the mapping
+is correct. Internal ambiguity on the shipped artifact: **0**.
 
 And the curated set itself, checked with `evals/curated_glossary_verify.py`
 (**all 124 concepts, not a sample**): 0 structural findings, 0 pairs below the

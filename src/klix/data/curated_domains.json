@@ -1,133 +1,1096 @@
 {
  "concepts": {
-  "access_rights": "it",
-  "application": "it",
-  "appointment": "everyday",
-  "approval": "manufacturing",
-  "approval_office": "everyday",
-  "assembly": "manufacturing",
-  "backup": "it",
-  "bank_account": "everyday",
-  "batch": "manufacturing",
-  "budget": "everyday",
-  "bug": "it",
-  "bug_report": "it",
-  "cable": "manufacturing",
-  "calibration": "manufacturing",
-  "cancellation": "everyday",
-  "certificate": "it",
-  "certificate_hr": "everyday",
-  "change_request": "everyday",
-  "client": "it",
-  "commissioning": "manufacturing",
-  "complaint": "everyday",
-  "configuration": "it",
-  "confirmation": "everyday",
-  "contract": "everyday",
-  "conveyor": "manufacturing",
-  "cpu": "it",
-  "customer": "everyday",
-  "cycle_time": "manufacturing",
-  "database": "it",
-  "deadline": "everyday",
-  "delay": "everyday",
-  "delivery": "everyday",
-  "department": "everyday",
-  "deployment": "it",
-  "documentation": "it",
-  "downtime": "manufacturing",
-  "employee": "everyday",
-  "encryption": "it",
-  "error_code": "manufacturing",
-  "error_message": "it",
-  "expense": "everyday",
-  "expiry": "it",
-  "failure": "manufacturing",
-  "failure_cause": "manufacturing",
-  "firewall": "it",
-  "firewall_rule": "it",
-  "flow_rate": "manufacturing",
-  "fuse": "manufacturing",
-  "gear": "manufacturing",
-  "hydraulic": "manufacturing",
-  "inspection": "manufacturing",
-  "interface": "it",
-  "invoice": "everyday",
-  "issue_ticket": "it",
-  "job_application": "everyday",
-  "log_file": "it",
-  "login": "it",
-  "lubrication": "manufacturing",
-  "maintenance": "manufacturing",
-  "maintenance_plan": "it",
-  "malware": "it",
-  "measurement": "manufacturing",
-  "meeting_notes": "everyday",
-  "memory": "it",
-  "monitoring": "it",
-  "motor": "manufacturing",
-  "network": "it",
-  "notice_period": "everyday",
-  "nut": "manufacturing",
-  "onboarding": "everyday",
-  "order": "everyday",
-  "outage": "it",
-  "output": "manufacturing",
-  "overtime": "everyday",
-  "password": "it",
-  "payment": "everyday",
-  "performance": "it",
-  "pneumatic": "manufacturing",
-  "pressure": "manufacturing",
-  "problem": "everyday",
-  "process": "manufacturing",
-  "pump": "manufacturing",
-  "quality": "manufacturing",
-  "query": "it",
-  "question": "everyday",
-  "receipt": "everyday",
-  "refund": "everyday",
-  "relay": "manufacturing",
-  "report": "everyday",
-  "request": "everyday",
-  "restore": "it",
-  "return_goods": "everyday",
-  "rollback": "it",
-  "safety_guard": "manufacturing",
-  "salary": "everyday",
-  "scrap": "manufacturing",
-  "screw": "manufacturing",
-  "seal": "manufacturing",
-  "security_incident": "it",
-  "sensor": "manufacturing",
-  "server": "it",
-  "service": "it",
-  "shift": "manufacturing",
-  "sick_leave": "everyday",
-  "spare_part": "manufacturing",
-  "storage": "it",
-  "supervisor": "everyday",
-  "supplier": "everyday",
-  "switch": "manufacturing",
-  "temperature": "manufacturing",
-  "timeout": "it",
-  "tolerance": "manufacturing",
-  "torque": "manufacturing",
-  "training": "everyday",
-  "update": "it",
-  "urgent": "everyday",
-  "user_account": "it",
-  "vacation": "everyday",
-  "valve": "manufacturing",
-  "version": "it",
-  "voltage": "manufacturing",
-  "warehouse": "manufacturing",
-  "warranty": "everyday",
-  "wear": "manufacturing"
+  "absence_report": [
+   "everyday"
+  ],
+  "acceptance_criteria": [
+   "it"
+  ],
+  "access_rights": [
+   "it"
+  ],
+  "adapter": [
+   "it"
+  ],
+  "affected_users": [
+   "everyday"
+  ],
+  "akku": [
+   "it"
+  ],
+  "alert": [
+   "it"
+  ],
+  "amendment_doc": [
+   "everyday"
+  ],
+  "anschluss": [
+   "it"
+  ],
+  "api_endpoint": [
+   "it"
+  ],
+  "application": [
+   "it"
+  ],
+  "appointment": [
+   "everyday"
+  ],
+  "appraisal": [
+   "everyday"
+  ],
+  "approval": [
+   "manufacturing"
+  ],
+  "approval_chain": [
+   "everyday"
+  ],
+  "approval_office": [
+   "everyday"
+  ],
+  "archiving": [
+   "everyday"
+  ],
+  "artifact_build": [
+   "it"
+  ],
+  "assembly": [
+   "manufacturing"
+  ],
+  "asset": [
+   "it"
+  ],
+  "attachment": [
+   "everyday"
+  ],
+  "audit_log": [
+   "it"
+  ],
+  "backlog": [
+   "it"
+  ],
+  "backup": [
+   "it"
+  ],
+  "bandwidth": [
+   "it"
+  ],
+  "bank_account": [
+   "everyday"
+  ],
+  "batch": [
+   "manufacturing"
+  ],
+  "batch_job": [
+   "it"
+  ],
+  "beamer": [
+   "it"
+  ],
+  "bounce": [
+   "everyday"
+  ],
+  "branch": [
+   "it"
+  ],
+  "browser": [
+   "it"
+  ],
+  "budget": [
+   "everyday"
+  ],
+  "bug": [
+   "it"
+  ],
+  "bug_report": [
+   "it"
+  ],
+  "build": [
+   "it"
+  ],
+  "cable": [
+   "manufacturing"
+  ],
+  "cache": [
+   "it"
+  ],
+  "calendar_invite": [
+   "it"
+  ],
+  "calibration": [
+   "manufacturing"
+  ],
+  "cancellation": [
+   "everyday"
+  ],
+  "cc": [
+   "everyday"
+  ],
+  "certificate": [
+   "it"
+  ],
+  "certificate_hr": [
+   "everyday"
+  ],
+  "change_request": [
+   "everyday"
+  ],
+  "changelog": [
+   "it"
+  ],
+  "circular": [
+   "everyday"
+  ],
+  "client": [
+   "it"
+  ],
+  "closing": [
+   "everyday"
+  ],
+  "cluster": [
+   "it"
+  ],
+  "code_review": [
+   "it"
+  ],
+  "colleague": [
+   "everyday"
+  ],
+  "column": [
+   "it"
+  ],
+  "commissioning": [
+   "manufacturing"
+  ],
+  "commit": [
+   "it"
+  ],
+  "compiler": [
+   "it"
+  ],
+  "complaint": [
+   "everyday"
+  ],
+  "configuration": [
+   "it"
+  ],
+  "confirmation": [
+   "everyday"
+  ],
+  "container": [
+   "it"
+  ],
+  "contract": [
+   "everyday"
+  ],
+  "contract_term": [
+   "everyday"
+  ],
+  "conveyor": [
+   "manufacturing"
+  ],
+  "cookie": [
+   "it"
+  ],
+  "core_hours": [
+   "everyday"
+  ],
+  "cost_centre": [
+   "everyday"
+  ],
+  "cpu": [
+   "it"
+  ],
+  "credit_note": [
+   "everyday"
+  ],
+  "cronjob": [
+   "it"
+  ],
+  "currency": [
+   "everyday"
+  ],
+  "customer": [
+   "everyday"
+  ],
+  "cycle_time": [
+   "manufacturing"
+  ],
+  "daemon": [
+   "it"
+  ],
+  "dashboard": [
+   "it"
+  ],
+  "data_loss": [
+   "it"
+  ],
+  "data_quality": [
+   "it"
+  ],
+  "database": [
+   "it"
+  ],
+  "datenschutz": [
+   "it"
+  ],
+  "deadline": [
+   "everyday"
+  ],
+  "deadline_extension": [
+   "everyday"
+  ],
+  "debugger": [
+   "it"
+  ],
+  "decommission": [
+   "it"
+  ],
+  "definition_of_done": [
+   "it"
+  ],
+  "delay": [
+   "everyday"
+  ],
+  "delegation": [
+   "everyday"
+  ],
+  "delivery": [
+   "everyday"
+  ],
+  "delivery_note": [
+   "everyday"
+  ],
+  "denial_of_service": [
+   "it"
+  ],
+  "department": [
+   "everyday"
+  ],
+  "departure": [
+   "everyday"
+  ],
+  "dependency": [
+   "it"
+  ],
+  "deployment": [
+   "it"
+  ],
+  "desktop_pc": [
+   "it"
+  ],
+  "discount": [
+   "everyday"
+  ],
+  "distribution_list": [
+   "it"
+  ],
+  "dns": [
+   "it"
+  ],
+  "dockingstation": [
+   "it"
+  ],
+  "documentation": [
+   "it"
+  ],
+  "downtime": [
+   "manufacturing"
+  ],
+  "draft": [
+   "everyday"
+  ],
+  "dunning": [
+   "everyday"
+  ],
+  "editor": [
+   "it"
+  ],
+  "einwilligung": [
+   "it"
+  ],
+  "email": [
+   "everyday"
+  ],
+  "employee": [
+   "everyday"
+  ],
+  "encryption": [
+   "it"
+  ],
+  "epic": [
+   "it"
+  ],
+  "error_code": [
+   "manufacturing"
+  ],
+  "error_message": [
+   "it"
+  ],
+  "escalate_request": [
+   "everyday"
+  ],
+  "escalation": [
+   "it"
+  ],
+  "escalation_contact": [
+   "everyday"
+  ],
+  "estimation": [
+   "it"
+  ],
+  "expense": [
+   "everyday"
+  ],
+  "expiry": [
+   "it"
+  ],
+  "exploit": [
+   "it"
+  ],
+  "export": [
+   "it"
+  ],
+  "failure": [
+   "manufacturing"
+  ],
+  "failure_cause": [
+   "manufacturing"
+  ],
+  "feedback": [
+   "everyday"
+  ],
+  "festplatte": [
+   "it"
+  ],
+  "fileshare": [
+   "it"
+  ],
+  "firewall": [
+   "it"
+  ],
+  "firewall_rule": [
+   "it"
+  ],
+  "flexitime": [
+   "everyday"
+  ],
+  "flow_rate": [
+   "manufacturing"
+  ],
+  "follow_up": [
+   "everyday"
+  ],
+  "foreign_key": [
+   "it"
+  ],
+  "form": [
+   "everyday"
+  ],
+  "forward": [
+   "everyday"
+  ],
+  "framework": [
+   "it"
+  ],
+  "fuse": [
+   "manufacturing"
+  ],
+  "gateway": [
+   "it"
+  ],
+  "gear": [
+   "manufacturing"
+  ],
+  "goal": [
+   "everyday"
+  ],
+  "grafikkarte": [
+   "it"
+  ],
+  "group_policy": [
+   "it"
+  ],
+  "guideline": [
+   "everyday"
+  ],
+  "handover": [
+   "everyday"
+  ],
+  "headset": [
+   "it"
+  ],
+  "helpdesk": [
+   "it"
+  ],
+  "hydraulic": [
+   "manufacturing"
+  ],
+  "identity": [
+   "it"
+  ],
+  "image_ops": [
+   "it"
+  ],
+  "impact": [
+   "everyday"
+  ],
+  "import": [
+   "it"
+  ],
+  "index": [
+   "it"
+  ],
+  "inquiry_status": [
+   "everyday"
+  ],
+  "inspection": [
+   "manufacturing"
+  ],
+  "install": [
+   "it"
+  ],
+  "instruction": [
+   "everyday"
+  ],
+  "integration_test": [
+   "it"
+  ],
+  "interface": [
+   "it"
+  ],
+  "invoice": [
+   "everyday"
+  ],
+  "ip_address": [
+   "it"
+  ],
+  "issue_ticket": [
+   "it"
+  ],
+  "job_application": [
+   "everyday"
+  ],
+  "join": [
+   "it"
+  ],
+  "keyboard": [
+   "it"
+  ],
+  "laptop": [
+   "it"
+  ],
+  "letter": [
+   "everyday"
+  ],
+  "library": [
+   "it"
+  ],
+  "lizenz": [
+   "it"
+  ],
+  "lizenzablauf": [
+   "it"
+  ],
+  "load_balancer": [
+   "it"
+  ],
+  "loeschung": [
+   "it"
+  ],
+  "log_file": [
+   "it"
+  ],
+  "login": [
+   "it"
+  ],
+  "lubrication": [
+   "manufacturing"
+  ],
+  "mailbox": [
+   "it"
+  ],
+  "mailbox_full": [
+   "everyday"
+  ],
+  "mainboard": [
+   "it"
+  ],
+  "maintenance": [
+   "manufacturing"
+  ],
+  "maintenance_plan": [
+   "it"
+  ],
+  "malware": [
+   "it"
+  ],
+  "measurement": [
+   "manufacturing"
+  ],
+  "meeting_notes": [
+   "everyday"
+  ],
+  "memo": [
+   "everyday"
+  ],
+  "memory": [
+   "it"
+  ],
+  "metric": [
+   "it"
+  ],
+  "migration": [
+   "it"
+  ],
+  "milestone": [
+   "it"
+  ],
+  "modem": [
+   "it"
+  ],
+  "monitor": [
+   "it"
+  ],
+  "monitoring": [
+   "it"
+  ],
+  "motor": [
+   "manufacturing"
+  ],
+  "mouse": [
+   "it"
+  ],
+  "network": [
+   "it"
+  ],
+  "netzteil": [
+   "it"
+  ],
+  "netzwerkverteiler": [
+   "it"
+  ],
+  "new_hire": [
+   "everyday"
+  ],
+  "node": [
+   "it"
+  ],
+  "notice_period": [
+   "everyday"
+  ],
+  "nut": [
+   "manufacturing"
+  ],
+  "on_call": [
+   "it"
+  ],
+  "onboarding": [
+   "everyday"
+  ],
+  "one_on_one": [
+   "everyday"
+  ],
+  "operating_system": [
+   "it"
+  ],
+  "order": [
+   "everyday"
+  ],
+  "org_unit": [
+   "everyday"
+  ],
+  "out_of_office": [
+   "it"
+  ],
+  "outage": [
+   "it"
+  ],
+  "output": [
+   "manufacturing"
+  ],
+  "overtime": [
+   "everyday"
+  ],
+  "package": [
+   "it"
+  ],
+  "parental_leave": [
+   "everyday"
+  ],
+  "password": [
+   "it"
+  ],
+  "payload": [
+   "it"
+  ],
+  "payment": [
+   "everyday"
+  ],
+  "penetration_test": [
+   "it"
+  ],
+  "performance": [
+   "it"
+  ],
+  "phishing": [
+   "it"
+  ],
+  "pipeline": [
+   "it"
+  ],
+  "pneumatic": [
+   "manufacturing"
+  ],
+  "postmortem": [
+   "it"
+  ],
+  "power_of_attorney": [
+   "everyday"
+  ],
+  "pressure": [
+   "manufacturing"
+  ],
+  "primary_key": [
+   "it"
+  ],
+  "printer": [
+   "it"
+  ],
+  "priority_change": [
+   "everyday"
+  ],
+  "privilege_escalation": [
+   "it"
+  ],
+  "problem": [
+   "everyday"
+  ],
+  "procedure_step": [
+   "everyday"
+  ],
+  "process": [
+   "manufacturing"
+  ],
+  "provisioning": [
+   "it"
+  ],
+  "proxy": [
+   "it"
+  ],
+  "pseudonymisierung": [
+   "it"
+  ],
+  "public_holiday": [
+   "everyday"
+  ],
+  "pull_request": [
+   "it"
+  ],
+  "pump": [
+   "manufacturing"
+  ],
+  "purchase_order": [
+   "everyday"
+  ],
+  "purchase_request": [
+   "everyday"
+  ],
+  "qualification": [
+   "everyday"
+  ],
+  "quality": [
+   "manufacturing"
+  ],
+  "query": [
+   "it"
+  ],
+  "question": [
+   "everyday"
+  ],
+  "quotation": [
+   "everyday"
+  ],
+  "ransomware": [
+   "it"
+  ],
+  "rate_limit": [
+   "it"
+  ],
+  "receipt": [
+   "everyday"
+  ],
+  "recipient": [
+   "everyday"
+  ],
+  "record": [
+   "everyday"
+  ],
+  "recurrence": [
+   "everyday"
+  ],
+  "refactoring": [
+   "it"
+  ],
+  "refund": [
+   "everyday"
+  ],
+  "rejection": [
+   "everyday"
+  ],
+  "relay": [
+   "manufacturing"
+  ],
+  "reminder": [
+   "everyday"
+  ],
+  "reminder_mail": [
+   "everyday"
+  ],
+  "remittance": [
+   "everyday"
+  ],
+  "remote_access": [
+   "it"
+  ],
+  "reopened": [
+   "everyday"
+  ],
+  "replication": [
+   "it"
+  ],
+  "reply": [
+   "everyday"
+  ],
+  "report": [
+   "everyday"
+  ],
+  "repository": [
+   "it"
+  ],
+  "request": [
+   "everyday"
+  ],
+  "resolution_time": [
+   "everyday"
+  ],
+  "resolved": [
+   "everyday"
+  ],
+  "response": [
+   "it"
+  ],
+  "response_time": [
+   "everyday"
+  ],
+  "responsibility": [
+   "everyday"
+  ],
+  "restore": [
+   "it"
+  ],
+  "retention": [
+   "everyday"
+  ],
+  "retrospective": [
+   "it"
+  ],
+  "return_goods": [
+   "everyday"
+  ],
+  "roadmap": [
+   "it"
+  ],
+  "role": [
+   "everyday"
+  ],
+  "rollback": [
+   "it"
+  ],
+  "root_cause": [
+   "it"
+  ],
+  "root_fix": [
+   "everyday"
+  ],
+  "router": [
+   "it"
+  ],
+  "row": [
+   "it"
+  ],
+  "runbook": [
+   "it"
+  ],
+  "safety_guard": [
+   "manufacturing"
+  ],
+  "salary": [
+   "everyday"
+  ],
+  "salutation": [
+   "everyday"
+  ],
+  "satisfaction": [
+   "everyday"
+  ],
+  "scanner": [
+   "it"
+  ],
+  "schema": [
+   "it"
+  ],
+  "scrap": [
+   "manufacturing"
+  ],
+  "screw": [
+   "manufacturing"
+  ],
+  "seal": [
+   "manufacturing"
+  ],
+  "security_incident": [
+   "it"
+  ],
+  "sender": [
+   "everyday"
+  ],
+  "sensor": [
+   "manufacturing"
+  ],
+  "server": [
+   "it"
+  ],
+  "service": [
+   "it"
+  ],
+  "service_level": [
+   "it"
+  ],
+  "session": [
+   "it"
+  ],
+  "severity": [
+   "everyday"
+  ],
+  "shift": [
+   "manufacturing"
+  ],
+  "shift_swap": [
+   "everyday"
+  ],
+  "sick_leave": [
+   "everyday"
+  ],
+  "signature": [
+   "everyday"
+  ],
+  "signature_legal": [
+   "everyday"
+  ],
+  "single_sign_on": [
+   "it"
+  ],
+  "smartphone": [
+   "it"
+  ],
+  "software_inventory": [
+   "it"
+  ],
+  "source_code": [
+   "it"
+  ],
+  "spam_filter": [
+   "everyday"
+  ],
+  "spare_part": [
+   "manufacturing"
+  ],
+  "specification": [
+   "it"
+  ],
+  "sprint": [
+   "it"
+  ],
+  "spyware": [
+   "it"
+  ],
+  "ssd": [
+   "it"
+  ],
+  "standup": [
+   "it"
+  ],
+  "status_code": [
+   "it"
+  ],
+  "status_update": [
+   "everyday"
+  ],
+  "storage": [
+   "it"
+  ],
+  "subject_line": [
+   "everyday"
+  ],
+  "subnet": [
+   "it"
+  ],
+  "supervisor": [
+   "everyday"
+  ],
+  "supplier": [
+   "everyday"
+  ],
+  "switch": [
+   "manufacturing"
+  ],
+  "table": [
+   "it"
+  ],
+  "tablet": [
+   "it"
+  ],
+  "tax": [
+   "everyday"
+  ],
+  "team_lead": [
+   "everyday"
+  ],
+  "team_meeting": [
+   "everyday"
+  ],
+  "temperature": [
+   "manufacturing"
+  ],
+  "temporary_staff": [
+   "everyday"
+  ],
+  "test_suite": [
+   "it"
+  ],
+  "threshold": [
+   "it"
+  ],
+  "ticket_queue": [
+   "it"
+  ],
+  "time_off_request": [
+   "everyday"
+  ],
+  "timeout": [
+   "it"
+  ],
+  "timesheet": [
+   "everyday"
+  ],
+  "token": [
+   "it"
+  ],
+  "tolerance": [
+   "manufacturing"
+  ],
+  "torque": [
+   "manufacturing"
+  ],
+  "training": [
+   "everyday"
+  ],
+  "trend": [
+   "it"
+  ],
+  "two_factor": [
+   "it"
+  ],
+  "uninstall": [
+   "it"
+  ],
+  "unit_test": [
+   "it"
+  ],
+  "update": [
+   "it"
+  ],
+  "uptime": [
+   "it"
+  ],
+  "urgent": [
+   "everyday"
+  ],
+  "usb": [
+   "it"
+  ],
+  "user_account": [
+   "it"
+  ],
+  "user_story": [
+   "it"
+  ],
+  "vacation": [
+   "everyday"
+  ],
+  "valve": [
+   "manufacturing"
+  ],
+  "version": [
+   "it"
+  ],
+  "version_control": [
+   "it"
+  ],
+  "view": [
+   "it"
+  ],
+  "voltage": [
+   "manufacturing"
+  ],
+  "vpn": [
+   "it"
+  ],
+  "vulnerability": [
+   "it"
+  ],
+  "waiting_customer": [
+   "everyday"
+  ],
+  "waiting_third_party": [
+   "everyday"
+  ],
+  "warehouse": [
+   "manufacturing"
+  ],
+  "warranty": [
+   "everyday"
+  ],
+  "wear": [
+   "manufacturing"
+  ],
+  "webcam": [
+   "it"
+  ],
+  "webhook": [
+   "it"
+  ],
+  "withdrawal": [
+   "everyday"
+  ],
+  "workaround": [
+   "everyday"
+  ],
+  "working_hours": [
+   "everyday"
+  ],
+  "workload": [
+   "everyday"
+  ],
+  "works_agreement": [
+   "everyday"
+  ]
  },
- "description": "Which curated concept belongs to which domain. Domains are free metadata tags, not a validation axis.",
+ "description": "Domain of each curated concept. Domains are free metadata tags: they take no part in validation or merging.",
  "glossary_source": {
   "license": "MIT",
   "source": "klix curated (hand-written)"
- }
+ },
+ "schema_version": 1
 }

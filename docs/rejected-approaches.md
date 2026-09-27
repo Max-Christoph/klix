@@ -83,9 +83,13 @@ truth (sense-based, `evals/glossary_error_rate.py`):
 | Domain | wrong mappings | coverage of curated terms |
 |---|---|---|
 | manufacturing | 3.5 % | 48 % |
-| IT | 8.3 % | 26 % |
-| everyday | 10.0 % | 38 % |
-| overall | **6.6 %** | 39 % |
+| IT | 11.6 % | 19 % |
+| everyday | 9.4 % | 22 % |
+| overall | **8.4 %** | 25 % |
+
+(Denominator: 768 curated German terms. Earlier figures — 8.3 % / 10.0 % /
+6.6 % overall — were measured against a 310-term list before the curated
+glossary grew from 124 to 362 concepts; see `DATA_SOURCES.md`.)
 
 The cause is structural, not a query bug (`evals/wikidata_sense_audit.py`,
 `evals/glossary_sense_check.py`):

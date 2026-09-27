@@ -176,8 +176,8 @@ IT: dict[str, dict[str, list[str]]] = {
                       "en": ["configuration", "setting", "parameter"]},
     "monitoring": {"de": ["ueberwachung", "monitoring"],
                    "en": ["monitoring", "supervision"]},
-    "storage": {"de": ["speicher", "festplatte", "speicherplatz"],
-                "en": ["storage", "disk", "disk space"]},
+    "storage": {"de": ["speicher", "speicherplatz"],
+                "en": ["storage", "disk space"]},
     "memory": {"de": ["arbeitsspeicher", "hauptspeicher"],
                "en": ["memory", "ram"]},
     "cpu": {"de": ["prozessor", "rechnerleistung"],
@@ -185,7 +185,7 @@ IT: dict[str, dict[str, list[str]]] = {
     "application": {"de": ["anwendung", "applikation", "programm"],
                     "en": ["application", "app", "program"]},
     "service": {"de": ["dienst", "webdienst"],
-                "en": ["service", "daemon", "web service"]},
+                "en": ["service", "web service"]},
     "firewall": {"de": ["firewall", "paketfilter"],
                  "en": ["firewall", "packet filter"]},
     "encryption": {"de": ["verschluesselung", "kryptografie"],
@@ -211,7 +211,7 @@ IT: dict[str, dict[str, list[str]]] = {
     "bug_report": {"de": ["fehlerbericht", "fehlerbeschreibung"],
                    "en": ["bug report", "defect description"]},
     "version": {"de": ["version", "versionsstand"],
-                "en": ["version", "build", "release"]},
+                "en": ["version"]},
     "rollback": {"de": ["zuruecksetzen", "rueckabwicklung"],
                  "en": ["rollback", "revert"]},
     "maintenance_plan": {"de": ["wartungsplan", "wartungsplanung"],
@@ -284,7 +284,7 @@ EVERYDAY: dict[str, dict[str, list[str]]] = {
     "change_request": {"de": ["aenderung", "aenderungsantrag", "anpassung"],
                        "en": ["change", "change request", "modification"]},
     "training": {"de": ["schulung", "weiterbildung", "unterweisung"],
-                 "en": ["training", "course", "instruction"]},
+                 "en": ["training", "course"]},
     "onboarding": {"de": ["einarbeitung", "einstieg", "einarbeitungsplan"],
                    "en": ["onboarding", "induction"]},
     # HR sense of 'certificate'; the TLS sense is IT/certificate ('zertifikat').
@@ -321,8 +321,20 @@ DOMAINS = {"manufacturing": MANUFACTURING, "it": IT, "everyday": EVERYDAY}
 
 
 def all_domains() -> dict[str, dict[str, dict[str, list[str]]]]:
-    """{domain: mapping} — the three curated domains, kept separate."""
-    return DOMAINS
+    """{domain: mapping} — the curated domains, kept separate.
+
+    The IT and everyday layers were extended in a second module
+    (`curated_glossary_ext`) to add volume where measured coverage was weakest;
+    both halves are unioned into the same domain here, so nothing downstream
+    needs to know the content arrived in two passes.
+    """
+    from curated_glossary_ext import EVERYDAY2, IT2
+
+    return {
+        "manufacturing": MANUFACTURING,           # complete; deliberately not grown
+        "it": {**IT, **IT2},
+        "everyday": {**EVERYDAY, **EVERYDAY2},
+    }
 
 
 def merge_sources(*sources, strict: bool = True) -> dict[str, dict[str, list[str]]]:
@@ -383,20 +395,26 @@ def merged(*sources, strict: bool = True) -> dict[str, dict[str, list[str]]]:
     `merge_sources`, so adding a domain is adding an entry to `DOMAINS` (or
     calling `merge_sources` yourself) and nothing else.
 
+    Note it reads `all_domains()`, not the module-level `DOMAINS` constant: the
+    IT and everyday layers were extended in a second module, and going through
+    `all_domains()` means this function needs no change when content is added
+    in a further pass. Reading the constant directly would silently miss the
+    extension — which is exactly what happened on the first run of this build.
+
     Raises on a cross-source term collision rather than silently overriding:
     a flat index can only resolve a word to one concept, so a duplicate is an
     ambiguous mapping. No concept is ever renamed — the name-prefixed key is only
     used for a genuinely NEW concept that happens to share a key.
     """
-    return merge_sources(*DOMAINS.items(), strict=strict)
+    return merge_sources(*all_domains().items(), strict=strict)
 
 
 def tags() -> dict[str, list[str]]:
     """concept -> [domain tag]. Free metadata; carries no validation meaning."""
-    return {concept: [domain] for domain, mapping in DOMAINS.items()
+    return {concept: [domain] for domain, mapping in all_domains().items()
             for concept in mapping}
 
 
 def counts() -> dict[str, int]:
-    return {d: len(m) for d, m in DOMAINS.items()}
+    return {d: len(m) for d, m in all_domains().items()}
 

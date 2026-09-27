@@ -296,7 +296,9 @@ class TestDomainPacks:
         full = curated().mapping
         parts = (curated_manufacturing().mapping, curated_it().mapping,
                  curated_everyday().mapping)
-        assert sum(len(p) for p in parts) == len(full) == 124
+        # 362 after the IT/everyday expansion (was 124); range guarded in
+        # tests/test_curated_expansion.py, exact split asserted here.
+        assert sum(len(p) for p in parts) == len(full) == 362
         # the three domains are disjoint and together cover the curated file
         keys = [k for p in parts for k in p]
         assert len(keys) == len(set(keys))
@@ -304,7 +306,7 @@ class TestDomainPacks:
     def test_broad_pack_is_opt_in_and_separate(self):
         from klix.glossaries import broad, curated
         assert len(broad().mapping) > 1000      # the generated vocabulary
-        assert len(curated().mapping) == 124    # the default
+        assert 300 <= len(curated().mapping) <= 500   # the default (target range)
 
     def test_workflow_pack_covers_routing_terms(self):
         g = workflow_glossary()

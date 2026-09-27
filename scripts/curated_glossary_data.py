@@ -325,33 +325,78 @@ def all_domains() -> dict[str, dict[str, dict[str, list[str]]]]:
     return DOMAINS
 
 
-def merged() -> dict[str, dict[str, list[str]]]:
-    """All three domains as ONE mapping (klix uses a single flat index).
+def merge_sources(*sources, strict: bool = True) -> dict[str, dict[str, list[str]]]:
+    """Merges ANY number of named term sources into one concept map.
 
-    Raises on a cross-domain term collision rather than silently overriding:
-    a flat index can only resolve a word to one concept, so a duplicate is an
-    ambiguous mapping, not a merge detail.
+    This is the generic form of the old `merged()`: it takes
+    ``(name, mapping)`` pairs rather than reading a module-level `DOMAINS`
+    constant, so a fourth, fifth, or externally supplied glossary goes through
+    exactly the same path as the three built-ins. There is no notion of a
+    "domain" here — `name` is only used to disambiguate a concept key and to
+    label the error message. Domain-ness lives in the `tags` metadata.
+
+    Parameters
+    ----------
+    *sources:
+        ``(name, mapping)`` pairs, in priority order.
+    strict:
+        When True (default) a term appearing under two concepts raises
+        `ValueError`. This is the same single conflict rule the engine applies
+        (`Glossary.conflicts`); keeping it identical here means a build cannot
+        ship something the engine would refuse to merge later.
+
+    Language buckets are created on demand — a concept with only `{"fr": [...]}`
+    is carried through as-is instead of gaining empty `de`/`en` lists.
     """
     out: dict[str, dict[str, list[str]]] = {}
     owner: dict[str, tuple[str, str]] = {}
-    for domain, mapping in DOMAINS.items():
+    for name, mapping in sources:
         for concept, langs in mapping.items():
-            key = concept if concept not in out else f"{domain}_{concept}"
-            bucket = out.setdefault(key, {"de": [], "en": []})
+            if not isinstance(langs, dict):
+                raise ValueError(f"{name}/{concept}: expected a language map")
+            key = concept if concept not in out else f"{name}_{concept}"
+            bucket = out.setdefault(key, {})
             for lang, terms in langs.items():
+                if lang == "tags":            # metadata, not a language
+                    continue
+                own = bucket.setdefault(lang, [])
                 for term in terms:
                     low = term.lower()
                     prev = owner.get(low)
-                    if prev is not None and prev != (domain, concept):
+                    if prev is not None and prev != (name, concept):
                         raise ValueError(
-                            f"term {term!r} appears in {domain}/{concept} and "
-                            f"already belongs to {prev[0]}/{prev[1]} — the klix "
-                            f"index is flat (one word -> one concept)"
+                            f"term {term!r} appears in {name}/{concept} and already "
+                            f"belongs to {prev[0]}/{prev[1]} — the klix index is flat "
+                            f"(one word -> one concept), so this is an ambiguous "
+                            f"mapping, not a merge detail"
                         )
-                    owner[low] = (domain, concept)
-                    bucket.setdefault(lang, []).append(low)
+                    owner[low] = (name, concept)
+                    if low not in own:
+                        own.append(low)
     return out
+
+
+def merged(*sources, strict: bool = True) -> dict[str, dict[str, list[str]]]:
+    """All curated domains as ONE mapping (klix uses a single flat index).
+
+    Kept as the zero-argument entry point for the built-in set; it delegates to
+    `merge_sources`, so adding a domain is adding an entry to `DOMAINS` (or
+    calling `merge_sources` yourself) and nothing else.
+
+    Raises on a cross-source term collision rather than silently overriding:
+    a flat index can only resolve a word to one concept, so a duplicate is an
+    ambiguous mapping. No concept is ever renamed — the name-prefixed key is only
+    used for a genuinely NEW concept that happens to share a key.
+    """
+    return merge_sources(*DOMAINS.items(), strict=strict)
+
+
+def tags() -> dict[str, list[str]]:
+    """concept -> [domain tag]. Free metadata; carries no validation meaning."""
+    return {concept: [domain] for domain, mapping in DOMAINS.items()
+            for concept in mapping}
 
 
 def counts() -> dict[str, int]:
     return {d: len(m) for d, m in DOMAINS.items()}
+

@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Max-Christoph/klix/data/glossary.schema.json",
+  "title": "klix glossary document",
+  "description": "A klix glossary: concepts mapped to per-language term lists. This document format is stable and hand-writable — you do not need klix's build pipeline to author one. Both the versioned document (with schema_version/concepts) and the bare concept map are accepted by klix; the versioned form is preferred for anything you intend to distribute, because it carries provenance.",
+  "oneOf": [
+    {"$ref": "#/$defs/versioned_document"},
+    {"$ref": "#/$defs/bare_map"}
+  ],
+  "$defs": {
+    "bare_map": {
+      "title": "Bare concept map (legacy)",
+      "description": "The original shape: every top-level key is a concept. No version, no provenance. Still accepted; use the versioned document for anything shared.",
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {
+        "description": "Document-level keys are not concept names — their presence would make this a versioned document, so the two branches stay disjoint.",
+        "not": {"enum": ["schema_version", "concepts", "source", "license", "description", "glossary_source", "glossary_license"]}
+      },
+      "additionalProperties": {"$ref": "#/$defs/concept"}
+    },
+
+    "versioned_document": {
+      "title": "Versioned glossary document",
+      "type": "object",
+      "required": ["schema_version", "concepts"],
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "description": "Format version. klix refuses a document whose version is NEWER than the build understands, instead of parsing it optimistically. Current version: 1.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1
+        },
+        "concepts": {
+          "description": "The vocabulary. Concept key -> per-language terms.",
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {
+            "not": {"enum": ["tags"]},
+            "pattern": "^[^\\s]+$"
+          },
+          "additionalProperties": {"$ref": "#/$defs/concept"}
+        },
+        "description": {
+          "description": "Optional human-readable summary of what this glossary covers.",
+          "type": "string"
+        },
+        "source": {
+          "description": "Where this glossary came from. PROVENANCE IS PER GLOSSARY, never per concept — one record covers the whole file, so it stays a single entry no matter how many concepts the glossary holds.",
+          "type": "string"
+        },
+        "license": {
+          "description": "Licence of THIS glossary. Must be compatible with the project you bundle it into — a share-alike or copyleft source cannot be merged into an MIT package. Recorded verbatim; klix does not interpret it.",
+          "type": "string"
+        },
+        "glossary_source": {
+          "description": "Alternative spelling of `source`, accepted so a machine-generated header can group the two provenance fields together.",
+          "oneOf": [
+            {"type": "string"},
+            {
+              "type": "object",
+              "properties": {
+                "source": {"type": "string"},
+                "license": {"type": "string"}
+              },
+              "additionalProperties": false
+            }
+          ]
+        },
+        "glossary_license": {
+          "description": "Alternative spelling of `license`.",
+          "type": "string"
+        }
+      }
+    },
+
+    "concept": {
+      "title": "One concept and its terms",
+      "description": "A language map plus optional metadata tags. Every key other than `tags` is an ISO-639-1 language code; any number of languages is allowed and there is no fixed pair — a concept may have one language or ten.",
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {
+        "pattern": "^([a-z]{2,3}|[a-z]{2}-[A-Z]{2}|tags)$"
+      },
+      "additionalProperties": {
+        "description": "A term list, or the reserved `tags` list. anyOf rather than oneOf: both are lists of strings and the loader separates them by key name, so requiring exactly one match would make every valid document fail.",
+        "anyOf": [
+          {"$ref": "#/$defs/term_list"},
+          {"$ref": "#/$defs/tags"}
+        ]
+      }
+    },
+
+    "term_list": {
+      "title": "Terms in one language",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "description": "One term. No duplicates within a concept — a term maps to exactly one concept across the WHOLE glossary (klix's index is flat), so the same word under two concepts is refused, not merged."
+      }
+    },
+
+    "tags": {
+      "title": "Free metadata tags",
+      "description": "Optional, free-form labels such as ['manufacturing'] or ['workplace','hr']. Tags are METADATA ONLY: they do not take part in validation and there is no 'domain' concept in the engine. They exist so a caller can filter (e.g. 'give me every concept tagged it') without that filtering affecting merge or conflict rules.",
+      "type": "array",
+      "items": {"type": "string", "minLength": 1},
+      "uniqueItems": true
+    }
+  }
+}

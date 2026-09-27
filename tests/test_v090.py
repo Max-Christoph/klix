@@ -322,14 +322,38 @@ class TestDomainPacks:
         a.mapping["conveyor"]["de"].append("mutated")
         assert "mutated" not in manufacturing_glossary().mapping["conveyor"]["de"]
 
-    def test_merge_all_unions(self):
-        merged = merge_all(manufacturing_glossary(), workflow_glossary())
-        assert "conveyor" in merged.mapping and "urgent" in merged.mapping
+    def test_merge_all_unions_disjoint_packs(self):
+        merged = merge_all(manufacturing_glossary(), empty_glossary())
+        assert "conveyor" in merged.mapping
+
+    def test_merge_all_refuses_overlapping_packs(self):
+        """manufacturing() and workflow() genuinely overlap -> refused.
+
+        `manufacturing()` is now the curated manufacturing layer and `workflow()`
+        is the legacy generic pack; they disagree on 7 terms (`freigabe` ->
+        approval vs review, `pruefung` -> inspection vs review, `stoerung` ->
+        failure vs error, plus their English sides). One term can only resolve to
+        one concept, so merging them silently picks a winner — which is exactly
+        what the strict rule exists to prevent.
+        """
+        from klix import GlossaryConflict
+        with pytest.raises(GlossaryConflict):
+            merge_all(manufacturing_glossary(), workflow_glossary())
+        # the escape hatch still works when the caller decides
+        loose = merge_all(manufacturing_glossary(), workflow_glossary(),
+                          strict=False)
+        assert "conveyor" in loose.mapping and "urgent" in loose.mapping
 
     def test_merge_all_is_deterministic(self):
-        a = merge_all(manufacturing_glossary(), workflow_glossary()).mapping
-        b = merge_all(manufacturing_glossary(), workflow_glossary()).mapping
+        args = (manufacturing_glossary(), empty_glossary())
+        a = merge_all(*args).mapping
+        b = merge_all(*args).mapping
         assert a == b
+
+    def test_merge_all_on_curated_is_clean(self):
+        from klix.glossaries import curated
+        merged = merge_all(curated(), empty_glossary())
+        assert merged.conflicts() == []
 
     def test_engine_accepts_workflow_pack(self):
         eng = DecisionEngine(glossary=workflow_glossary())
@@ -433,8 +457,8 @@ class TestSchemaHashStability:
 
     def test_stable_across_recompiles_all_packs(self):
         for pack in (None, empty_glossary(), manufacturing_glossary(),
-                     workflow_glossary(), merge_all(manufacturing_glossary(),
-                                                    workflow_glossary())):
+                     workflow_glossary(),
+                     merge_all(manufacturing_glossary(), empty_glossary())):
             eng = DecisionEngine(glossary=pack)
             eng.add_head(Choice(name="r", options=OPT))
             eng.compile()

@@ -35,6 +35,9 @@ Issues = "https://github.com/Max-Christoph/klix/issues"
 [dependency-groups]
 dev = [
     "pytest>=8.0",
+    # Schemas are validated against the real JSON-Schema file in the test suite.
+    # Test-only: the runtime package still imports nothing beyond its three deps.
+    "jsonschema>=4.0",
 ]
 
 [build-system]
@@ -52,6 +55,9 @@ artifacts = [
     # Curated tri-domain glossary (124 concepts, original work, MIT) + domain map.
     "src/klix/data/curated_glossary.json",
     "src/klix/data/curated_domains.json",
+    # The documented format (JSON Schema), shipped so a user can author/validate
+    # their own glossary without reading klix's source.
+    "src/klix/data/glossary.schema.json",
     # Opt-in broad vocabulary (CC0/Wikidata) with its build provenance.
     "src/klix/data/default_glossary.json",
     "src/klix/data/build_meta.json",

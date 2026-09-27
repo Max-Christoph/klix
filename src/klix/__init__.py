@@ -1,7 +1,9 @@
 """Klix: decoupled decision heads (Choice, Score, Flag) on a shared semantic backbone."""
 
 from klix.engine import DecisionEngine, DecisionResult
-from klix.glossary import Glossary, load_glossary, resolve_glossary
+from klix.glossary import (SCHEMA_VERSION, Glossary, GlossaryConflict,
+                           GlossaryRegistry, load_glossary, resolve_glossary)
+from klix.glossaries import curated_where as curated_where_glossary
 from klix.glossaries import merge_all
 from klix.glossaries import broad as broad_glossary
 from klix.glossaries import curated as curated_glossary
@@ -27,6 +29,9 @@ __all__ = [
     "Flag",
     "Rule",
     "Glossary",
+    "GlossaryConflict",
+    "GlossaryRegistry",
+    "SCHEMA_VERSION",
     "load_glossary",
     "resolve_glossary",
     # Domain packs (klix.glossaries)
@@ -35,6 +40,7 @@ __all__ = [
     "curated_manufacturing_glossary",
     "curated_it_glossary",
     "curated_everyday_glossary",
+    "curated_where_glossary",
     "broad_glossary",
     "manufacturing_glossary",
     "workflow_glossary",

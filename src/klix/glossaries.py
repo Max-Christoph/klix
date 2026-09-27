@@ -50,9 +50,10 @@ from pathlib import Path
 
 from klix.glossary import DEFAULT_GLOSSARY, Glossary
 
-__all__ = ["empty", "curated", "curated_manufacturing", "curated_it",
-           "curated_everyday", "broad", "manufacturing", "workflow", "merge_all",
-           "MANUFACTURING", "WORKFLOW", "CURATED_PATH"]
+__all__ = ["empty", "curated", "curated_where", "curated_manufacturing",
+           "curated_it", "curated_everyday", "broad", "manufacturing", "workflow",
+           "merge_all", "MANUFACTURING", "WORKFLOW", "CURATED_PATH",
+           "CURATED_PROVENANCE", "BROAD_PROVENANCE"]
 
 # The curated tri-domain glossary (124 concepts, original work, MIT).
 CURATED_PATH = Path(__file__).with_name("data") / "curated_glossary.json"
@@ -220,8 +221,27 @@ def empty() -> Glossary:
     return Glossary({})
 
 
+# Provenance is recorded PER GLOSSARY, never per concept (decision of the
+# format design): one record covers the whole file regardless of concept count.
+CURATED_PROVENANCE = {"source": "klix curated (hand-written)", "license": "MIT"}
+BROAD_PROVENANCE = {"source": "Wikidata (lexemes + curated item classes)",
+                    "license": "CC0-1.0"}
+
+
 def _load_curated() -> dict:
-    return json.loads(CURATED_PATH.read_text(encoding="utf-8"))
+    doc = json.loads(CURATED_PATH.read_text(encoding="utf-8"))
+    return doc.get("concepts", doc)
+
+
+def _load_curated_domains() -> dict:
+    """concept -> [tag], read from the versioned domains document.
+
+    Tags are free metadata: this mapping never takes part in validation, which is
+    why a fourth or fifth tag needs no code change here.
+    """
+    doc = json.loads(CURATED_DOMAINS_PATH.read_text(encoding="utf-8"))
+    concepts = doc.get("concepts", doc)
+    return {k: (v if isinstance(v, list) else [v]) for k, v in concepts.items()}
 
 
 def curated() -> Glossary:
@@ -231,14 +251,33 @@ def curated() -> Glossary:
     (`evals/curated_glossary_verify.py`). Every candidate source that could have
     supplied this automatically is copyleft or share-alike and incompatible with
     MIT — see `DATA_SOURCES.md`.
+
+    The returned glossary carries `.tags` (concept -> [domain]) and `.meta`
+    (provenance). Tags are metadata only: filtering by them does not affect
+    validation or merging.
     """
-    return Glossary(_load_curated())
+    g = Glossary(_load_curated())
+    g.tags = {k: list(v) for k, v in _load_curated_domains().items()}
+    g.meta = dict(CURATED_PROVENANCE)
+    return g
+
+
+def curated_where(tag: str) -> Glossary:
+    """Every curated concept carrying `tag` — a filter, not a special case.
+
+    Works for any tag string, including ones added later: there is no fixed list
+    of domains anywhere in the engine.
+    """
+    mapping = _load_curated()
+    g = Glossary({k: v for k, v in mapping.items()
+                  if tag in _load_curated_domains().get(k, [])})
+    g.tags = {k: v for k, v in _load_curated_domains().items() if tag in v}
+    g.meta = dict(CURATED_PROVENANCE)
+    return g
 
 
 def _curated_domain(name: str) -> Glossary:
-    mapping = _load_curated()
-    doms = json.loads(CURATED_DOMAINS_PATH.read_text(encoding="utf-8"))["domains"]
-    return Glossary({k: v for k, v in mapping.items() if doms.get(k) == name})
+    return curated_where(name)
 
 
 def curated_manufacturing() -> Glossary:
@@ -269,7 +308,9 @@ def broad() -> Glossary:
     try:
         from klix.glossary import load_glossary
 
-        return load_glossary(DEFAULT_GLOSSARY)
+        g = load_glossary(DEFAULT_GLOSSARY)
+        g.meta = dict(BROAD_PROVENANCE)
+        return g
     except FileNotFoundError:
         return curated()
 
@@ -291,14 +332,29 @@ def workflow() -> Glossary:
     return Glossary({k: {lg: list(t) for lg, t in v.items()} for k, v in WORKFLOW.items()})
 
 
-def merge_all(*glossaries: Glossary) -> Glossary:
-    """Union of several presets (deterministic; earlier presets win on conflicts).
+def merge_all(*glossaries: Glossary, strict: bool = True) -> Glossary:
+    """Union of several presets. Refuses ambiguous combinations by default.
 
-    ``merge_all(manufacturing(), workflow())`` is the usual composition: the
-    domain terms stay at full strength and the generic routing terms are added.
+    Deterministic (argument order). Delegates to `Glossary.merge`, so the single
+    conflict rule applies: the same term under two concepts is refused instead of
+    one silently shadowing the other.
+
+    Parameters
+    ----------
+    strict:
+        Default True. Note that ``merge_all(manufacturing(), workflow())`` — the
+        composition this helper was originally written for — now RAISES, because
+        those two sets genuinely overlap: ``freigabe`` is `approval` in the
+        curated layer and `review` in the legacy workflow pack, and the same
+        holds for `pruefung`, `stoerung`, `failure`, `fault`, `inspection` and
+        `approval`. There is no correct silent answer to that; pass
+        `strict=False` if you have decided the earlier argument should win.
+
+        Prefer `curated()`, which already contains the workflow vocabulary for
+        the terms that matter, so the overlap does not arise.
     """
     out = empty()
     for g in glossaries:
         if g is not None:
-            out = out.merge(g)
+            out = out.merge(g, strict=strict)
     return out

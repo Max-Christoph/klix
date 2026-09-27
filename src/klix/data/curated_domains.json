@@ -1,10 +1,5 @@
 {
- "counts": {
-  "everyday": 40,
-  "it": 40,
-  "manufacturing": 44
- },
- "domains": {
+ "concepts": {
   "access_rights": "it",
   "application": "it",
   "appointment": "everyday",
@@ -129,5 +124,10 @@
   "warehouse": "manufacturing",
   "warranty": "everyday",
   "wear": "manufacturing"
+ },
+ "description": "Which curated concept belongs to which domain. Domains are free metadata tags, not a validation axis.",
+ "glossary_source": {
+  "license": "MIT",
+  "source": "klix curated (hand-written)"
  }
 }

@@ -37,10 +37,13 @@ from pathlib import Path
 
 __all__ = [
     "Glossary",
+    "GlossaryConflict",
+    "GlossaryRegistry",
     "load_glossary",
     "resolve_glossary",
     "DEFAULT_GLOSSARY",
     "MANUFACTURING_GLOSSARY",
+    "SCHEMA_VERSION",
 ]
 
 # The bundled broad DE<->EN basic vocabulary (generated offline by
@@ -49,6 +52,23 @@ DEFAULT_GLOSSARY = Path(__file__).with_name("data") / "default_glossary.json"
 # The original 16-term production glossary (kept for backward compatibility;
 # `klix.glossaries.manufacturing()` returns the same content from code).
 MANUFACTURING_GLOSSARY = Path(__file__).with_name("glossary.json")
+
+#: Version of the glossary document format. Bump on any incompatible change to
+#: the document shape; `Glossary.load` accepts this version and older ones it
+#: can still read, and refuses unknown newer ones rather than guessing.
+#: See `docs/glossary-format.md` and `klix/data/glossary.schema.json`.
+SCHEMA_VERSION = 1
+
+
+class GlossaryConflict(ValueError):
+    """Raised when a glossary would contain an ambiguous mapping.
+
+    The klix index is flat (one term -> one concept). If the same surface term
+    is registered under two concepts, a lookup can only return one of them, so
+    the other silently becomes unreachable and a query is routed to the wrong
+    concept. This is the single, non-negotiable conflict level of the format —
+    it applies to every glossary, regardless of origin or tags.
+    """
 
 _TOKEN_RE = re.compile(r"(?u)\b[\w-]+\b")
 
@@ -149,6 +169,12 @@ class Glossary:
         # only structure derived from data the glossary ALREADY holds, so a lazy
         # lookup can build the rest without it. `None` means "not built yet".
         self._terms_by_concept: dict[str, list[tuple[str, str]]] | None = None
+        # Document metadata (schema_version, source, license, tags). Populated by
+        # `load` from a versioned document; provenance is PER GLOSSARY, never per
+        # concept, so this stays a flat dict no matter how large the glossary is.
+        self.meta: dict = {}
+        # concept -> free-form tags (metadata only; no role in validation)
+        self.tags: dict[str, list[str]] = {}
         if index:
             self._build_index()
 
@@ -477,12 +503,35 @@ class Glossary:
         return findings
 
     # -- composition -------------------------------------------------------
-    def merge(self, other: "Glossary") -> "Glossary":
+    def merge(self, other: "Glossary", strict: bool = True) -> "Glossary":
         """Returns a NEW glossary with `other`'s terms merged in (self wins).
 
         Term lists are unioned per language and concept; existing entries are
         extended rather than replaced, so a user glossary adds vocabulary on top
         of the built-in one instead of overwriting it. Deterministic.
+
+        Parameters
+        ----------
+        strict:
+            When True (the default) a **term collision** raises `GlossaryConflict`:
+            the same surface term registered under two different concepts. The
+            index is flat (one word -> one concept), so such a merge would
+            silently create an ambiguous mapping — the exact failure mode that
+            makes a glossary route a query to the wrong concept. Refusing is the
+            safe default; pass `strict=False` only when you have checked the
+            conflicts yourself and accept first-wins.
+
+        Notes
+        -----
+        * The check runs across ALL concepts and ALL languages of the merged
+          result, not just the terms being added, so conflicts that only appear
+          in combination are caught too.
+        * A term that merely coincides with another concept's canonical KEY is
+          not a conflict — keys are synthetic identifiers, and in a generated
+          vocabulary they routinely coincide with a synonym elsewhere (this was
+          287 false positives on the bundled file; see the note in `validate`).
+        * On conflict, NOTHING is renamed and nothing is dropped silently. The
+          caller decides: fix the term, or merge with `strict=False`.
         """
         if not isinstance(other, Glossary):
             raise TypeError(f"merge() expects a Glossary, got {type(other).__name__}")
@@ -497,8 +546,53 @@ class Glossary:
                 for term in terms:
                     if term not in existing:
                         existing.append(term)
-        return Glossary(merged, max_added=max(self.max_added, other.max_added),
-                        per_concept_topk=max(self.per_concept_topk, other.per_concept_topk))
+
+        out = Glossary(merged, max_added=max(self.max_added, other.max_added),
+                       per_concept_topk=max(self.per_concept_topk, other.per_concept_topk))
+        if strict:
+            conflicts = out.conflicts()
+            if conflicts:
+                lines = "\n".join(f"  - {f['message']}" for f in conflicts[:10])
+                more = "" if len(conflicts) <= 10 else f"\n  ... and {len(conflicts) - 10} more"
+                raise GlossaryConflict(
+                    f"merge would create {len(conflicts)} ambiguous mapping(s) — the klix "
+                    f"index is flat (one term -> one concept), so these would silently "
+                    f"route a query to the wrong concept:\n{lines}{more}\n"
+                    f"Fix the terms, or merge with strict=False to accept first-wins."
+                )
+        return out
+
+    def conflicts(self) -> list[dict]:
+        """Term collisions across concepts — the ONE conflict level of the format.
+
+        Returns the subset of `validate()` findings that represent a genuine
+        ambiguous mapping: the same surface term registered under two or more
+        different concepts, and a term listed twice inside one concept. Homograph
+        findings (same word, different languages, different concepts) are the
+        same condition seen from the language side and are included, because a
+        flat index cannot resolve them either.
+
+        This is the check `merge()` applies. It is deliberately independent of
+        any notion of "domain": domains are free metadata tags (see the JSON
+        schema), not a validation axis, so adding a fourth or fifth glossary
+        cannot fall through a special case.
+        """
+        kinds = {"circular", "duplicate", "homograph"}
+        return [f for f in self.validate() if f.get("kind") in kinds]
+
+    def assert_valid(self) -> None:
+        """Raises `GlossaryConflict` if the glossary has any term collision.
+
+        Convenience for loaders and user code: one call instead of inspecting
+        the `validate()` list.
+        """
+        conflicts = self.conflicts()
+        if conflicts:
+            lines = "\n".join(f"  - {f['message']}" for f in conflicts[:10])
+            more = "" if len(conflicts) <= 10 else f"\n  ... and {len(conflicts) - 10} more"
+            raise GlossaryConflict(
+                f"glossary has {len(conflicts)} ambiguous mapping(s):\n{lines}{more}"
+            )
 
     @classmethod
     def load(
@@ -511,6 +605,26 @@ class Glossary:
 
         Fail-loud: malformed input raises `ValueError` at load time rather than
         silently degrading routing later.
+
+        Accepts BOTH document shapes, so nothing breaks while the format gains a
+        version header:
+
+        * **legacy / bare** — a plain concept map::
+
+              {"conveyor": {"de": ["förderband"], "en": ["conveyor"]}}
+
+        * **versioned document** — the documented format (schema_version,
+          optional provenance, optional tags)::
+
+              {"schema_version": 1,
+               "source": "curated", "license": "MIT",
+               "concepts": {"conveyor": {"de": [...], "en": [...],
+                                         "tags": ["manufacturing"]}},
+               "glossary_source": {"source": "acme", "license": "CC-BY-4.0"},
+               "glossary_license": "CC-BY-4.0"}
+
+        Unknown documents with a *newer* `schema_version` are refused instead of
+        being parsed optimistically. See `docs/glossary-format.md`.
         """
         if isinstance(source, cls):
             return source
@@ -524,6 +638,8 @@ class Glossary:
             Path(source).read_text(encoding="utf-8"))
         if not isinstance(data, dict):
             raise ValueError(f"glossary must be a JSON object, got {type(data).__name__}")
+
+        data, meta = _split_document(data)
         for key, langs in data.items():
             if not isinstance(langs, dict):
                 raise ValueError(
@@ -531,8 +647,33 @@ class Glossary:
             for lang, terms in langs.items():
                 if not isinstance(terms, list) or not all(isinstance(t, str) for t in terms):
                     raise ValueError(f"glossary[{key!r}][{lang!r}] must be a list of strings")
-        return cls(data, max_added=max_added, per_concept_topk=per_concept_topk,
-                   index=not from_file)
+        g = cls(data, max_added=max_added, per_concept_topk=per_concept_topk,
+                index=not from_file)
+        g.meta = meta
+        g.tags = dict(meta.get("tags", {}))
+        return g
+
+    # -- public construction API (documented, for third-party glossaries) ----
+
+    @classmethod
+    def from_file(cls, path, **kwargs) -> "Glossary":
+        """Loads a glossary from a JSON file (bare map or versioned document).
+
+        This is the entry point for a glossary you wrote yourself — you do not
+        need to touch klix's source or use its presets::
+
+            from klix import Glossary
+            mine = Glossary.from_file("company_terms.json")
+
+        See `docs/glossary-format.md` for the format and
+        `data/glossary.schema.json` for the machine-readable schema.
+        """
+        return cls.load(Path(path), **kwargs)
+
+    @classmethod
+    def from_dict(cls, mapping: dict, **kwargs) -> "Glossary":
+        """Builds a glossary from an in-memory concept map (or versioned doc)."""
+        return cls.load(mapping, **kwargs)
 
 
 def resolve_glossary(source, max_added: int = 12, per_concept_topk: int = 6) -> Glossary | None:
@@ -567,3 +708,242 @@ def load_glossary(
 ) -> Glossary:
     """Loads a glossary JSON file. Raises on malformed input (fail loud)."""
     return Glossary.load(path, max_added=max_added, per_concept_topk=per_concept_topk)
+
+
+# ---------------------------------------------------------------------------
+# document format: version header, tags, per-glossary provenance
+# ---------------------------------------------------------------------------
+
+#: Reserved document-level keys of the versioned format. A concept may not be
+#: called one of these, and their presence is what distinguishes a versioned
+#: document from a bare concept map.
+_DOC_KEYS = {"schema_version", "concepts", "source", "license",
+             "tags", "glossary_source", "glossary_license", "description"}
+_RESERVED_CONCEPT_KEYS = {"tags"}
+# Provenance keys are accepted both at document level and nested, because the
+# decision was "provenance per glossary, not per concept" — the nested form is
+# just the explicit spelling of the same thing.
+_LICENCE_KEYS = ("license", "glossary_license")
+_SOURCE_KEYS = ("source", "glossary_source")
+
+
+def _split_document(data: dict) -> tuple[dict, dict]:
+    """Splits a loaded JSON object into (concept map, metadata).
+
+    Two shapes are accepted:
+
+    * **bare map** — every top-level key is a concept. No metadata.
+    * **versioned document** — has ``concepts`` (and usually
+      ``schema_version``); everything else at document level is metadata.
+
+    Raises `ValueError` on a `schema_version` this build cannot read, on a
+    malformed `concepts` block, and on a `tags` value that is not a list of
+    strings. Never renames or drops anything silently.
+
+    Returns the concept map with any per-concept ``tags`` key stripped out, so
+    the engine only ever sees ``{concept: {lang: [terms]}}``.
+    """
+    if "concepts" not in data and "schema_version" not in data:
+        return data, {}          # bare legacy map
+
+    version = data.get("schema_version", SCHEMA_VERSION)
+    if not isinstance(version, int) or version < 1:
+        raise ValueError(f"schema_version must be a positive integer, got {version!r}")
+    if version > SCHEMA_VERSION:
+        raise ValueError(
+            f"glossary uses schema_version {version}, but this build of klix "
+            f"understands at most {SCHEMA_VERSION}. Upgrade klix rather than "
+            f"letting it parse a format it does not know."
+        )
+
+    concepts = data.get("concepts")
+    if not isinstance(concepts, dict):
+        raise ValueError(
+            "a versioned glossary document needs a 'concepts' object; "
+            f"got {type(concepts).__name__}"
+        )
+
+    meta: dict = {"schema_version": version}
+    for k in _DOC_KEYS - {"concepts"}:
+        if k in data:
+            meta[k] = data[k]
+    # provenance: accept either spelling, expose one canonical pair.
+    # `glossary_source` may be a STRING or an OBJECT, so it is handled after the
+    # scalar loops — otherwise the dict form would be stored as if a name.
+    for k in _LICENCE_KEYS:
+        if k in data and isinstance(data[k], str):
+            meta["license"] = data[k]
+            break
+    for k in _SOURCE_KEYS:
+        if k in data and isinstance(data[k], str):
+            meta["source"] = data[k]
+            break
+    nested = data.get("glossary_source")
+    if isinstance(nested, dict):
+        if nested.get("source") is not None:
+            meta["source"] = nested["source"]
+        if nested.get("license") is not None:
+            meta["license"] = nested["license"]
+
+    clean: dict[str, dict[str, list[str]]] = {}
+    tags: dict[str, list[str]] = {}
+    for concept, langs in concepts.items():
+        if concept in _RESERVED_CONCEPT_KEYS:
+            raise ValueError(
+                f"{concept!r} is a reserved document key and cannot be used as a "
+                f"concept name (it would shadow the format's own metadata)"
+            )
+        if not isinstance(langs, dict):
+            raise ValueError(f"concepts[{concept!r}] must be an object")
+        entry = {lang: terms for lang, terms in langs.items()
+                 if lang not in _RESERVED_CONCEPT_KEYS}
+        for rt in _RESERVED_CONCEPT_KEYS & set(langs):
+            val = langs[rt]
+            if not isinstance(val, list) or not all(isinstance(t, str) for t in val):
+                raise ValueError(
+                    f"concepts[{concept!r}].{rt} must be a list of strings")
+            tags[concept] = list(val)
+        if not entry:
+            raise ValueError(
+                f"concepts[{concept!r}] has no language entries — a concept with "
+                f"only metadata is almost certainly a mistake"
+            )
+        clean[concept] = entry
+    if tags:
+        meta["tags"] = tags
+    return clean, meta
+
+
+class GlossaryRegistry:
+    """Named, reusable glossaries — including ones you supply yourself.
+
+    The built-in presets in `klix.glossaries` are convenient but fixed at
+    import time. This registry is the extension point for a glossary you write
+    without touching klix's source::
+
+        from klix import GlossaryRegistry
+        from klix.glossaries import curated
+
+        reg = GlossaryRegistry(fallback=curated)   # or fallback="curated"
+        reg.register("acme", "acme_terms.json",        # path
+                     source="Acme GmbH", license="CC-BY-4.0")
+        reg.register("short", {"urgent": {"de": ["dringend"],
+                                          "en": ["urgent"]}})
+
+        eng = DecisionEngine(glossary=reg.get("acme"))
+
+    Merging goes through `Glossary.merge`, so **term collisions are refused by
+    default** instead of silently creating an ambiguous mapping. That is the
+    same rule for every glossary, built-in or third-party: there is no special
+    case for "domains", because domains are free metadata tags, not a
+    validation axis.
+
+    Parameters
+    ----------
+    fallback:
+        Called with no arguments to obtain a base glossary when a requested name
+        is unknown, or the string name of a built-in preset
+        (``"curated"``, ``"empty"``, ``"broad"``, ...). ``None`` means an unknown
+        name raises `KeyError`.
+    provenance:
+        Optional ``{name: {"source": ..., "license": ...}}`` used by
+        `provenance_report`, for the case where you register a *path* whose
+        licence you want recorded.
+    """
+
+    def __init__(self, fallback=None, provenance: dict | None = None):
+        self._named: dict[str, Glossary] = {}
+        self._fallback = fallback
+        self.provenance: dict[str, dict] = dict(provenance or {})
+        self._loaded: dict[str, Glossary] = {}
+
+    # -- registration ------------------------------------------------------
+
+    def register(self, name: str, glossary, *, source: str | None = None,
+                 license: str | None = None, tags=None, replace: bool = False) -> "Glossary":
+        """Registers a glossary under `name`.
+
+        `glossary` may be a `Glossary`, a dict, or a path to a JSON file (bare
+        map or versioned document). Raises `GlossaryConflict` if the glossary
+        itself contains an ambiguous mapping, and `KeyError` if `name` is taken
+        and `replace` is not set. Nothing is ever renamed or overwritten
+        silently.
+        """
+        if name in self._named and not replace:
+            raise KeyError(
+                f"glossary {name!r} is already registered — pass replace=True to "
+                f"override it deliberately"
+            )
+        g = glossary if isinstance(glossary, Glossary) else Glossary.load(glossary)
+        g.assert_valid()                      # refuse ambiguous mappings
+        self._named[name] = g
+        prov = dict(getattr(g, "meta", {}) or {})
+        if source is not None:
+            prov["source"] = source
+        if license is not None:
+            prov["license"] = license
+        if tags is not None:
+            prov["tags"] = list(tags)
+        if prov:
+            self.provenance[name] = prov
+        return g
+
+    # -- retrieval ---------------------------------------------------------
+
+    def get(self, name: str) -> Glossary:
+        """Returns a registered glossary, or resolves `name` via the fallback.
+
+        `name` may also be a path — a glossary file that was never registered is
+        loaded on demand, so the registry never gets in the way of simply
+        pointing at a file.
+        """
+        if name in self._named:
+            return self._named[name]
+        p = Path(name)
+        if p.suffix == ".json" and p.exists():
+            g = Glossary.load(p)
+            g.assert_valid()
+            self._named[name] = g
+            return g
+        if callable(self._fallback):
+            return self._fallback()
+        if isinstance(self._fallback, str):
+            from klix import glossaries as _presets
+
+            return getattr(_presets, self._fallback)()
+        raise KeyError(
+            f"unknown glossary {name!r}; registered: {sorted(self._named)}"
+        )
+
+    def names(self) -> list[str]:
+        """Registered names (sorted)."""
+        return sorted(self._named)
+
+    def merge(self, *names: str, strict: bool = True) -> Glossary:
+        """Merges several registered glossaries, refusing term collisions.
+
+        Delegates to `Glossary.merge`, so the single conflict rule applies
+        uniformly — a fourth, fifth or externally supplied glossary goes through
+        exactly the same path as the built-in ones.
+        """
+        if not names:
+            raise ValueError("merge() needs at least one glossary name")
+        out = self.get(names[0])
+        for name in names[1:]:
+            out = out.merge(self.get(name), strict=strict)
+        if strict:
+            out.assert_valid()
+        return out
+
+    def provenance_report(self) -> dict[str, dict]:
+        """Provenance per registered glossary, for docs / compliance output.
+
+        Provenance is tracked **per glossary**, never per concept, so this is a
+        small, stable table regardless of how large a glossary grows.
+        """
+        report: dict[str, dict] = {}
+        for name in self.names():
+            meta = dict(self.provenance.get(name, {}))
+            meta.setdefault("concepts", len(self._named[name].mapping))
+            report[name] = meta
+        return report

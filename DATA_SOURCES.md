@@ -4,12 +4,42 @@ klix ships four data files under `src/klix/`. Everything else in the package is
 code. This file records where each comes from, the licence chain, why the
 alternatives were rejected, and how the generated one is rebuilt.
 
+## Provenance is tracked per glossary
+
+Provenance is recorded **once per glossary**, never per concept (a format
+decision, not an implementation detail). With 124 concepts you write one
+`source`/`license` pair, not 124. The record lives:
+
+* **in the file itself** for the versioned document format —
+  `{"schema_version": 1, "source": ..., "license": ..., "concepts": {...}}`
+  (see [`docs/glossary-format.md`](docs/glossary-format.md))
+* **in `Glossary.meta`** after loading, so code can read it back
+* **in `GlossaryRegistry.provenance_report()`** for several named glossaries
+
+```python
+from klix import GlossaryRegistry
+reg = GlossaryRegistry(fallback="curated")
+reg.register("acme", "acme_terms.json", source="Acme GmbH", license="CC-BY-4.0")
+print(reg.provenance_report())
+# {'acme': {'source': 'Acme GmbH', 'license': 'CC-BY-4.0', 'concepts': 42}}
+```
+
+This structure is **not hardwired to the two bundled sources.** A glossary you
+add carries its own licence and shows up in the same report; nothing here needs
+editing to accommodate a third or fourth source. The table below is therefore
+just the *current* content of that mechanism, not its shape.
+
+**Mixing sources inside one glossary is deliberately unsupported.** If concepts
+from several origins ever need distinct licences in one file, that requires
+per-term provenance — a later, separate problem. It is not pre-built.
+
 ## Shipped data
 
 | File | Content | Origin | Licence |
 |---|---|---|---|
 | `data/curated_glossary.json` | **The default.** 124 concepts (manufacturing, IT, everyday office) × DE/EN, hand-written | klix author — **original work** | **MIT** |
-| `data/curated_domains.json` | Which curated concept belongs to which domain | klix author | MIT |
+| `data/curated_domains.json` | Domain of each curated concept, as free `tags` metadata | klix author | MIT |
+| `data/glossary.schema.json` | The documented document format (JSON Schema, versioned) | klix author | MIT |
 | `data/default_glossary.json` | Broad DE↔EN vocabulary, ~10k concepts, generated offline. **Opt-in** (`broad()`) | [Wikidata](https://www.wikidata.org) | **CC0 1.0** |
 | `data/build_meta.json` | Build provenance of the generated file (per-class outcome, source, counts) | generated | — |
 | `glossary.json` | Legacy 16-term manufacturing list, kept for compatibility | klix author | MIT |

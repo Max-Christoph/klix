@@ -9,23 +9,55 @@ Every preset returns a `Glossary` whose format is language agnostic::
 
     {"CONCEPT_KEY": {"de": [...], "en": [...], "fr": [...]}}
 
-Any number of ISO-639-1 keys is allowed per concept; `de`/`en` is merely what
-the bundled presets happen to contain.
-
 Presets
 -------
-- `empty()`         — no terms (the default: routing is pure dense+TF-IDF).
-- `manufacturing()` — the 16-term production glossary klix shipped with.
-- `workflow()`      — generic routing/intake terms (error, urgent, cancel, ...).
-- `default()`       — the bundled broad DE<->EN basic vocabulary
-                      (generated offline, CC0/Wikidata; see DATA_SOURCES.md).
-- `merge_all(*gs)`  — deterministic union of several presets.
+- `empty()`            — no terms (pure dense+TF-IDF routing).
+- `curated()`          — **the default**: 124 hand-written concepts across
+                         manufacturing, IT and everyday office language. See the
+                         quality section below.
+- `curated_manufacturing()` / `curated_it()` / `curated_everyday()`
+                       — one curated domain on its own.
+- `broad()`            — the large Wikidata-generated vocabulary (10k concepts).
+                         Opt-in, NOT the default: ~7% of its mappings are wrong
+                         (see below). Good for recall, not for precision.
+- `manufacturing()`    — historical name, returns the curated manufacturing set.
+- `workflow()`         — legacy generic routing terms.
+- `merge_all(*gs)`     — deterministic union.
+
+Why the curated set is the default
+----------------------------------
+Measured (evals/glossary_error_rate.py — sense-based, the curated list used as
+ground truth, per domain):
+
+    domain          wrong-mapping rate    coverage of curated terms
+    manufacturing         3.5%                   48%
+    IT                    8.3%                   26%
+    everyday             10.0%                   38%
+    overall               6.6%
+
+and the curated set itself: 0 structural findings, 0 pairs below the dense
+agreement floor, 0 genuine round-trip failures (evals/curated_glossary_verify.py,
+all 124 concepts — not a sample).
+
+So: 124 terms with no measured errors beat 23,600 terms with a measured 6.6%
+wrong-mapping rate, when the failure mode is a query being bridged to the wrong
+concept. Use `broad()` deliberately when recall matters more than precision.
 """
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 from klix.glossary import DEFAULT_GLOSSARY, Glossary
 
-__all__ = ["empty", "manufacturing", "workflow", "default", "merge_all", "MANUFACTURING", "WORKFLOW"]
+__all__ = ["empty", "curated", "curated_manufacturing", "curated_it",
+           "curated_everyday", "broad", "manufacturing", "workflow", "merge_all",
+           "MANUFACTURING", "WORKFLOW", "CURATED_PATH"]
+
+# The curated tri-domain glossary (124 concepts, original work, MIT).
+CURATED_PATH = Path(__file__).with_name("data") / "curated_glossary.json"
+# Domain of each curated concept, so callers can select a single domain.
+CURATED_DOMAINS_PATH = Path(__file__).with_name("data") / "curated_domains.json"
 
 # --------------------------------------------------------------------------
 # manufacturing: the 16 concepts klix shipped as its bundled glossary.json.
@@ -184,33 +216,79 @@ WORKFLOW: dict[str, dict[str, list[str]]] = {
 
 
 def empty() -> Glossary:
-    """No terms. Expansion is a no-op — the default behaviour of klix."""
+    """No terms. Expansion is a no-op."""
     return Glossary({})
 
 
+def _load_curated() -> dict:
+    return json.loads(CURATED_PATH.read_text(encoding="utf-8"))
+
+
+def curated() -> Glossary:
+    """**The default**: 124 hand-written concepts (manufacturing + IT + everyday).
+
+    Original work, MIT-licensed, structurally validated and verified end-to-end
+    (`evals/curated_glossary_verify.py`). Every candidate source that could have
+    supplied this automatically is copyleft or share-alike and incompatible with
+    MIT — see `DATA_SOURCES.md`.
+    """
+    return Glossary(_load_curated())
+
+
+def _curated_domain(name: str) -> Glossary:
+    mapping = _load_curated()
+    doms = json.loads(CURATED_DOMAINS_PATH.read_text(encoding="utf-8"))["domains"]
+    return Glossary({k: v for k, v in mapping.items() if doms.get(k) == name})
+
+
+def curated_manufacturing() -> Glossary:
+    """The curated manufacturing/production layer (44 concepts)."""
+    return _curated_domain("manufacturing")
+
+
+def curated_it() -> Glossary:
+    """The curated IT/software layer (40 concepts)."""
+    return _curated_domain("it")
+
+
+def curated_everyday() -> Glossary:
+    """The curated everyday/office layer (40 concepts)."""
+    return _curated_domain("everyday")
+
+
+def broad() -> Glossary:
+    """The large Wikidata-generated vocabulary (~10k concepts). Opt-in.
+
+    NOT the default. Measured 6.6% wrong-mapping rate against the curated list
+    (per domain: manufacturing 3.5%, IT 8.3%, everyday 10.0%), because Wikidata
+    sense disambiguation without context is unreliable and for many German terms
+    no manufacturing sense is linked at all. Use it when recall matters more than
+    precision; prefer `curated()` for routing decisions that must not bridge a
+    query to the wrong concept.
+    """
+    try:
+        from klix.glossary import load_glossary
+
+        return load_glossary(DEFAULT_GLOSSARY)
+    except FileNotFoundError:
+        return curated()
+
+
 def manufacturing() -> Glossary:
-    """The 16-term manufacturing/OT production glossary bundled since v0.8.7."""
-    return Glossary({k: {lg: list(t) for lg, t in v.items()} for k, v in MANUFACTURING.items()})
+    """Historical name: the curated manufacturing layer.
+
+    Was a 16-term hand-written list; now returns `curated_manufacturing()` so
+    callers get the larger, equally hand-checked set.
+    """
+    return curated_manufacturing()
 
 
 def workflow() -> Glossary:
-    """Generic intake/routing terms (error, urgent, cancel, help, approve, ...)."""
-    return Glossary({k: {lg: list(t) for lg, t in v.items()} for k, v in WORKFLOW.items()})
+    """Generic intake/routing terms (error, urgent, cancel, help, approve, ...).
 
-
-def default() -> Glossary:
-    """The bundled broad DE<->EN basic vocabulary (CC0; ~20k concepts).
-
-    Generated offline into ``klix/data/default_glossary.json`` by
-    ``scripts/build_default_glossary.py``; falls back to `manufacturing()`
-    when the data file is missing (e.g. an exotic build).
+    Superseded by the curated IT + everyday layers, kept for compatibility.
     """
-    from klix.glossary import load_glossary
-
-    try:
-        return load_glossary(DEFAULT_GLOSSARY)
-    except FileNotFoundError:
-        return manufacturing()
+    return Glossary({k: {lg: list(t) for lg, t in v.items()} for k, v in WORKFLOW.items()})
 
 
 def merge_all(*glossaries: Glossary) -> Glossary:

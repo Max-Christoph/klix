@@ -3,7 +3,11 @@
 from klix.engine import DecisionEngine, DecisionResult
 from klix.glossary import Glossary, load_glossary, resolve_glossary
 from klix.glossaries import merge_all
-from klix.glossaries import default as default_glossary
+from klix.glossaries import broad as broad_glossary
+from klix.glossaries import curated as curated_glossary
+from klix.glossaries import curated_everyday as curated_everyday_glossary
+from klix.glossaries import curated_it as curated_it_glossary
+from klix.glossaries import curated_manufacturing as curated_manufacturing_glossary
 from klix.glossaries import empty as empty_glossary
 from klix.glossaries import manufacturing as manufacturing_glossary
 from klix.glossaries import workflow as workflow_glossary
@@ -27,9 +31,13 @@ __all__ = [
     "resolve_glossary",
     # Domain packs (klix.glossaries)
     "empty_glossary",
+    "curated_glossary",
+    "curated_manufacturing_glossary",
+    "curated_it_glossary",
+    "curated_everyday_glossary",
+    "broad_glossary",
     "manufacturing_glossary",
     "workflow_glossary",
-    "default_glossary",
     "merge_all",
     "HardNegativeStore",
     "attach_counterexamples",

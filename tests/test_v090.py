@@ -272,8 +272,39 @@ class TestDomainPacks:
         assert g.expand_terms("foerderband steht") == []
         assert g.expand("foerderband steht") == "foerderband steht"
 
-    def test_manufacturing_pack_has_16_concepts(self):
-        assert len(manufacturing_glossary().mapping) == 16
+    def test_manufacturing_pack_is_the_curated_layer(self):
+        """`manufacturing()` now returns the curated manufacturing domain.
+
+        Was a 16-term hand-written list; the curated layer is the larger,
+        equally hand-checked successor (44 concepts). Pinned so a silent
+        shrink/growth of the curated file is noticed.
+        """
+        from klix.glossaries import curated_manufacturing
+        m = manufacturing_glossary().mapping
+        assert len(m) == len(curated_manufacturing().mapping)
+        assert len(m) >= 40
+        # the original production terms must all still be present
+        for concept, terms in [("conveyor", "foerderband"), ("cycle_time", "taktzeit"),
+                               ("downtime", "stillstand"), ("maintenance", "wartung"),
+                               ("spare_part", "ersatzteil"), ("calibration", "kalibrierung")]:
+            assert concept in m, concept
+            assert any(terms in t for t in m[concept]["de"]), (concept, terms)
+
+    def test_curated_packs_by_domain(self):
+        from klix.glossaries import (curated, curated_everyday, curated_it,
+                                     curated_manufacturing)
+        full = curated().mapping
+        parts = (curated_manufacturing().mapping, curated_it().mapping,
+                 curated_everyday().mapping)
+        assert sum(len(p) for p in parts) == len(full) == 124
+        # the three domains are disjoint and together cover the curated file
+        keys = [k for p in parts for k in p]
+        assert len(keys) == len(set(keys))
+
+    def test_broad_pack_is_opt_in_and_separate(self):
+        from klix.glossaries import broad, curated
+        assert len(broad().mapping) > 1000      # the generated vocabulary
+        assert len(curated().mapping) == 124    # the default
 
     def test_workflow_pack_covers_routing_terms(self):
         g = workflow_glossary()

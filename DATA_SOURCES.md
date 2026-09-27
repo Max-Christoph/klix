@@ -1,26 +1,102 @@
 # Data sources and licences
 
-klix ships one generated data file: `src/klix/data/default_glossary.json`.
-Everything else in the package is code. This file records where that data comes
-from, why the alternatives were rejected, and how to regenerate it.
+klix ships four data files under `src/klix/`. Everything else in the package is
+code. This file records where each comes from, the licence chain, why the
+alternatives were rejected, and how the generated one is rebuilt.
 
 ## Shipped data
 
-| File | Content | Source | Licence |
+| File | Content | Origin | Licence |
 |---|---|---|---|
-| `src/klix/data/default_glossary.json` | Broad DE↔EN basic vocabulary (concepts → per-language synonyms), generated offline | [Wikidata](https://www.wikidata.org) | **CC0 1.0** (public domain dedication) |
-| `src/klix/glossary.json` | 16-term manufacturing/OT production glossary, hand-written | klix itself | MIT (same as the package) |
+| `data/curated_glossary.json` | **The default.** 124 concepts (manufacturing, IT, everyday office) × DE/EN, hand-written | klix author — **original work** | **MIT** |
+| `data/curated_domains.json` | Which curated concept belongs to which domain | klix author | MIT |
+| `data/default_glossary.json` | Broad DE↔EN vocabulary, ~10k concepts, generated offline. **Opt-in** (`broad()`) | [Wikidata](https://www.wikidata.org) | **CC0 1.0** |
+| `data/build_meta.json` | Build provenance of the generated file (per-class outcome, source, counts) | generated | — |
+| `glossary.json` | Legacy 16-term manufacturing list, kept for compatibility | klix author | MIT |
 
-Both files are consumed read-only at runtime. Nothing is downloaded at install
-time or at import time — `pip install klix-engine` is fully offline.
+All files are consumed read-only at runtime. Nothing is downloaded at install or
+import time — `pip install klix-engine` is fully offline.
 
-`default_glossary.json` is **generated**, not hand-maintained. Regenerate with:
+## Why the curated file is the default and the generated one is opt-in
 
-```bash
-uv run python scripts/build_default_glossary.py     # writes the glossary + build_meta.json
-```
+Measured with `evals/glossary_error_rate.py` — sense-based (an auto-resolved
+concept counts as correct when its English side names the same sense as the
+curated one, cosine ≥ 0.60), the curated list used as ground truth. The curated
+list was written **before** the measurement, so the labels could not be shaped by
+the scoring:
 
-### What is reproducible, and what is not
+| Domain | curated terms tested | wrong mappings (auto) | coverage of curated terms |
+|---|---|---|---|
+| manufacturing | 110 | **3.5 %** | 48 % |
+| IT | 94 | **8.3 %** | 26 % |
+| everyday | 106 | **10.0 %** | 38 % |
+| **overall** | **310** | **6.6 %** | 39 % |
+
+And the curated set itself, checked with `evals/curated_glossary_verify.py`
+(**all 124 concepts, not a sample**): 0 structural findings, 0 pairs below the
+embedding-agreement floor, 0 genuine round-trip failures.
+
+The failure mode is what decides it: a wrong mapping does not merely fail to help
+— it silently bridges a query to the **wrong** English concept. 124 concepts with
+no measured errors are therefore the safer default than 23,600 with a measured
+6.6 % error rate. Use `broad()` when recall matters more than precision.
+
+### Note on measurement validity
+
+An earlier revision of this analysis reported 20 % and then 38.8 % error. Both
+were wrong, and the reason matters:
+
+* the 40-term probe was deliberately failure-enriched, so 20 % was never the
+  file's error rate
+* the 38.8 % figure scored by concept **key**, so `motor → engine`,
+  `kryptografie → cryptography` and `kunde → client` counted as errors although
+  they are correct — only the key name differed
+
+The 6.6 % above is the corrected, sense-based figure. Separately, an
+embedding-similarity metric applied to the **whole** file was discarded entirely:
+it flagged `lunar eclipse / mondfinsternis` and `baptism / taufe` as weak, i.e.
+it measured term rarity, not correctness. It is valid only as a pairwise
+"same concept?" test between two concrete term sets, which is how it is used here.
+
+## Rejected sources — checked at the source, not assumed
+
+Every candidate bilingual source that would have allowed an *automatic* curated
+layer is copyleft or share-alike and therefore incompatible with this MIT package:
+
+| Source | Licence (verified how) | Verdict |
+|---|---|---|
+| dbnary / Wiktionary | **CC BY-SA 4.0** (Wikimedia `rightsinfo` API) | ✗ share-alike |
+| FreeDict `deu-eng` 1.9 | **GPLv2+ and AGPLv3** (`COPYING` 339 lines + TEI header: *"composed of the original Ding dictionary (GPLv2+) and the ding2tei-haskell program (AGPLv3)"*) | ✗ copyleft |
+| Apertium `apertium-eng-deu` | **GPL-3.0** (GitHub API) | ✗ copyleft |
+| PanLex | **unverifiable** — `api.panlex.org` unreachable, HTTP 000 | ✗ unverifiable ⇒ out |
+| OmegaWiki | unreachable, HTTP 000 | ✗ unverifiable ⇒ out |
+| Wikidata | **CC0 1.0** — see below | ✓ **the only compatible source** |
+
+Consequence: the multi-source **consensus principle** (a mapping is trusted when
+two independent sources agree) could not be implemented. With exactly one
+licence-compatible source there is no second vote, so the curated layer had to be
+written rather than derived. That is the honest reason it is 124 hand-checked
+concepts and not tens of thousands.
+
+### Wikidata licence, verified
+
+`Wikidata:Licensing` (fetched verbatim):
+
+> "All structured data (i.e. the main, Property, Lexeme, and EntitySchema
+> namespaces) is released into the public domain under Creative Commons Zero."
+> "Wikidata requires a CC0 license … no other data license or designation is
+> compatible with Wikidata's copyright requirements."
+
+Cross-checked against what the builder actually reads (`scripts/build_default_glossary.py`):
+`rdfs:label` and `wikibase:lemma` (main/lexeme namespaces), `wdt:P5137`,
+`wdt:P31`, `wdt:P279*` (statements in the main namespace), `dct:language`,
+`wikibase:lexicalCategory` (schema values) — all within the CC0 declaration.
+
+No non-CC0 reference material is pulled in: 0 entries contain URLs, QIDs or mail
+addresses, max 3 tokens per term, median 10 characters — short labels only, no
+prose or reference text from third-party works.
+
+## The generated file: what is reproducible, and what is not
 
 * **Query-level ordering: reproducible.** Every SPARQL query carries an `ORDER BY`,
   so pagination is stable — two identical limit/offset runs return byte-identical

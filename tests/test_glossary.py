@@ -33,10 +33,11 @@ class TestGlossary:
         assert len(g.mapping) >= 16
         assert "conveyor" in g.mapping
 
-    def test_manufacturing_json_matches_code_preset(self, g):
-        """glossary.json stays in sync with the code preset (one truth)."""
-        from_file = load_glossary(MANUFACTURING_GLOSSARY)
-        assert from_file.mapping.keys() == g.mapping.keys()
+    def test_curated_layer_validates_clean(self, g):
+        """The curated default must be structurally clean (engine's own rules)."""
+        from klix.glossaries import curated
+        assert curated().validate() == []
+        assert len(g.mapping) >= 40
 
     def test_bundled_default_glossary_loads_when_generated(self):
         try:

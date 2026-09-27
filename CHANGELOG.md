@@ -23,9 +23,59 @@ All notable changes to klix are documented here. Format based on
 - **`evals/glossary_noise.py`** (new) replaces an ad-hoc figure: the proper-name
   share of the generated vocabulary is **8.2 % (834/10134)**, deduplicated, from a
   documented criterion. The earlier "5.3 % / 533" had no script behind it.
-- The fast-path miss overhead is **0.0264 ms** median (n=300), not the 0.060 ms
-  quoted before — corrected in `DESIGN_PRINCIPLES.md` after re-running
-  `evals/fastpath_overhead.py`.
+- The fast-path miss overhead is a **load-dependent ~0.03 ms** median (n=300;
+  measured 0.027–0.045 ms across runs). Two figures had been quoted for it and
+  neither survived: 0.060 ms (first measurement, taken on a contended CPU — the
+  test suite was running) and 0.0264 ms (a second revision). Only the order of
+  magnitude is stable, so only that is claimed. Corrected in
+  `DESIGN_PRINCIPLES.md`, `docs/rejected-approaches.md`, `README.md` and the
+  `glossaries.py` quality section, not just in one place (principle 13).
+
+### Fixed (a coverage rate was reported where an error rate was asked for)
+- **The P5 measurement answers a different question than it was read as.**
+  `evals/curated_error_rate_new.py` reports how many sampled German terms have a
+  Wikidata sense link at all — 46/160 = 28.7 %. That is **coverage**: it says
+  nothing about whether a mapping is right, and it is silent for 71.3 % of the
+  sample. It was presented as the error rate. The missing measurement was then
+  built.
+- **A real correctness figure now exists, on an independent ground truth.**
+  `evals/curated_correctness_new.py`: for each sampled concept the P5137 sense
+  items of the German side and of the English side are looked up **separately**
+  and compared. The author wrote the terms; the item links are external, so
+  agreement is evidence rather than a restatement of the file. Same seed and same
+  n=160 as the coverage figure, so the two are comparable. Result: 53 confirmed,
+  11 mismatched, 96 undecidable; after reading all 11 individually, **10 are
+  method artifacts and 1 is a genuine minor ambiguity**, i.e. ≤1.6 % of the
+  decidable subset. `docs/curated-correctness.md` carries the adjudication table
+  and the limits.
+- **`evals/glossary_error_rate.py` cannot answer the question, by construction.**
+  It scores the *generated* layer against the curated English sides as ground
+  truth, so an error inside the curated list is structurally invisible to it. The
+  6.6 %/8.4 % figures apply to the generated vocabulary only — always true, but
+  the two questions had been run together. Now stated where the figure appears.
+- **The honest limit, recorded rather than papered over:** for 96 of 160 sampled
+  concepts (60 %) there is **no** independent ground truth, so correctness is
+  unknown — not assumed. Wikidata alone cannot supply a true curation error rate,
+  because it lacks senses for compounded/office-register terms and its English
+  surface forms are polysemous in 10 of 11 flagged cases. A real figure for the
+  ~240 new concepts needs an independent labelling pass by someone other than the
+  author. That is an open item, not a solved one.
+
+### Fixed (documentation vs. artifact drift after the curated expansion)
+- **The curated counts were stale in seven places.** The expansion to 362
+  concepts (44 manufacturing / 186 IT / 132 everyday) shipped, but `glossaries.py`
+  still described the default as "124 concepts" and the IT and everyday presets as
+  "40 concepts" each, `curated_glossary_verify.py` still printed "all 124
+  concepts", and `DATA_SOURCES.md` still claimed "0 pairs below the embedding
+  agreement floor". Re-measured: the verify script reports 362 concepts, and the
+  floor is **not** clean — 9 pairs below 0.35, 30 more below 0.50. The claim that
+  no pair fell below it is withdrawn rather than restated.
+- **`evals/roundtrip_failure_diag.py` carried a hard-coded list of 10 failures**
+  from the 124-concept era, so after the expansion only 10 of the (now 73)
+  round-trip misses were ever classified. It now derives the failure set from the
+  shipped artifact and prints a verdict per class: **73 thin-anchor artefacts,
+  0 mapping errors, 0 sparse-also-wrong**. This confirms the round-trip figure
+  that was previously only supported for a tenth of the cases.
 
 ## [0.9.0] - 2026-09-26
 
@@ -43,9 +93,12 @@ Three changes, all measured, none adding a dependency.
   wall-clock).
 
   Cost of the eliminated work, measured directly (`evals/fastpath_overhead.py`,
-  n=300): **0.060 ms median / 0.086 ms p95** per sparse-state build. The removed
-  duplicate was therefore ~0.06 ms per miss — *not* the 1-2 ms assumed when this
-  task was scoped.
+  n=300): **~0.03 ms** median per sparse-state build (load-dependent, 0.027–0.045
+  ms across runs). The removed duplicate was therefore ~0.03 ms per miss — *not*
+  the 1-2 ms assumed when this task was scoped. (This entry quoted 0.060 ms
+  median / 0.086 ms p95 when it was written; that measurement ran on a contended
+  CPU, with the test suite in parallel, and did not survive re-measurement —
+  see the Unreleased section.)
 
   On method: a miss-vs-baseline wall-clock comparison cannot resolve this. The
   ONNX dense forward pass (~10-30 ms) dominates and its variance exceeds the

@@ -101,8 +101,9 @@ invite loosening, which principle 11 warns about. Would need care.
 ## P5 — Grow the curated glossary to 300-500 concepts
 
 **Motivation, measured.** The curated layer is the default and has no measured
-errors, but it is narrow: 124 concepts, covering 39 % of the curated German terms
-in the broader Wikidata vocabulary. Coverage by domain is uneven — IT 26 %,
+errors, but it was narrow: 124 concepts at the time this proposal was written
+(now 362 after the P5 work below), covering 39 % of the curated German terms
+in the broader Wikidata vocabulary. Coverage by domain was uneven — IT 26 %,
 everyday 38 %, manufacturing 48 %.
 
 **Requested distribution** (explicitly *not* an even split): manufacturing may

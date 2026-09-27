@@ -61,7 +61,7 @@ All incompatible with MIT. The unverifiable ones are out by rule, not by doubt.
 
 **Consequence, and it changed the design.** The consensus principle could not be
 implemented: with exactly one licence-compatible source there is no second vote.
-That is the honest reason the curated layer is 124 hand-written concepts rather
+That is the honest reason the curated layer is 362 hand-written concepts rather
 than tens of thousands of derived ones. Recorded here so it is not re-attempted
 as an oversight.
 
@@ -212,9 +212,10 @@ fact before this was understood — a retraction (principle 13).
 
 **Replaced by.** A deterministic mechanism measurement
 (`evals/fastpath_overhead.py`): the eliminated duplicate vectorisation costs
-**0.060 ms median / 0.086 ms p95** (n=300), and the benchmark now counts
-invocations per `decide()` — 1 on both hit and miss, versus 2 on a miss in
-v0.8.8. The fix is real; its size is ~20–30× smaller than originally assumed.
+**~0.03 ms** median (n=300; measured 0.027–0.045 ms across runs, so only the
+order of magnitude is stable), and the benchmark now counts invocations per
+`decide()` — 1 on both hit and miss, versus 2 on a miss in v0.8.8. The fix is
+real; its size is ~30–60× smaller than originally assumed.
 
 **Pitfall.** The original figures also came from runs overlapped with the test
 suite, i.e. a contended CPU. Interference of that kind is not visible in the

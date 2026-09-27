@@ -17,7 +17,7 @@ where it only measured term rarity and flagged 'baptism/taufe' as bad.)
   wrong   — cosine <  0.60  (different concept -> the harmful case)
   missing — the German term is not in the auto layer at all
 
-Ground truth: the 124 curated concepts, written by hand BEFORE this measurement
+Ground truth: the 362 curated concepts, written by hand BEFORE this measurement
 was run, so the labels could not be shaped by the scoring.
 
 Run: uv run python -m evals.glossary_error_rate

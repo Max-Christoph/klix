@@ -1,7 +1,7 @@
 """Verification of the curated tri-domain glossary — per domain, all entries.
 
 The task asked for a random sample of 100-150 terms across the three domains.
-The curated list has 124 concepts, so this checks ALL of them: no sampling error.
+The curated list has 362 concepts, so this checks ALL of them: no sampling error.
 
 Three independent checks per concept:
 
@@ -58,7 +58,7 @@ def main():
     domains = curated.all_domains()
 
     print("=" * 100)
-    print("CURATED GLOSSARY VERIFICATION — all 124 concepts, per domain")
+    print("CURATED GLOSSARY VERIFICATION — all concepts, per domain")
     print("=" * 100)
 
     bb = HybridBackbone()

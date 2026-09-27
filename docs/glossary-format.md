@@ -130,8 +130,8 @@ schema itself — see `klix.glossaries.curated_it()` for the filtering helper.
 
 ## Provenance: per glossary, not per concept
 
-Provenance is recorded once per glossary. With 124 concepts you write one
-`source`/`license` pair, not 124 — and mixing sources inside a single glossary is
+Provenance is recorded once per glossary. With 362 concepts you write one
+`source`/`license` pair, not 362 — and mixing sources inside a single glossary is
 a deliberately unsolved problem (it would need per-term provenance; see
 `DATA_SOURCES.md`).
 

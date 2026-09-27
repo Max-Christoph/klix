@@ -1,10 +1,11 @@
 """Curated glossary expansion — IT and everyday/support/mail volume.
 
-The 124-concept core covered the manufacturing shop floor completely but left IT
-and everyday language thin (measured coverage 26 % and 38 % against a broader
-vocabulary, versus 48 % for manufacturing — `evals/glossary_error_rate.py`). This
-module adds volume where it is missing and deliberately adds none to
-manufacturing, which is already complete for the terms that matter.
+The 124-concept core (still the manufacturing + baseline IT/everyday layer) covered
+the shop floor completely but left IT and everyday language thin (measured coverage
+26 % and 38 % against a broader vocabulary, versus 48 % for manufacturing —
+`evals/glossary_error_rate.py`). This module adds 238 concepts of volume where it is
+missing, for a shipped total of 362, and deliberately adds none to manufacturing,
+which is already complete for the terms that matter.
 
 Same authoring rules as the core (`scripts/curated_glossary_data.py`):
   * one term -> exactly ONE concept across ALL domains. The index is flat, so a

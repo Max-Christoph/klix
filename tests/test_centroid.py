@@ -126,18 +126,31 @@ class TestCentroid:
         assert [b.route for b in batch] == [s.route for s in serial]
 
     def test_matches_linear_probe_on_frozen_set(self):
-        """centroid must reach the accuracy of the trained probe (no training).
+        """centroid must reach the trained probe's level on this frozen set.
 
-        TOLERANCE (1 case, v0.9.0): this test used to assert `centroid >= linear`
-        exactly. Removing `_cross_lingual_mixup` (the language-specific
-        augmentation; see `klix.heads`) changed the LINEAR probe's training set:
-        it now receives `_augment_embeddings`' midpoints over ALL same-class
-        anchor pairs instead of only the cross-language ones — a superset. That
-        shifted the probe's boundary on exactly one of these 60 frozen cases, so
-        centroid now leads by 1 instead of tying. Recorded here rather than
-        silently tolerated: the strict floor below is the real regression guard,
-        and `>=` with a 1-case allowance keeps the comparison meaningful without
-        pretending a 60-case set resolves single-case differences.
+        MEASURED HISTORY (evals/centroid_regression_diag.py, all 60 cases):
+
+            code v0.8.8 (with _cross_lingual_mixup):  centroid 51   linear 51
+            code v0.9.0 (mixup removed):              centroid 51   linear 52
+
+        Read that carefully, because it re-frames the v0.8.5 claim. On this corpus
+        centroid and linear were a TIE, not "centroid ahead" — the original
+        `centroid >= linear` assertion sat exactly on the boundary and passed by
+        equality. Removing the language-specific `_cross_lingual_mixup` improved
+        the LINEAR probe by one case (SHOP "the delivery driver never even rang
+        the doorbell", expected 'complaint'); CENTROID IS UNCHANGED at 51.
+
+        So this is not a centroid regression. It is a linear improvement that
+        pushed a pre-existing tie to -1, and the old assertion could not tell
+        those two situations apart. Asserting a blanket `>= linear - 1` would keep
+        that ambiguity forever, so the guard is stated as what actually matters:
+
+          * centroid must not regress against its OWN baseline (>= 51), and
+          * it must stay within one case of the trained probe (i.e. still at
+            probe level — the thing v0.8.5 was actually claiming).
+
+        Both bounds are pinned, so a real future centroid regression (<= 50)
+        fails loudly, while a linear-only improvement does not masquerade as one.
         """
         from evals.eval_domains import (IMG_CASES, IMG_OPTIONS, SHOP_CASES,
                                         SHOP_OPTIONS, TASK_CASES, TASK_OPTIONS)
@@ -164,5 +177,13 @@ class TestCentroid:
         c_ok, n = run("centroid")
         l_ok, _ = run("linear")
         assert n == 60
-        assert c_ok >= l_ok - 1, f"centroid {c_ok} trails linear {l_ok} by >1 case"
-        assert c_ok >= 50, f"centroid regressed: {c_ok}/{n}"
+        # (a) no regression against centroid's own measured baseline
+        assert c_ok >= 51, (
+            f"centroid REGRESSED: {c_ok}/{n} (baseline on this set is 51; "
+            f"see evals/centroid_regression_diag.py)"
+        )
+        # (b) still at probe level (within one case of the trained probe)
+        assert c_ok >= l_ok - 1, (
+            f"centroid {c_ok} trails linear {l_ok} by more than one case — "
+            f"no longer at probe level"
+        )

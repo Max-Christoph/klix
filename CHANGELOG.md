@@ -3,6 +3,30 @@
 All notable changes to klix are documented here. Format based on
 [Keep a Changelog](https://keepachangelog.com/); versioning: SemVer.
 
+## Unreleased (after 0.9.0)
+
+### Added
+- **`DESIGN_PRINCIPLES.md`** — 18 principles, each tied to the incident that
+  produced it, plus a pre-flight checklist. Enforced by
+  `tests/test_design_principles.py`, which checks that every cited file and eval
+  script exists and that the quoted numbers appear in those scripts' real output.
+- **`docs/rejected-approaches.md`** — abandoned paths with their disproof
+  (NLTK/OMW, the four copyleft bilingual sources, Wikidata as sole source, the
+  whole-file dense-similarity metric, `_guess_lang`, `_cross_lingual_mixup`,
+  the wall-clock fast-path comparison, the blanket `centroid` tolerance, the
+  "deterministic build" claim, the `{"de": [], "en": []}` bucket literal, domain
+  as a validation concept, an ad-hoc command as a number's source, and the README
+  retraction omission).
+- **`docs/proposals.md`** — seven measured proposals, none built.
+
+### Fixed
+- **`evals/glossary_noise.py`** (new) replaces an ad-hoc figure: the proper-name
+  share of the generated vocabulary is **8.2 % (834/10134)**, deduplicated, from a
+  documented criterion. The earlier "5.3 % / 533" had no script behind it.
+- The fast-path miss overhead is **0.0264 ms** median (n=300), not the 0.060 ms
+  quoted before — corrected in `DESIGN_PRINCIPLES.md` after re-running
+  `evals/fastpath_overhead.py`.
+
 ## [0.9.0] - 2026-09-26
 
 Focus: **be a fast, lightweight decision engine — not a language framework.**

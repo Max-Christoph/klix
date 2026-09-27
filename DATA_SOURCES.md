@@ -47,6 +47,10 @@ per-term provenance — a later, separate problem. It is not pre-built.
 All files are consumed read-only at runtime. Nothing is downloaded at install or
 import time — `pip install klix-engine` is fully offline.
 
+The rules behind these choices are in [`DESIGN_PRINCIPLES.md`](DESIGN_PRINCIPLES.md);
+the paths that were tried and abandoned are in
+[`docs/rejected-approaches.md`](docs/rejected-approaches.md).
+
 ## Why the curated file is the default and the generated one is opt-in
 
 Measured with `evals/glossary_error_rate.py` — sense-based (an auto-resolved

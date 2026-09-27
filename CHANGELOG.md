@@ -3,7 +3,50 @@
 All notable changes to klix are documented here. Format based on
 [Keep a Changelog](https://keepachangelog.com/); versioning: SemVer.
 
-## Unreleased (after 0.9.0)
+## [0.9.1] - 2026-09-28
+
+Documentation and measurement only. **No behaviour change, no API change, no
+dependency change** — the library code is byte-identical to 0.9.0 apart from the
+version string. This release closes the two known limits that v0.9.0 shipped with
+and adds the script that measures the second one.
+
+### Added
+- **`evals/polysemy_review.py`** — how many distinct Wikidata senses each curated
+  German term carries, over the whole glossary. Measured: **62 of 768 terms
+  (8.1 %)** are polysemous, 11 of them in manufacturing. This quantifies the flat
+  lookup's exposure instead of guessing at it, and it is the source of every
+  polysemy figure now quoted in the README.
+- **`tests/test_glossary_limits.py`** — pins both known limits so they cannot go
+  stale silently. It asserts that the ambiguity is *structural* (a term cannot map
+  to two concepts; `merge` refuses, `validate` reports), that the two documented
+  reproductions still reproduce, and that **no part-level concept exists** for
+  `lager`'s other reading. If a future change adds one, the test fails — which is
+  the point, because the documentation would then be overstating the problem.
+
+### Documented
+- **The polysemy of the flat lookup is a permanent property, not a bug list.**
+  One term maps to exactly one concept, so a German word with two readings resolves
+  to whichever concept claimed it and the format cannot express otherwise. Scale
+  and per-domain split are now in `README.md`, `DATA_SOURCES.md` and
+  `docs/curated-correctness.md`.
+- **`lager` (*bearing* / *stock*) is a coverage gap as much as a polysemy case.**
+  It resolves to `warehouse` and no part-level concept exists for the other
+  reading, so it could not resolve correctly even in principle. `leiter`
+  (*ladder* / *supervisor*) is the same class but sits inside the office domain.
+- **Manufacturing exposure is contained and stated as such:** all 11 polysemous
+  manufacturing terms resolve to a manufacturing concept, and 10 have no competing
+  concept in the glossary at all. The single exception is `lager`.
+- **The 96 undecidable cases are broken down per domain** in `DATA_SOURCES.md`
+  (everyday 47, IT 41, manufacturing 8), alongside what could be decided
+  (manufacturing 0 wrong of 8 — the best case on every decidable measure).
+- **No data was changed for any of this.** Removing the offending synonyms was
+  measured and does not help: dropping `leiter` from `supervisor` leaves the ladder
+  query on the office concept anyway. The failure is the absence of context, not
+  the presence of a word. A real fix is a scope change — recorded as proposal
+  **P8** (per-domain presets as the recommended default, plus a part-level concept),
+  deliberately not implemented here.
+
+## Unreleased (after 0.9.1)
 
 ### Added
 - **`DESIGN_PRINCIPLES.md`** — 18 principles, each tied to the incident that
@@ -30,6 +73,29 @@ All notable changes to klix are documented here. Format based on
   magnitude is stable, so only that is claimed. Corrected in
   `DESIGN_PRINCIPLES.md`, `docs/rejected-approaches.md`, `README.md` and the
   `glossaries.py` quality section, not just in one place (principle 13).
+
+### Documented (known limits, after the v0.9.0 release)
+- **The flat lookup's polysemy is a structural property, not a fixable entry
+  list.** One term maps to exactly one concept — `Glossary.merge` raises
+  `GlossaryConflict` on a second assignment and `validate()` reports an ambiguous
+  mapping — so a German word with two readings can only ever resolve to the one
+  that claimed it. Measured, new script `evals/polysemy_review.py`: **62 of 768
+  curated terms (8.1 %) carry more than one Wikidata sense**, 11 of them in
+  manufacturing. The manufacturing exposure is contained: all 11 resolve to a
+  manufacturing concept, 10 have no competing concept at all. Documented in
+  `README.md`, `DATA_SOURCES.md` and `docs/curated-correctness.md` — the same
+  visibility as the 60 % uncertainty, not buried in an appendix.
+- **`lager` is a coverage gap as much as a polysemy case.** It means *bearing* as
+  well as *stock*, resolves to `warehouse`, and **no part-level concept exists**
+  for the other reading, so it could not resolve correctly even in principle.
+  `leiter` (*ladder* vs *supervisor*) is the same class but resolves inside the
+  office domain and does not touch manufacturing.
+- **No data was changed for this.** Removing the offending synonyms was measured
+  and does not help: dropping `leiter` from `supervisor` leaves the ladder query on
+  the office concept anyway, because the English anchors are semantically close.
+  The failure is the absence of context, not the presence of a word. A fix would be
+  a scope change (per-domain glossaries, context disambiguation) — recorded as
+  proposal **P8**, not implemented.
 
 ### Fixed (a coverage rate was reported where an error rate was asked for)
 - **The P5 measurement answers a different question than it was read as.**

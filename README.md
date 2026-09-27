@@ -236,11 +236,31 @@ A real error rate needs a labelling pass by someone other than the author.
 
 Two consequences you can hit in practice:
 
-* **Flat lookup, no context.** A German word with both an industrial and an office
-  meaning resolves to whichever concept claimed it. Reproduced: `das lager der
-  welle ist verschlissen` (*shaft bearing*) resolves to `warehouse`, not to a part;
-  `der leiter ist kaputt` (*ladder*) resolves to `supervisor`.
-* **Deleting the synonym is not a fix.** It moves the error, it does not remove it.
+* **Flat lookup, no context — this is structural, not a fixable list of typos.**
+  A German word with more than one meaning resolves to whichever concept claimed
+  it, and the format cannot express otherwise: one term maps to exactly one
+  concept, `merge()` refuses the second assignment with `GlossaryConflict`, and
+  `validate()` reports it as an ambiguous mapping. Measured
+  (`evals/polysemy_review.py`): **62 of 768 glossary terms (8.1 %) carry more than
+  one Wikidata sense**, so this is a property of the vocabulary, not of a single
+  entry. Reproduced end-to-end: `das lager der welle ist verschlissen` (*shaft
+  bearing*) resolves to `warehouse`, and `der leiter ist kaputt` (*ladder*)
+  resolves to `supervisor`.
+* **Deleting the synonym is not a fix.** Measured: dropping `leiter` from
+  `supervisor` leaves the ladder query on the office concept anyway, because the
+  English `supervisor` anchors are semantically close to it. The failure is the
+  absence of context, not the presence of a word.
+* **In a single-domain schema the exposure is small.** Of the 11 polysemous
+  manufacturing terms, every one resolves to a manufacturing concept — none leaks
+  into another domain, and for 10 of them no competing concept exists in the
+  glossary at all. The one exception is `lager` (bearing *and* stock): it resolves
+  to `warehouse`, and no part-level concept exists for the other reading. If your
+  schema is manufacturing-only, that is the single case worth knowing about.
+
+Real mitigations, none of them in this release: per-domain glossaries (the engine
+already supports this via `curated_where(tag)` or one glossary per head), a
+context-bearing synonym such as `kugellager`/`wellenlager` for the part reading, or
+context disambiguation (a scope change — the engine is deliberately stateless).
 
 If your schema mixes domains, prefer your **own** glossary over the bundled presets
 — the presets are a starting point and a demonstration, not a calibrated artifact

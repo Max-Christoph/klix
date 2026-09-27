@@ -128,34 +128,66 @@ UNDECIDABLE(no sense link on >=1 side)        : 96   -> correctness UNKNOWN
 The undecidable remainder is concentrated in the peripheral domains, and it does
 reach manufacturing:
 
-| Domain | undecidable | of sampled |
-|---|---|---|
-| everyday | 47 | 71 |
-| IT | 41 | 73 |
-| **manufacturing** | **8** | **16** |
+| Domain | undecidable | of sampled | decidable so far | wrong on decidable |
+|---|---|---|---|---|
+| everyday | 47 | 71 | 24 | 9 (8 of them artifacts) |
+| IT | 41 | 73 | 32 | 2 (both artifacts) |
+| **manufacturing** | **8** | **16** | **8** | **0** |
+| total | 96 | 160 | 64 | 11 |
 
 The 8 manufacturing terms with no external ground truth are `error_code`,
 `failure_cause`, `output`, `quality`, `relay`, `safety_guard`, `spare_part`,
 `torque` — mostly compounded German industrial vocabulary for which Wikidata has
-no lexeme sense. A real error rate for the whole list needs an independent
-labelling pass by someone other than the author; until that exists, treat the
-figure above as a lower bound on the unknown, not as a clean bill of health.
+no lexeme sense. Manufacturing is also the **best** case on every measure that
+could be decided (0 wrong of 8), so the uncertainty there is a gap in the external
+source, not a suspicion about the data. A real error rate for the whole list needs
+an independent labelling pass by someone other than the author; until that exists,
+treat the figures above as a lower bound on the unknown, not as a clean bill of
+health.
 
-**Known polysemy risk (measured, not theorised).** The lookup is flat and
-context-free, so a German word carrying both an industrial and an office meaning
-resolves to whichever concept claimed it first. Confirmed reproductions:
+**Known polysemy risk (measured, not theorised) — a permanent property, not a bug
+list.** The lookup is flat and context-free, so a German word carrying both an
+industrial and an office reading resolves to whichever concept claimed it. This is
+**structural**: one term maps to exactly one concept, and the format cannot express
+a second assignment — `Glossary.merge` raises `GlossaryConflict` and
+`validate()`/`conflicts()` report it as an ambiguous mapping. So it is not fixable
+by editing the word list; that was tested, not assumed.
 
-| Query | resolves to | should be |
+Scale, measured over the whole glossary (`evals/polysemy_review.py`):
+
+```
+62 of 768 curated terms (8.1 %) carry more than one Wikidata sense
+  manufacturing   11   (druck, lager, prozess, verfahren, montage, mutter,
+                        schraube, spannung, toleranz, ventil, wartung)
+  everyday/IT     51
+```
+
+**The manufacturing exposure is contained.** All 11 polysemous manufacturing terms
+resolve to a manufacturing concept; none leaks into another domain, and for 10 of
+them no competing concept exists in the glossary. The single exception is `lager`:
+
+| Query (other reading) | resolves to | should be |
 |---|---|---|
-| `das lager der welle ist verschlissen` (a worn shaft **bearing**) | `warehouse` | a part/wear concept |
-| `der leiter ist kaputt und muss ersetzt werden` (a broken **ladder**) | `supervisor` | a part concept |
+| `das lager der welle ist verschlissen` (a shaft **bearing**) | `warehouse` | a part concept — **which does not exist in the glossary** |
+| `der leiter ist kaputt und muss ersetzt werden` (a **ladder**) | `supervisor` | a part concept (office domain, not manufacturing) |
 
-Removing the offending synonym is not a fix: dropping `leiter` from `supervisor`
-leaves the ladder query on `hr_lead` anyway, because the English *supervisor*
-anchors are semantically close to it. Real mitigations would be context
-disambiguation or per-domain glossaries — both are changes of scope, not data
-edits, and neither is in this release. Recorded here so it is a known limitation
-rather than a surprise.
+`lager` is therefore a **coverage gap as much as a polysemy case**: no
+`bearing`/`kugellager` concept exists for the other reading to land on, so the
+term can only ever mean `warehouse` here.
+
+**Removing the synonym does not fix it.** Measured: dropping `leiter` from
+`supervisor` leaves the ladder query on the office concept anyway, because the
+English `supervisor` anchors are semantically close to it. The failure is the
+absence of context, not the presence of a word.
+
+Real mitigations, none of them in this release (see `docs/proposals.md`, P8):
+
+* per-domain glossaries instead of one merged preset — the engine already supports
+  it (`curated_where(tag)`, or one glossary per head)
+* a context-bearing synonym: `kugellager` / `wellenlager` gives the part reading its
+  own unambiguous surface form (fixes the *coverage* half of `lager`, not the bare
+  `lager` case)
+* context disambiguation — out of scope; the engine is deliberately stateless
 
 Full method and adjudication: `docs/curated-correctness.md`.
 

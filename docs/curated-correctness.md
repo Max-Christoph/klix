@@ -80,34 +80,44 @@ uncertainty there is a coverage gap in Wikidata, not a suspicion of bad data.
 
 ## Known polysemy risk — measured, with reproductions
 
-The lookup is flat and context-free: `word -> concept -> synonyms`. A German word
-carrying both an industrial and an office meaning therefore resolves to whichever
-concept claimed it first. Both of these were reproduced against the shipped
-artifact:
+**This is structural, not a fixable list of entries.** The lookup is flat and
+context-free (`word -> concept -> synonyms`), and one term can map to exactly one
+concept: `Glossary.merge` raises `GlossaryConflict` on a second assignment, and
+`validate()` reports it as an ambiguous mapping. A word with two readings therefore
+resolves to whichever concept claimed it, and the format cannot express otherwise.
 
-| Query (meaning) | resolves to | should be |
+Scale, measured over the whole glossary (`evals/polysemy_review.py`): **62 of 768
+terms (8.1 %) carry more than one Wikidata sense** — 11 in manufacturing, 51 in
+IT/everyday. Both of these were reproduced end-to-end:
+
+| Query (other reading) | resolves to | should be |
 |---|---|---|
-| `das lager der welle ist verschlissen` (worn shaft **bearing**) | `warehouse` | a part/wear concept |
-| `der leiter ist kaputt und muss ersetzt werden` (broken **ladder**) | `supervisor` | a part concept |
+| `das lager der welle ist verschlissen` (a shaft **bearing**) | `warehouse` | a part concept — which does not exist |
+| `der leiter ist kaputt und muss ersetzt werden` (a **ladder**) | `supervisor` | a part concept (office) |
 
-`lager` is the more serious of the two: it is core manufacturing vocabulary, and
-because `lager` is claimed by `warehouse`, the *bearing* reading is pre-empted.
-Similar polysemy exists in `leitung` (claim: `cable`; also management), `mutter`
-(`nut`; also mother), `druck` (`pressure`; also print), `sicherung` (`fuse`; also
-safeguard). None of them is a defect *of the mapping* — each is a correct sense —
-but on the wrong text they bridge the query to the wrong concept.
+**The manufacturing exposure is contained.** All 11 polysemous manufacturing terms
+resolve to a manufacturing concept; none leaks into another domain, and for 10 no
+competing concept exists in the glossary. The single exception is `lager`, which is
+a **coverage gap as much as a polysemy case**: no `bearing`/`kugellager` concept
+exists for the other reading, so the term can only ever mean `warehouse` here.
+
+Similar polysemy exists in `druck` (claim: `pressure`; also print/stress),
+`mutter` (`nut`; also mother), `spannung` (`voltage`; also mechanical tension),
+`prozess`/`verfahren` (`process`), `montage` (`assembly`), `toleranz`, `ventil`,
+`wartung`. None is a defect *of the mapping* — each is a correct sense — but on the
+wrong text they bridge the query to the wrong concept.
 
 **Removing the synonym does not fix it.** Measured: dropping `leiter` from
-`supervisor` leaves `der leiter ist kaputt` on `hr_lead` anyway, because the
-English `supervisor` anchors are semantically close to it. The failure is in the
-absence of context, not in the vocabulary list.
+`supervisor` leaves `der leiter ist kaputt` on the office concept anyway, because
+the English `supervisor` anchors are semantically close to it. The failure is in
+the absence of context, not in the vocabulary list.
 
-Real mitigations, none of them in this release:
+Real mitigations, none of them in this release (proposal P8):
 
 * per-domain glossaries instead of one merged preset (a scope change, and the
   engine already supports it via `curated_where(tag)` / one glossary per head)
 * context disambiguation (out of scope — the engine is deliberately stateless)
-* a context-bearing synonym: adding `kugellager` / `wellenlager` gives the bearing
+* a context-bearing synonym: adding `kugellager` / `wellenlager` gives the part
   reading its own unambiguous surface form, which is a data edit but does **not**
   fix the bare `lager` case
 

@@ -156,3 +156,44 @@ assume the pair.
 **Uncertain.** Whether a second language pair will ever be needed. The engine side
 is already language-agnostic (principle 3), so this is the only remaining
 language-specific component — and it is a script, not the library.
+
+---
+
+## P8 — Per-domain presets as the recommended default, and a part-level concept
+
+**Motivation, measured.** The curated glossary is one merged tri-domain list, and
+the lookup is flat and context-free. Measured (`evals/polysemy_review.py`): **62 of
+768 terms (8.1 %) carry more than one Wikidata sense**, and one term can map to only
+one concept — the format refuses a second assignment, so the ambiguity is
+structural. On a mixed-domain schema the other reading can therefore be bridged to
+the wrong concept.
+
+The manufacturing exposure is contained today (all 11 polysemous manufacturing
+terms resolve inside manufacturing; 10 have no competing concept at all), with one
+real exception: `lager` means *bearing* as well as *stock*, resolves to
+`warehouse`, and **no part-level concept exists** for the other reading — so it
+could not resolve correctly even in principle.
+
+**What it would change.** Two independent things, either of which is useful on its
+own:
+
+1. A part-level concept (`bearing` / `kugellager` / `wellenlager`) closes the
+   coverage half of `lager`, and gives the bearing reading an unambiguous surface
+   form of its own.
+2. Documenting `curated_where(tag)` as the recommended entry point for a
+   single-domain schema — the engine already supports per-domain glossaries
+   (one glossary per head, or a tag filter), but the README leads with the merged
+   preset, which is the configuration that carries the ambiguity.
+
+**Cost.** (1) is a data edit plus a rebuild and re-measure — small. (2) is
+documentation only.
+
+**Uncertain.** Whether (1) changes anything measurable: the bare `lager` query would
+still resolve to `warehouse`, because adding a concept does not add context. It
+would only help queries that name the part explicitly. That is worth measuring
+before claiming a benefit — the honest expectation is that it converts one silent
+wrong bridge into one silent miss.
+
+**Not a fix for the general case.** Removing synonyms does not help (measured: the
+ladder query stays on the office concept regardless), and context disambiguation is
+out of scope because the engine is deliberately stateless.

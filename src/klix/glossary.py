@@ -155,7 +155,19 @@ class Glossary:
         per_concept_topk: int = 6,
         index: bool = True,
     ):
-        self.mapping = mapping
+        # Defensive strip of reserved keys. `load` already removes per-concept
+        # `tags`, but a Glossary is also constructed directly from a dict — and a
+        # document that still carries `tags` would otherwise be read as if "tags"
+        # were a LANGUAGE, with the tag values ("it", "everyday") as its terms.
+        # Those then collide across every concept and look like hundreds of
+        # ambiguous mappings. The loader is not the only entry point, so the
+        # guarantee belongs here (principle 1: fail safe, do not leak metadata
+        # into the data).
+        self.mapping = {
+            concept: {lang: terms for lang, terms in langs.items()
+                      if lang not in _RESERVED_CONCEPT_KEYS}
+            for concept, langs in mapping.items()
+        }
         self.max_added = max_added
         self.per_concept_topk = per_concept_topk
         # term (lowercased, single token) -> concept key. Populated either here

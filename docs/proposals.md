@@ -115,9 +115,16 @@ language should gain the most volume.
 validator, collisions aborting, and the error rate re-measured on a **new**
 random sample (not the 310 known cases, which are no longer blind).
 
-**Status.** Approved in principle by the user; not started, because the format
-work (conflict-safe merge, public API, schema) came first as the higher-value
-change. Prerequisite now met.
+**Status: DONE.** 362 concepts (44 manufacturing, 186 IT, 132 everyday/support/
+mail), 1495 terms. Manufacturing deliberately unchanged. Four gates passed:
+`merge_sources` (0 collisions), `validate()` (0 findings), `assert_valid()`
+(0 ambiguous mappings), JSON Schema (0 errors). New-sample measurement
+(`evals/curated_error_rate_new.py`, seed 20260928, n=160): internal ambiguity 0,
+external attestation 28.7 % overall (manufacturing 44 %, IT 26 %, everyday 28 %).
+Two defects were surfaced by the measurement and fixed: `merged()` read the
+`DOMAINS` constant and silently missed the second content module, and
+`Glossary({...})` did not strip per-concept `tags`, so tag values were read as a
+language called "tags" and produced 359 bogus ambiguous mappings.
 
 ---
 

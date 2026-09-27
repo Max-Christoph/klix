@@ -31,17 +31,23 @@ ground truth, per domain):
 
     domain          wrong-mapping rate    coverage of curated terms
     manufacturing         3.5%                   48%
-    IT                    8.3%                   26%
-    everyday             10.0%                   38%
-    overall               6.6%
+    IT                   11.6%                   19%
+    everyday              9.4%                   22%
+    overall               8.4%                   25%
+
+    (Measured against 768 curated German terms. An earlier revision of this
+    table read 6.6% overall against a 310-term denominator; the curated list
+    grew from 124 to 362 concepts, and the added IT/everyday vocabulary is
+    exactly what Wikidata covers worst, so a larger denominator raises the
+    measured rate. Same question, different population.)
 
 and the curated set itself: 0 structural findings, 0 pairs below the dense
 agreement floor, 0 genuine round-trip failures (evals/curated_glossary_verify.py,
 all 124 concepts — not a sample).
 
-So: 124 terms with no measured errors beat 23,600 terms with a measured 6.6%
-wrong-mapping rate, when the failure mode is a query being bridged to the wrong
-concept. Use `broad()` deliberately when recall matters more than precision.
+So: a curated list with no measured errors beats 23,600 terms with a measured
+8.4% wrong-mapping rate, when the failure mode is a query being bridged to the
+wrong concept. Use `broad()` deliberately when recall matters more than precision.
 """
 from __future__ import annotations
 
@@ -298,8 +304,8 @@ def curated_everyday() -> Glossary:
 def broad() -> Glossary:
     """The large Wikidata-generated vocabulary (~10k concepts). Opt-in.
 
-    NOT the default. Measured 6.6% wrong-mapping rate against the curated list
-    (per domain: manufacturing 3.5%, IT 8.3%, everyday 10.0%), because Wikidata
+    NOT the default. Measured 8.4% wrong-mapping rate against the curated list
+    (per domain: manufacturing 3.5%, IT 11.6%, everyday 9.4%), because Wikidata
     sense disambiguation without context is unreliable and for many German terms
     no manufacturing sense is linked at all. Use it when recall matters more than
     precision; prefer `curated()` for routing decisions that must not bridge a

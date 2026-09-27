@@ -36,6 +36,9 @@ from klix.backbone import HybridBackbone  # noqa: E402
 from klix.glossary import DEFAULT_GLOSSARY, Glossary  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[1]
+# The content module imports its sibling `curated_glossary_ext`, so the scripts
+# directory must be importable — loading by spec path alone is not enough.
+sys.path.insert(0, str(REPO / "scripts"))
 spec = importlib.util.spec_from_file_location(
     "curated", REPO / "scripts" / "curated_glossary_data.py")
 curated = importlib.util.module_from_spec(spec)

@@ -1,1349 +1,4761 @@
 {
- "access_rights": {
-  "de": [
-   "zugriffsrechte",
-   "berechtigung"
-  ],
-  "en": [
-   "access rights",
-   "permission"
-  ]
- },
- "application": {
-  "de": [
-   "anwendung",
-   "applikation",
-   "programm"
-  ],
-  "en": [
-   "application",
-   "app",
-   "program"
-  ]
- },
- "appointment": {
-  "de": [
-   "termin",
-   "besprechung"
-  ],
-  "en": [
-   "appointment",
-   "meeting"
-  ]
- },
- "approval": {
-  "de": [
-   "freigabe",
-   "abnahme"
-  ],
-  "en": [
-   "approval",
-   "acceptance"
-  ]
- },
- "approval_office": {
-  "de": [
-   "genehmigung",
-   "zulassung",
-   "erlaubnis"
-  ],
-  "en": [
-   "permit",
-   "license",
-   "authorization"
-  ]
- },
- "assembly": {
-  "de": [
-   "montage",
-   "montagelinie",
-   "zusammenbau"
-  ],
-  "en": [
-   "assembly",
-   "assembly line"
-  ]
- },
- "backup": {
-  "de": [
-   "sicherungskopie",
-   "datensicherung"
-  ],
-  "en": [
-   "backup",
-   "data backup"
-  ]
- },
- "bank_account": {
-  "de": [
-   "konto",
-   "bankkonto"
-  ],
-  "en": [
-   "account",
-   "bank account"
-  ]
- },
- "batch": {
-  "de": [
-   "charge",
-   "losgroesse"
-  ],
-  "en": [
-   "batch",
-   "lot size"
-  ]
- },
- "budget": {
-  "de": [
-   "budget",
-   "etat",
-   "kostenrahmen"
-  ],
-  "en": [
-   "budget",
-   "funds"
-  ]
- },
- "bug": {
-  "de": [
-   "programmfehler",
-   "softwarefehler",
-   "absturz"
-  ],
-  "en": [
-   "bug",
-   "defect",
-   "crash"
-  ]
- },
- "bug_report": {
-  "de": [
-   "fehlerbericht",
-   "fehlerbeschreibung"
-  ],
-  "en": [
-   "bug report",
-   "defect description"
-  ]
- },
- "cable": {
-  "de": [
-   "kabel",
-   "leitung",
-   "steckverbinder"
-  ],
-  "en": [
-   "cable",
-   "wire",
-   "connector"
-  ]
- },
- "calibration": {
-  "de": [
-   "kalibrierung",
-   "justierung",
-   "abgleich"
-  ],
-  "en": [
-   "calibration",
-   "adjustment"
-  ]
- },
- "cancellation": {
-  "de": [
-   "stornierung",
-   "kuendigung",
-   "abbruch"
-  ],
-  "en": [
-   "cancellation",
-   "termination",
-   "abort"
-  ]
- },
- "certificate": {
-  "de": [
-   "zertifikat",
-   "tlszertifikat"
-  ],
-  "en": [
-   "tls certificate",
-   "digital certificate"
-  ]
- },
- "certificate_hr": {
-  "de": [
-   "zeugnis",
-   "bescheinigung",
-   "nachweis"
-  ],
-  "en": [
-   "reference letter",
-   "proof of qualification"
-  ]
- },
- "change_request": {
-  "de": [
-   "aenderung",
-   "aenderungsantrag",
-   "anpassung"
-  ],
-  "en": [
-   "change",
-   "change request",
-   "modification"
-  ]
- },
- "client": {
-  "de": [
-   "endgeraet",
-   "arbeitsplatzrechner"
-  ],
-  "en": [
-   "client",
-   "endpoint"
-  ]
- },
- "commissioning": {
-  "de": [
-   "inbetriebnahme",
-   "inbetriebsetzung"
-  ],
-  "en": [
-   "commissioning",
-   "startup"
-  ]
- },
- "complaint": {
-  "de": [
-   "beschwerde",
-   "reklamation",
-   "beanstandung"
-  ],
-  "en": [
-   "complaint",
-   "reclamation"
-  ]
- },
- "configuration": {
-  "de": [
-   "konfiguration",
-   "einstellung",
-   "parameter"
-  ],
-  "en": [
-   "configuration",
-   "setting",
-   "parameter"
-  ]
- },
- "confirmation": {
-  "de": [
-   "bestaetigung",
-   "zusage"
-  ],
-  "en": [
-   "confirmation",
-   "acknowledgement"
-  ]
- },
- "contract": {
-  "de": [
-   "vertrag",
-   "vereinbarung"
-  ],
-  "en": [
-   "contract",
-   "agreement"
-  ]
- },
- "conveyor": {
-  "de": [
-   "foerderband",
-   "förderband",
-   "transportband"
-  ],
-  "en": [
-   "conveyor",
-   "conveyor belt"
-  ]
- },
- "cpu": {
-  "de": [
-   "prozessor",
-   "rechnerleistung"
-  ],
-  "en": [
-   "processor",
-   "cpu"
-  ]
- },
- "customer": {
-  "de": [
-   "kunde",
-   "auftraggeber"
-  ],
-  "en": [
-   "customer",
-   "buyer"
-  ]
- },
- "cycle_time": {
-  "de": [
-   "taktzeit",
-   "zykluszeit"
-  ],
-  "en": [
-   "cycle time",
-   "cycle-time"
-  ]
- },
- "database": {
-  "de": [
-   "datenbank",
-   "datenspeicher"
-  ],
-  "en": [
-   "database",
-   "datastore"
-  ]
- },
- "deadline": {
-  "de": [
-   "frist",
-   "stichtag"
-  ],
-  "en": [
-   "deadline",
-   "due date"
-  ]
- },
- "delay": {
-  "de": [
-   "verzoegerung",
-   "verspaetung",
-   "verzug"
-  ],
-  "en": [
-   "delay",
-   "lag"
-  ]
- },
- "delivery": {
-  "de": [
-   "lieferung",
-   "zustellung",
-   "versand"
-  ],
-  "en": [
-   "delivery",
-   "shipment",
-   "dispatch"
-  ]
- },
- "department": {
-  "de": [
-   "abteilung",
-   "bereich",
-   "ressort"
-  ],
-  "en": [
-   "department",
-   "division",
-   "unit"
-  ]
- },
- "deployment": {
-  "de": [
-   "bereitstellung",
-   "ausrollen"
-  ],
-  "en": [
-   "deployment",
-   "rollout"
-  ]
- },
- "documentation": {
-  "de": [
-   "dokumentation",
-   "anleitung",
-   "handbuch"
-  ],
-  "en": [
-   "documentation",
-   "manual",
-   "guide"
-  ]
- },
- "downtime": {
-  "de": [
-   "stillstand",
-   "ausfallzeit",
-   "anlagenstillstand"
-  ],
-  "en": [
-   "downtime",
-   "line stoppage",
-   "standstill"
-  ]
- },
- "employee": {
-  "de": [
-   "mitarbeiter",
-   "beschaeftigter",
-   "angestellter"
-  ],
-  "en": [
-   "employee",
-   "staff member",
-   "worker"
-  ]
- },
- "encryption": {
-  "de": [
-   "verschluesselung",
-   "kryptografie"
-  ],
-  "en": [
-   "encryption",
-   "cryptography"
-  ]
- },
- "error_code": {
-  "de": [
-   "fehlercode",
-   "stoerungscode"
-  ],
-  "en": [
-   "error code",
-   "fault code"
-  ]
- },
- "error_message": {
-  "de": [
-   "fehlermeldung",
-   "fehlertext"
-  ],
-  "en": [
-   "error message",
-   "error text"
-  ]
- },
- "expense": {
-  "de": [
-   "ausgabe",
-   "spesen",
-   "kosten"
-  ],
-  "en": [
-   "expense",
-   "cost",
-   "spending"
-  ]
- },
- "expiry": {
-  "de": [
-   "gueltigkeit",
-   "ablaufdatum"
-  ],
-  "en": [
-   "expiry",
-   "validity",
-   "expiration date"
-  ]
- },
- "failure": {
-  "de": [
-   "ausfall",
-   "stoerung",
-   "fehlfunktion"
-  ],
-  "en": [
-   "failure",
-   "fault",
-   "malfunction"
-  ]
- },
- "failure_cause": {
-  "de": [
-   "stoergrund",
-   "ausfallgrund"
-  ],
-  "en": [
-   "failure cause",
-   "downtime reason"
-  ]
- },
- "firewall": {
-  "de": [
-   "firewall",
-   "paketfilter"
-  ],
-  "en": [
-   "firewall",
-   "packet filter"
-  ]
- },
- "firewall_rule": {
-  "de": [
-   "regel",
-   "portfreigabe"
-  ],
-  "en": [
-   "rule",
-   "port release"
-  ]
- },
- "flow_rate": {
-  "de": [
-   "durchfluss",
-   "durchflussmenge",
-   "volumenstrom"
-  ],
-  "en": [
-   "flow rate",
-   "flow"
-  ]
- },
- "fuse": {
-  "de": [
-   "sicherung",
-   "absicherung"
-  ],
-  "en": [
-   "fuse",
-   "circuit protection"
-  ]
- },
- "gear": {
-  "de": [
-   "getriebe",
-   "zahnrad",
-   "uebersetzung"
-  ],
-  "en": [
-   "gearbox",
-   "gear",
-   "transmission"
-  ]
- },
- "hydraulic": {
-  "de": [
-   "hydraulik",
-   "hydraulikoel"
-  ],
-  "en": [
-   "hydraulic",
-   "hydraulic system"
-  ]
- },
- "inspection": {
-  "de": [
-   "pruefung",
-   "inspektion",
-   "sichtpruefung"
-  ],
-  "en": [
-   "inspection",
-   "check",
-   "examination"
-  ]
- },
- "interface": {
-  "de": [
-   "schnittstelle",
-   "anbindung",
-   "api"
-  ],
-  "en": [
-   "interface",
-   "integration",
-   "api"
-  ]
- },
- "invoice": {
-  "de": [
-   "rechnung",
-   "abrechnung"
-  ],
-  "en": [
-   "invoice",
-   "bill",
-   "statement"
-  ]
- },
- "issue_ticket": {
-  "de": [
-   "ticket",
-   "vorgang",
-   "stoerungsmeldung"
-  ],
-  "en": [
-   "ticket",
-   "incident"
-  ]
- },
- "job_application": {
-  "de": [
-   "bewerbung",
-   "bewerbungsunterlagen",
-   "lebenslauf"
-  ],
-  "en": [
-   "job application",
-   "cv",
-   "resume"
-  ]
- },
- "log_file": {
-  "de": [
-   "logdatei",
-   "protokolldatei"
-  ],
-  "en": [
-   "log file",
-   "log"
-  ]
- },
- "login": {
-  "de": [
-   "anmeldung",
-   "einloggen",
-   "anmeldedaten"
-  ],
-  "en": [
-   "login",
-   "log in",
-   "sign in"
-  ]
- },
- "lubrication": {
-  "de": [
-   "schmierung",
-   "schmierstoff"
-  ],
-  "en": [
-   "lubrication",
-   "lubricant"
-  ]
- },
- "maintenance": {
-  "de": [
-   "wartung",
-   "instandhaltung",
-   "reparatur"
-  ],
-  "en": [
-   "maintenance",
-   "repair"
-  ]
- },
- "maintenance_plan": {
-  "de": [
-   "wartungsplan",
-   "wartungsplanung"
-  ],
-  "en": [
-   "maintenance plan",
-   "maintenance schedule"
-  ]
- },
- "malware": {
-  "de": [
-   "schadsoftware",
-   "virus",
-   "trojaner"
-  ],
-  "en": [
-   "malware",
-   "virus",
-   "trojan"
-  ]
- },
- "measurement": {
-  "de": [
-   "messung",
-   "messwert",
-   "messergebnis"
-  ],
-  "en": [
-   "measurement",
-   "measured value",
-   "reading"
-  ]
- },
- "meeting_notes": {
-  "de": [
-   "protokoll",
-   "sitzungsprotokoll",
-   "notizen"
-  ],
-  "en": [
-   "minutes",
-   "meeting notes"
-  ]
- },
- "memory": {
-  "de": [
-   "arbeitsspeicher",
-   "hauptspeicher"
-  ],
-  "en": [
-   "memory",
-   "ram"
-  ]
- },
- "monitoring": {
-  "de": [
-   "ueberwachung",
-   "monitoring"
-  ],
-  "en": [
-   "monitoring",
-   "supervision"
-  ]
- },
- "motor": {
-  "de": [
-   "motor",
-   "elektromotor"
-  ],
-  "en": [
-   "motor",
-   "electric motor"
-  ]
- },
- "network": {
-  "de": [
-   "netzwerk",
-   "netz",
-   "verbindung"
-  ],
-  "en": [
-   "network",
-   "connection",
-   "link"
-  ]
- },
- "notice_period": {
-  "de": [
-   "kuendigungsfrist",
-   "austrittsdatum"
-  ],
-  "en": [
-   "notice period",
-   "termination date"
-  ]
- },
- "nut": {
-  "de": [
-   "mutter",
-   "sechskantmutter"
-  ],
-  "en": [
-   "nut",
-   "hex nut"
-  ]
- },
- "onboarding": {
-  "de": [
-   "einarbeitung",
-   "einstieg",
-   "einarbeitungsplan"
-  ],
-  "en": [
-   "onboarding",
-   "induction"
-  ]
- },
- "order": {
-  "de": [
-   "bestellung",
-   "auftrag"
-  ],
-  "en": [
-   "order",
-   "purchase order"
-  ]
- },
- "outage": {
-  "de": [
-   "unerreichbarkeit",
-   "wartungsfenster"
-  ],
-  "en": [
-   "outage",
-   "maintenance window"
-  ]
- },
- "output": {
-  "de": [
-   "ausgangsleistung",
-   "durchsatz"
-  ],
-  "en": [
-   "output",
-   "power output"
-  ]
- },
- "overtime": {
-  "de": [
-   "ueberstunden",
-   "mehrarbeit"
-  ],
-  "en": [
-   "overtime",
-   "extra hours"
-  ]
- },
- "password": {
-  "de": [
-   "passwort",
-   "kennwort",
-   "zugangscode"
-  ],
-  "en": [
-   "password",
-   "credential",
-   "passphrase"
-  ]
- },
- "payment": {
-  "de": [
-   "zahlung",
-   "ueberweisung"
-  ],
-  "en": [
-   "payment",
-   "transfer"
-  ]
- },
- "performance": {
-  "de": [
-   "leistung",
-   "geschwindigkeit"
-  ],
-  "en": [
-   "performance",
-   "speed",
-   "throughput"
-  ]
- },
- "pneumatic": {
-  "de": [
-   "pneumatik",
-   "druckluft"
-  ],
-  "en": [
-   "pneumatic",
-   "compressed air"
-  ]
- },
- "pressure": {
-  "de": [
-   "druck",
-   "luftdruck",
-   "systemdruck"
-  ],
-  "en": [
-   "pressure",
-   "system pressure"
-  ]
- },
- "problem": {
-  "de": [
-   "problem",
-   "schwierigkeit"
-  ],
-  "en": [
-   "problem",
-   "issue"
-  ]
- },
- "process": {
-  "de": [
-   "prozess",
-   "verfahren",
-   "ablauf"
-  ],
-  "en": [
-   "process",
-   "procedure",
-   "workflow"
-  ]
- },
- "pump": {
-  "de": [
-   "pumpe",
-   "foerderpumpe"
-  ],
-  "en": [
-   "pump",
-   "feed pump"
-  ]
- },
- "quality": {
-  "de": [
-   "qualitaet",
-   "guete",
-   "beschaffenheit"
-  ],
-  "en": [
-   "quality",
-   "grade"
-  ]
- },
- "query": {
-  "de": [
-   "abfrage",
-   "suchabfrage"
-  ],
-  "en": [
-   "query"
-  ]
- },
- "question": {
-  "de": [
-   "frage",
-   "rueckfrage",
-   "nachfrage"
-  ],
-  "en": [
-   "question",
-   "clarification"
-  ]
- },
- "receipt": {
-  "de": [
-   "quittung",
-   "kassenzettel"
-  ],
-  "en": [
-   "receipt",
-   "proof of purchase"
-  ]
- },
- "refund": {
-  "de": [
-   "erstattung",
-   "rueckerstattung",
-   "gutschrift"
-  ],
-  "en": [
-   "refund",
-   "reimbursement",
-   "credit note"
-  ]
- },
- "relay": {
-  "de": [
-   "relais",
-   "schuetz"
-  ],
-  "en": [
-   "relay",
-   "contactor"
-  ]
- },
- "report": {
-  "de": [
-   "bericht",
-   "auswertung",
-   "meldung"
-  ],
-  "en": [
-   "report",
-   "analysis"
-  ]
- },
- "request": {
-  "de": [
-   "anfrage",
-   "anforderung"
-  ],
-  "en": [
-   "request",
-   "requirement"
-  ]
- },
- "restore": {
-  "de": [
-   "wiederherstellung",
-   "ruecksicherung"
-  ],
-  "en": [
-   "restore",
-   "recovery"
-  ]
- },
- "return_goods": {
-  "de": [
-   "rueckgabe",
-   "retoure",
-   "umtausch"
-  ],
-  "en": [
-   "return",
-   "exchange"
-  ]
- },
- "rollback": {
-  "de": [
-   "zuruecksetzen",
-   "rueckabwicklung"
-  ],
-  "en": [
-   "rollback",
-   "revert"
-  ]
- },
- "safety_guard": {
-  "de": [
-   "schutzgitter",
-   "schutztuer",
-   "schutzabdeckung"
-  ],
-  "en": [
-   "safety guard",
-   "safety door",
-   "guard"
-  ]
- },
- "salary": {
-  "de": [
-   "gehalt",
-   "lohn",
-   "verguetung"
-  ],
-  "en": [
-   "salary",
-   "wage",
-   "pay"
-  ]
- },
- "scrap": {
-  "de": [
-   "ausschuss",
-   "fehlteil",
-   "ausschussquote"
-  ],
-  "en": [
-   "scrap",
-   "reject part"
-  ]
- },
- "screw": {
-  "de": [
-   "schraube",
-   "gewinde",
-   "schraubverbindung"
-  ],
-  "en": [
-   "screw",
-   "thread",
-   "bolted joint"
-  ]
- },
- "seal": {
-  "de": [
-   "dichtung",
-   "dichtungsring",
-   "abdichtung"
-  ],
-  "en": [
-   "seal",
-   "gasket",
-   "sealing"
-  ]
- },
- "security_incident": {
-  "de": [
-   "sicherheitsvorfall",
-   "angriff",
-   "datenschutzvorfall"
-  ],
-  "en": [
-   "security incident",
-   "attack",
-   "breach"
-  ]
- },
- "sensor": {
-  "de": [
-   "sensor",
-   "sensorik",
-   "messfuehler"
-  ],
-  "en": [
-   "sensor",
-   "sensing"
-  ]
- },
- "server": {
-  "de": [
-   "server",
-   "host",
-   "rechensystem"
-  ],
-  "en": [
-   "server",
-   "host"
-  ]
- },
- "service": {
-  "de": [
-   "dienst",
-   "webdienst"
-  ],
-  "en": [
-   "service",
-   "daemon",
-   "web service"
-  ]
- },
- "shift": {
-  "de": [
-   "schicht",
-   "schichtbetrieb",
-   "fruehschicht"
-  ],
-  "en": [
-   "shift",
-   "work shift"
-  ]
- },
- "sick_leave": {
-  "de": [
-   "krankmeldung",
-   "krankschreibung",
-   "arbeitsunfaehigkeit"
-  ],
-  "en": [
-   "sick leave",
-   "sick note",
-   "absence"
-  ]
- },
- "spare_part": {
-  "de": [
-   "ersatzteil",
-   "ersatzteile"
-  ],
-  "en": [
-   "spare part",
-   "spare parts"
-  ]
- },
- "storage": {
-  "de": [
-   "speicher",
-   "festplatte",
-   "speicherplatz"
-  ],
-  "en": [
-   "storage",
-   "disk",
-   "disk space"
-  ]
- },
- "supervisor": {
-  "de": [
-   "vorgesetzter",
-   "leiter",
-   "fuehrungskraft"
-  ],
-  "en": [
-   "supervisor",
-   "manager",
-   "lead"
-  ]
- },
- "supplier": {
-  "de": [
-   "lieferant",
-   "zulieferer",
-   "anbieter"
-  ],
-  "en": [
-   "supplier",
-   "vendor",
-   "provider"
-  ]
- },
- "switch": {
-  "de": [
-   "schalter",
-   "taster",
-   "endschalter"
-  ],
-  "en": [
-   "switch",
-   "push button",
-   "limit switch"
-  ]
- },
- "temperature": {
-  "de": [
-   "temperatur",
-   "betriebstemperatur"
-  ],
-  "en": [
-   "temperature",
-   "operating temperature"
-  ]
- },
- "timeout": {
-  "de": [
-   "zeitueberschreitung",
-   "antwortzeit"
-  ],
-  "en": [
-   "timeout",
-   "latency",
-   "response time"
-  ]
- },
- "tolerance": {
-  "de": [
-   "toleranz",
-   "abmass"
-  ],
-  "en": [
-   "tolerance"
-  ]
- },
- "torque": {
-  "de": [
-   "drehmoment",
-   "anzugsmoment"
-  ],
-  "en": [
-   "torque",
-   "tightening torque"
-  ]
- },
- "training": {
-  "de": [
-   "schulung",
-   "weiterbildung",
-   "unterweisung"
-  ],
-  "en": [
-   "training",
-   "course",
-   "instruction"
-  ]
- },
- "update": {
-  "de": [
-   "aktualisierung",
-   "update",
-   "patch"
-  ],
-  "en": [
-   "update",
-   "patch",
-   "upgrade"
-  ]
- },
- "urgent": {
-  "de": [
-   "dringend",
-   "eilig",
-   "sofort",
-   "vorrangig"
-  ],
-  "en": [
-   "urgent",
-   "asap",
-   "immediately",
-   "priority"
-  ]
- },
- "user_account": {
-  "de": [
-   "benutzerkonto",
-   "benutzer"
-  ],
-  "en": [
-   "user account",
-   "user"
-  ]
- },
- "vacation": {
-  "de": [
-   "urlaub",
-   "erholungsurlaub",
-   "freizeitausgleich"
-  ],
-  "en": [
-   "vacation",
-   "annual leave",
-   "time off"
-  ]
- },
- "valve": {
-  "de": [
-   "ventil",
-   "absperrventil"
-  ],
-  "en": [
-   "valve",
-   "shut-off valve"
-  ]
- },
- "version": {
-  "de": [
-   "version",
-   "versionsstand"
-  ],
-  "en": [
-   "version",
-   "build",
-   "release"
-  ]
- },
- "voltage": {
-  "de": [
-   "spannung",
-   "versorgungsspannung"
-  ],
-  "en": [
-   "voltage",
-   "supply voltage"
-  ]
- },
- "warehouse": {
-  "de": [
-   "lager",
-   "lagerbestand",
-   "materiallager"
-  ],
-  "en": [
-   "warehouse",
-   "inventory",
-   "stock"
-  ]
- },
- "warranty": {
-  "de": [
-   "garantie",
-   "gewaehrleistung"
-  ],
-  "en": [
-   "warranty",
-   "guarantee"
-  ]
- },
- "wear": {
-  "de": [
-   "verschleiss",
-   "abnutzung"
-  ],
-  "en": [
-   "wear",
-   "abrasion"
-  ]
- }
+ "concepts": {
+  "absence_report": {
+   "de": [
+    "abwesenheitsmeldung",
+    "fehlzeit"
+   ],
+   "en": [
+    "absence report",
+    "absence record"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "acceptance_criteria": {
+   "de": [
+    "abnahmekriterium",
+    "abnahmekriterien"
+   ],
+   "en": [
+    "acceptance criteria"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "access_rights": {
+   "de": [
+    "zugriffsrechte",
+    "berechtigung"
+   ],
+   "en": [
+    "access rights",
+    "permission"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "adapter": {
+   "de": [
+    "adapter",
+    "zwischenstecker"
+   ],
+   "en": [
+    "adapter",
+    "dongle"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "affected_users": {
+   "de": [
+    "betroffene nutzer",
+    "betroffenenkreis"
+   ],
+   "en": [
+    "affected users",
+    "impacted users"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "akku": {
+   "de": [
+    "akku",
+    "batterie",
+    "stromversorgung"
+   ],
+   "en": [
+    "battery",
+    "accumulator"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "alert": {
+   "de": [
+    "warnmeldung",
+    "alarmierung"
+   ],
+   "en": [
+    "alert",
+    "notification"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "amendment_doc": {
+   "de": [
+    "nachtragsvereinbarung",
+    "vertragsanpassung"
+   ],
+   "en": [
+    "amendment",
+    "contract addendum"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "anschluss": {
+   "de": [
+    "anschluss",
+    "schnittstellenport"
+   ],
+   "en": [
+    "port",
+    "socket"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "api_endpoint": {
+   "de": [
+    "apiendpunkt",
+    "schnittstellenadresse"
+   ],
+   "en": [
+    "api endpoint",
+    "endpoint address"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "application": {
+   "de": [
+    "anwendung",
+    "applikation",
+    "programm"
+   ],
+   "en": [
+    "application",
+    "app",
+    "program"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "appointment": {
+   "de": [
+    "termin",
+    "besprechung"
+   ],
+   "en": [
+    "appointment",
+    "meeting"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "appraisal": {
+   "de": [
+    "beurteilung",
+    "mitarbeitergespraech"
+   ],
+   "en": [
+    "appraisal",
+    "performance review"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "approval": {
+   "de": [
+    "freigabe",
+    "abnahme"
+   ],
+   "en": [
+    "approval",
+    "acceptance"
+   ],
+   "tags": [
+    "manufacturing"
+   ]
+  },
+  "approval_chain": {
+   "de": [
+    "genehmigungskette",
+    "freigabeweg"
+   ],
+   "en": [
+    "approval chain",
+    "sign-off path"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "approval_office": {
+   "de": [
+    "genehmigung",
+    "zulassung",
+    "erlaubnis"
+   ],
+   "en": [
+    "permit",
+    "license",
+    "authorization"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "archiving": {
+   "de": [
+    "archivierung",
+    "ablage"
+   ],
+   "en": [
+    "archiving",
+    "filing"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "artifact_build": {
+   "de": [
+    "buildartefakt"
+   ],
+   "en": [
+    "build artifact"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "assembly": {
+   "de": [
+    "montage",
+    "montagelinie",
+    "zusammenbau"
+   ],
+   "en": [
+    "assembly",
+    "assembly line"
+   ],
+   "tags": [
+    "manufacturing"
+   ]
+  },
+  "asset": {
+   "de": [
+    "anlagegut",
+    "inventarobjekt"
+   ],
+   "en": [
+    "asset",
+    "device record"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "attachment": {
+   "de": [
+    "anhang",
+    "dateianhang"
+   ],
+   "en": [
+    "attachment",
+    "enclosure"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "audit_log": {
+   "de": [
+    "auditprotokoll",
+    "revisionsprotokoll"
+   ],
+   "en": [
+    "audit log",
+    "audit trail"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "backlog": {
+   "de": [
+    "rueckstand",
+    "aufgabenliste"
+   ],
+   "en": [
+    "backlog",
+    "task list"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "backup": {
+   "de": [
+    "sicherungskopie",
+    "datensicherung"
+   ],
+   "en": [
+    "backup",
+    "data backup"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "bandwidth": {
+   "de": [
+    "bandbreite",
+    "durchsatzrate"
+   ],
+   "en": [
+    "bandwidth"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "bank_account": {
+   "de": [
+    "konto",
+    "bankkonto"
+   ],
+   "en": [
+    "account",
+    "bank account"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "batch": {
+   "de": [
+    "charge",
+    "losgroesse"
+   ],
+   "en": [
+    "batch",
+    "lot size"
+   ],
+   "tags": [
+    "manufacturing"
+   ]
+  },
+  "batch_job": {
+   "de": [
+    "stapelverarbeitung",
+    "batchlauf"
+   ],
+   "en": [
+    "batch job",
+    "batch process"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "beamer": {
+   "de": [
+    "beamer",
+    "projektor"
+   ],
+   "en": [
+    "projector",
+    "beamer"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "bounce": {
+   "de": [
+    "unzustellbar",
+    "zurueckgewiesen"
+   ],
+   "en": [
+    "bounce",
+    "undeliverable"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "branch": {
+   "de": [
+    "zweig",
+    "entwicklungszweig"
+   ],
+   "en": [
+    "branch"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "browser": {
+   "de": [
+    "browser",
+    "webbrowser"
+   ],
+   "en": [
+    "browser",
+    "web browser"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "budget": {
+   "de": [
+    "budget",
+    "etat",
+    "kostenrahmen"
+   ],
+   "en": [
+    "budget",
+    "funds"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "bug": {
+   "de": [
+    "programmfehler",
+    "softwarefehler",
+    "absturz"
+   ],
+   "en": [
+    "bug",
+    "defect",
+    "crash"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "bug_report": {
+   "de": [
+    "fehlerbericht",
+    "fehlerbeschreibung"
+   ],
+   "en": [
+    "bug report",
+    "defect description"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "build": {
+   "de": [
+    "buildvorgang",
+    "uebersetzungsvorgang"
+   ],
+   "en": [
+    "build"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "cable": {
+   "de": [
+    "kabel",
+    "leitung",
+    "steckverbinder"
+   ],
+   "en": [
+    "cable",
+    "wire",
+    "connector"
+   ],
+   "tags": [
+    "manufacturing"
+   ]
+  },
+  "cache": {
+   "de": [
+    "zwischenspeicher",
+    "cache"
+   ],
+   "en": [
+    "cache",
+    "buffer"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "calendar_invite": {
+   "de": [
+    "terminanfrage",
+    "termineinladung"
+   ],
+   "en": [
+    "calendar invite",
+    "meeting request"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "calibration": {
+   "de": [
+    "kalibrierung",
+    "justierung",
+    "abgleich"
+   ],
+   "en": [
+    "calibration",
+    "adjustment"
+   ],
+   "tags": [
+    "manufacturing"
+   ]
+  },
+  "cancellation": {
+   "de": [
+    "stornierung",
+    "kuendigung",
+    "abbruch"
+   ],
+   "en": [
+    "cancellation",
+    "termination",
+    "abort"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "cc": {
+   "de": [
+    "inkopie",
+    "kopieempfaenger"
+   ],
+   "en": [
+    "cc",
+    "carbon copy"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "certificate": {
+   "de": [
+    "zertifikat",
+    "tlszertifikat"
+   ],
+   "en": [
+    "tls certificate",
+    "digital certificate"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "certificate_hr": {
+   "de": [
+    "zeugnis",
+    "bescheinigung",
+    "nachweis"
+   ],
+   "en": [
+    "reference letter",
+    "proof of qualification"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "change_request": {
+   "de": [
+    "aenderung",
+    "aenderungsantrag",
+    "anpassung"
+   ],
+   "en": [
+    "change",
+    "change request",
+    "modification"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "changelog": {
+   "de": [
+    "aenderungsprotokoll",
+    "changelog"
+   ],
+   "en": [
+    "changelog",
+    "release notes"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "circular": {
+   "de": [
+    "rundschreiben",
+    "umlauf"
+   ],
+   "en": [
+    "circular",
+    "broadcast message"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "client": {
+   "de": [
+    "endgeraet",
+    "arbeitsplatzrechner"
+   ],
+   "en": [
+    "client",
+    "endpoint"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "closing": {
+   "de": [
+    "grussformel",
+    "schlussformel"
+   ],
+   "en": [
+    "closing",
+    "valediction"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "cluster": {
+   "de": [
+    "cluster",
+    "verbund"
+   ],
+   "en": [
+    "cluster"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "code_review": {
+   "de": [
+    "codereview",
+    "codeueberpruefung"
+   ],
+   "en": [
+    "code review",
+    "peer review"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "colleague": {
+   "de": [
+    "kollege",
+    "kollegin"
+   ],
+   "en": [
+    "colleague",
+    "coworker"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "column": {
+   "de": [
+    "spalte",
+    "feld"
+   ],
+   "en": [
+    "column",
+    "field"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "commissioning": {
+   "de": [
+    "inbetriebnahme",
+    "inbetriebsetzung"
+   ],
+   "en": [
+    "commissioning",
+    "startup"
+   ],
+   "tags": [
+    "manufacturing"
+   ]
+  },
+  "commit": {
+   "de": [
+    "committen",
+    "versionsstand einchecken"
+   ],
+   "en": [
+    "commit",
+    "check-in"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "compiler": {
+   "de": [
+    "compiler",
+    "uebersetzer"
+   ],
+   "en": [
+    "compiler"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "complaint": {
+   "de": [
+    "beschwerde",
+    "reklamation",
+    "beanstandung"
+   ],
+   "en": [
+    "complaint",
+    "reclamation"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "configuration": {
+   "de": [
+    "konfiguration",
+    "einstellung",
+    "parameter"
+   ],
+   "en": [
+    "configuration",
+    "setting",
+    "parameter"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "confirmation": {
+   "de": [
+    "bestaetigung",
+    "zusage"
+   ],
+   "en": [
+    "confirmation",
+    "acknowledgement"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "container": {
+   "de": [
+    "container",
+    "laufzeitumgebung"
+   ],
+   "en": [
+    "container"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "contract": {
+   "de": [
+    "vertrag",
+    "vereinbarung"
+   ],
+   "en": [
+    "contract",
+    "agreement"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "contract_term": {
+   "de": [
+    "vertragslaufzeit",
+    "laufzeit"
+   ],
+   "en": [
+    "contract term",
+    "term"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "conveyor": {
+   "de": [
+    "foerderband",
+    "förderband",
+    "transportband"
+   ],
+   "en": [
+    "conveyor",
+    "conveyor belt"
+   ],
+   "tags": [
+    "manufacturing"
+   ]
+  },
+  "cookie": {
+   "de": [
+    "cookie",
+    "kennung"
+   ],
+   "en": [
+    "cookie"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "core_hours": {
+   "de": [
+    "kernzeit",
+    "kernarbeitszeit"
+   ],
+   "en": [
+    "core hours",
+    "core time"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "cost_centre": {
+   "de": [
+    "kostenstelle",
+    "kostenstelle zuordnung"
+   ],
+   "en": [
+    "cost centre",
+    "cost center"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "cpu": {
+   "de": [
+    "prozessor",
+    "rechnerleistung"
+   ],
+   "en": [
+    "processor",
+    "cpu"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "credit_note": {
+   "de": [
+    "gutschriftsbeleg",
+    "stornorechnung"
+   ],
+   "en": [
+    "credit memo",
+    "credit voucher"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "cronjob": {
+   "de": [
+    "zeitgesteuerter auftrag",
+    "cronjob"
+   ],
+   "en": [
+    "cron job",
+    "scheduled task"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "currency": {
+   "de": [
+    "waehrung",
+    "fremdwaehrung"
+   ],
+   "en": [
+    "currency",
+    "foreign currency"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "customer": {
+   "de": [
+    "kunde",
+    "auftraggeber"
+   ],
+   "en": [
+    "customer",
+    "buyer"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "cycle_time": {
+   "de": [
+    "taktzeit",
+    "zykluszeit"
+   ],
+   "en": [
+    "cycle time",
+    "cycle-time"
+   ],
+   "tags": [
+    "manufacturing"
+   ]
+  },
+  "daemon": {
+   "de": [
+    "hintergrunddienst"
+   ],
+   "en": [
+    "daemon",
+    "background service"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "dashboard": {
+   "de": [
+    "uebersichtsseite",
+    "dashboard"
+   ],
+   "en": [
+    "dashboard",
+    "overview page"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "data_loss": {
+   "de": [
+    "datenverlust"
+   ],
+   "en": [
+    "data loss"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "data_quality": {
+   "de": [
+    "datenqualitaet"
+   ],
+   "en": [
+    "data quality"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "database": {
+   "de": [
+    "datenbank",
+    "datenspeicher"
+   ],
+   "en": [
+    "database",
+    "datastore"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "datenschutz": {
+   "de": [
+    "datenschutz",
+    "datenrichtlinie"
+   ],
+   "en": [
+    "data protection",
+    "privacy"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "deadline": {
+   "de": [
+    "frist",
+    "stichtag"
+   ],
+   "en": [
+    "deadline",
+    "due date"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "deadline_extension": {
+   "de": [
+    "fristverlaengerung",
+    "aufschub"
+   ],
+   "en": [
+    "deadline extension",
+    "extension"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "debugger": {
+   "de": [
+    "debugger",
+    "fehlersuche"
+   ],
+   "en": [
+    "debugger"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "decommission": {
+   "de": [
+    "ausserbetriebnahme",
+    "stilllegung"
+   ],
+   "en": [
+    "decommissioning",
+    "retirement"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "definition_of_done": {
+   "de": [
+    "fertigstellungskriterium"
+   ],
+   "en": [
+    "definition of done"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "delay": {
+   "de": [
+    "verzoegerung",
+    "verspaetung",
+    "verzug"
+   ],
+   "en": [
+    "delay",
+    "lag"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "delegation": {
+   "de": [
+    "delegation",
+    "uebertragung"
+   ],
+   "en": [
+    "delegation",
+    "assignment"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "delivery": {
+   "de": [
+    "lieferung",
+    "zustellung",
+    "versand"
+   ],
+   "en": [
+    "delivery",
+    "shipment",
+    "dispatch"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "delivery_note": {
+   "de": [
+    "lieferschein",
+    "warenbegleitschein"
+   ],
+   "en": [
+    "delivery note",
+    "packing slip"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "denial_of_service": {
+   "de": [
+    "dienstblockade",
+    "ueberlastangriff"
+   ],
+   "en": [
+    "denial of service",
+    "dos attack"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "department": {
+   "de": [
+    "abteilung",
+    "bereich",
+    "ressort"
+   ],
+   "en": [
+    "department",
+    "division",
+    "unit"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "departure": {
+   "de": [
+    "austritt",
+    "personalabgang"
+   ],
+   "en": [
+    "departure",
+    "offboarding"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "dependency": {
+   "de": [
+    "abhaengigkeit",
+    "bibliotheksabhaengigkeit"
+   ],
+   "en": [
+    "dependency",
+    "dep"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "deployment": {
+   "de": [
+    "bereitstellung",
+    "ausrollen"
+   ],
+   "en": [
+    "deployment",
+    "rollout"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "desktop_pc": {
+   "de": [
+    "desktoprechner",
+    "standrechner"
+   ],
+   "en": [
+    "desktop computer",
+    "desktop pc"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "discount": {
+   "de": [
+    "rabatt",
+    "nachlass"
+   ],
+   "en": [
+    "discount",
+    "rebate"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "distribution_list": {
+   "de": [
+    "verteiler",
+    "verteilerliste"
+   ],
+   "en": [
+    "distribution list",
+    "mailing list"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "dns": {
+   "de": [
+    "namensaufloesung",
+    "dns"
+   ],
+   "en": [
+    "dns",
+    "name resolution"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "dockingstation": {
+   "de": [
+    "dockingstation",
+    "docking"
+   ],
+   "en": [
+    "docking station",
+    "dock"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "documentation": {
+   "de": [
+    "dokumentation",
+    "anleitung",
+    "handbuch"
+   ],
+   "en": [
+    "documentation",
+    "manual",
+    "guide"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "downtime": {
+   "de": [
+    "stillstand",
+    "ausfallzeit",
+    "anlagenstillstand"
+   ],
+   "en": [
+    "downtime",
+    "line stoppage",
+    "standstill"
+   ],
+   "tags": [
+    "manufacturing"
+   ]
+  },
+  "draft": {
+   "de": [
+    "entwurf"
+   ],
+   "en": [
+    "draft"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "dunning": {
+   "de": [
+    "mahnwesen",
+    "zahlungserinnerung"
+   ],
+   "en": [
+    "dunning",
+    "payment reminder"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "editor": {
+   "de": [
+    "editor",
+    "texteditor"
+   ],
+   "en": [
+    "editor",
+    "text editor"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "einwilligung": {
+   "de": [
+    "einwilligung",
+    "zustimmung"
+   ],
+   "en": [
+    "consent",
+    "approval to process"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "email": {
+   "de": [
+    "e-mail",
+    "email",
+    "mail"
+   ],
+   "en": [
+    "email",
+    "e-mail"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "employee": {
+   "de": [
+    "mitarbeiter",
+    "beschaeftigter",
+    "angestellter"
+   ],
+   "en": [
+    "employee",
+    "staff member",
+    "worker"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "encryption": {
+   "de": [
+    "verschluesselung",
+    "kryptografie"
+   ],
+   "en": [
+    "encryption",
+    "cryptography"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "epic": {
+   "de": [
+    "epos",
+    "grossvorhaben"
+   ],
+   "en": [
+    "epic",
+    "large story"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "error_code": {
+   "de": [
+    "fehlercode",
+    "stoerungscode"
+   ],
+   "en": [
+    "error code",
+    "fault code"
+   ],
+   "tags": [
+    "manufacturing"
+   ]
+  },
+  "error_message": {
+   "de": [
+    "fehlermeldung",
+    "fehlertext"
+   ],
+   "en": [
+    "error message",
+    "error text"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "escalate_request": {
+   "de": [
+    "hochstufen",
+    "zum vorgesetzten"
+   ],
+   "en": [
+    "escalate",
+    "raise to manager"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "escalation": {
+   "de": [
+    "eskalation",
+    "hochstufung"
+   ],
+   "en": [
+    "escalation"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "escalation_contact": {
+   "de": [
+    "ansprechpartner",
+    "kontaktperson"
+   ],
+   "en": [
+    "contact person",
+    "point of contact"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "estimation": {
+   "de": [
+    "aufwandsschaetzung",
+    "schaetzung"
+   ],
+   "en": [
+    "estimation",
+    "effort estimate"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "expense": {
+   "de": [
+    "ausgabe",
+    "spesen",
+    "kosten"
+   ],
+   "en": [
+    "expense",
+    "cost",
+    "spending"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "expiry": {
+   "de": [
+    "gueltigkeit",
+    "ablaufdatum"
+   ],
+   "en": [
+    "expiry",
+    "validity",
+    "expiration date"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "exploit": {
+   "de": [
+    "ausnutzung",
+    "schwachstellenausnutzung"
+   ],
+   "en": [
+    "exploit",
+    "attack vector"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "export": {
+   "de": [
+    "export",
+    "datenausgabe"
+   ],
+   "en": [
+    "export",
+    "extract"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "failure": {
+   "de": [
+    "ausfall",
+    "stoerung",
+    "fehlfunktion"
+   ],
+   "en": [
+    "failure",
+    "fault",
+    "malfunction"
+   ],
+   "tags": [
+    "manufacturing"
+   ]
+  },
+  "failure_cause": {
+   "de": [
+    "stoergrund",
+    "ausfallgrund"
+   ],
+   "en": [
+    "failure cause",
+    "downtime reason"
+   ],
+   "tags": [
+    "manufacturing"
+   ]
+  },
+  "feedback": {
+   "de": [
+    "rueckmeldung",
+    "feedback"
+   ],
+   "en": [
+    "feedback",
+    "review comment"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "festplatte": {
+   "de": [
+    "festplatte",
+    "hdd",
+    "laufwerk"
+   ],
+   "en": [
+    "hard drive",
+    "hdd",
+    "drive"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "fileshare": {
+   "de": [
+    "dateifreigabe",
+    "netzlaufwerk"
+   ],
+   "en": [
+    "file share",
+    "network drive"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "firewall": {
+   "de": [
+    "firewall",
+    "paketfilter"
+   ],
+   "en": [
+    "firewall",
+    "packet filter"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "firewall_rule": {
+   "de": [
+    "regel",
+    "portfreigabe"
+   ],
+   "en": [
+    "rule",
+    "port release"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "flexitime": {
+   "de": [
+    "gleitzeit",
+    "gleitzeitkonto"
+   ],
+   "en": [
+    "flexitime",
+    "flexible hours"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "flow_rate": {
+   "de": [
+    "durchfluss",
+    "durchflussmenge",
+    "volumenstrom"
+   ],
+   "en": [
+    "flow rate",
+    "flow"
+   ],
+   "tags": [
+    "manufacturing"
+   ]
+  },
+  "follow_up": {
+   "de": [
+    "nachfassen",
+    "nachverfolgung"
+   ],
+   "en": [
+    "follow up",
+    "chase"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "foreign_key": {
+   "de": [
+    "fremdschluessel"
+   ],
+   "en": [
+    "foreign key"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "form": {
+   "de": [
+    "formular",
+    "vordruck"
+   ],
+   "en": [
+    "form",
+    "template"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "forward": {
+   "de": [
+    "weiterleitung",
+    "weiterleiten"
+   ],
+   "en": [
+    "forward",
+    "redirect"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "framework": {
+   "de": [
+    "framework",
+    "rahmenwerk"
+   ],
+   "en": [
+    "framework"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "fuse": {
+   "de": [
+    "sicherung",
+    "absicherung"
+   ],
+   "en": [
+    "fuse",
+    "circuit protection"
+   ],
+   "tags": [
+    "manufacturing"
+   ]
+  },
+  "gateway": {
+   "de": [
+    "gateway",
+    "netzuebergang"
+   ],
+   "en": [
+    "gateway"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "gear": {
+   "de": [
+    "getriebe",
+    "zahnrad",
+    "uebersetzung"
+   ],
+   "en": [
+    "gearbox",
+    "gear",
+    "transmission"
+   ],
+   "tags": [
+    "manufacturing"
+   ]
+  },
+  "goal": {
+   "de": [
+    "ziel",
+    "zielsetzung"
+   ],
+   "en": [
+    "goal",
+    "objective"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "grafikkarte": {
+   "de": [
+    "grafikkarte"
+   ],
+   "en": [
+    "graphics card",
+    "gpu"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "group_policy": {
+   "de": [
+    "gruppenrichtlinie"
+   ],
+   "en": [
+    "group policy"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "guideline": {
+   "de": [
+    "richtlinie",
+    "leitfaden"
+   ],
+   "en": [
+    "guideline",
+    "policy"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "handover": {
+   "de": [
+    "uebergabe",
+    "uebergabeprotokoll"
+   ],
+   "en": [
+    "handover",
+    "transfer of work"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "headset": {
+   "de": [
+    "headset",
+    "kopfhoerer"
+   ],
+   "en": [
+    "headset",
+    "headphones"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "helpdesk": {
+   "de": [
+    "servicestelle",
+    "hilfestelle"
+   ],
+   "en": [
+    "helpdesk",
+    "service desk"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "hydraulic": {
+   "de": [
+    "hydraulik",
+    "hydraulikoel"
+   ],
+   "en": [
+    "hydraulic",
+    "hydraulic system"
+   ],
+   "tags": [
+    "manufacturing"
+   ]
+  },
+  "identity": {
+   "de": [
+    "identitaet",
+    "benutzeridentitaet"
+   ],
+   "en": [
+    "identity",
+    "user identity"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "image_ops": {
+   "de": [
+    "abbild",
+    "containerdatentraeger"
+   ],
+   "en": [
+    "image",
+    "container image"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "impact": {
+   "de": [
+    "auswirkung",
+    "betroffenheit"
+   ],
+   "en": [
+    "impact",
+    "affected scope"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "import": {
+   "de": [
+    "import",
+    "einlesen"
+   ],
+   "en": [
+    "import",
+    "ingest"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "index": {
+   "de": [
+    "index",
+    "suchindex"
+   ],
+   "en": [
+    "index"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "inquiry_status": {
+   "de": [
+    "bearbeitungsstand",
+    "bearbeitungsstatus"
+   ],
+   "en": [
+    "case status",
+    "processing state"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "inspection": {
+   "de": [
+    "pruefung",
+    "inspektion",
+    "sichtpruefung"
+   ],
+   "en": [
+    "inspection",
+    "check",
+    "examination"
+   ],
+   "tags": [
+    "manufacturing"
+   ]
+  },
+  "install": {
+   "de": [
+    "installation",
+    "einrichten"
+   ],
+   "en": [
+    "install",
+    "installation"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "instruction": {
+   "de": [
+    "anweisung",
+    "vorgabe"
+   ],
+   "en": [
+    "instruction",
+    "directive"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "integration_test": {
+   "de": [
+    "integrationstest"
+   ],
+   "en": [
+    "integration test"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "interface": {
+   "de": [
+    "schnittstelle",
+    "anbindung",
+    "api"
+   ],
+   "en": [
+    "interface",
+    "integration",
+    "api"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "invoice": {
+   "de": [
+    "rechnung",
+    "abrechnung"
+   ],
+   "en": [
+    "invoice",
+    "bill",
+    "statement"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "ip_address": {
+   "de": [
+    "ipadresse"
+   ],
+   "en": [
+    "ip address"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "issue_ticket": {
+   "de": [
+    "ticket",
+    "vorgang",
+    "stoerungsmeldung"
+   ],
+   "en": [
+    "ticket",
+    "incident"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "job_application": {
+   "de": [
+    "bewerbung",
+    "bewerbungsunterlagen",
+    "lebenslauf"
+   ],
+   "en": [
+    "job application",
+    "cv",
+    "resume"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "join": {
+   "de": [
+    "verknuepfung",
+    "tabellenverknuepfung"
+   ],
+   "en": [
+    "join",
+    "table join"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "keyboard": {
+   "de": [
+    "tastatur"
+   ],
+   "en": [
+    "keyboard"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "laptop": {
+   "de": [
+    "laptop",
+    "notebook",
+    "rechner mobil"
+   ],
+   "en": [
+    "laptop",
+    "notebook"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "letter": {
+   "de": [
+    "brief",
+    "schreiben"
+   ],
+   "en": [
+    "letter",
+    "written notice"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "library": {
+   "de": [
+    "bibliothek",
+    "lib"
+   ],
+   "en": [
+    "library",
+    "lib"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "lizenz": {
+   "de": [
+    "lizenz",
+    "nutzungsrecht"
+   ],
+   "en": [
+    "software license",
+    "licence key"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "lizenzablauf": {
+   "de": [
+    "lizenzablauf",
+    "lizenzlaufzeit"
+   ],
+   "en": [
+    "license expiry",
+    "license term"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "load_balancer": {
+   "de": [
+    "lastverteiler"
+   ],
+   "en": [
+    "load balancer"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "loeschung": {
+   "de": [
+    "loeschung",
+    "datenloeschung"
+   ],
+   "en": [
+    "deletion",
+    "erasure"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "log_file": {
+   "de": [
+    "logdatei",
+    "protokolldatei"
+   ],
+   "en": [
+    "log file",
+    "log"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "login": {
+   "de": [
+    "anmeldung",
+    "einloggen",
+    "anmeldedaten"
+   ],
+   "en": [
+    "login",
+    "log in",
+    "sign in"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "lubrication": {
+   "de": [
+    "schmierung",
+    "schmierstoff"
+   ],
+   "en": [
+    "lubrication",
+    "lubricant"
+   ],
+   "tags": [
+    "manufacturing"
+   ]
+  },
+  "mailbox": {
+   "de": [
+    "postfach",
+    "briefkasten"
+   ],
+   "en": [
+    "mailbox",
+    "inbox"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "mailbox_full": {
+   "de": [
+    "postfach voll",
+    "speichergrenze"
+   ],
+   "en": [
+    "mailbox full",
+    "quota exceeded"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "mainboard": {
+   "de": [
+    "hauptplatine",
+    "mainboard"
+   ],
+   "en": [
+    "motherboard",
+    "mainboard"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "maintenance": {
+   "de": [
+    "wartung",
+    "instandhaltung",
+    "reparatur"
+   ],
+   "en": [
+    "maintenance",
+    "repair"
+   ],
+   "tags": [
+    "manufacturing"
+   ]
+  },
+  "maintenance_plan": {
+   "de": [
+    "wartungsplan",
+    "wartungsplanung"
+   ],
+   "en": [
+    "maintenance plan",
+    "maintenance schedule"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "malware": {
+   "de": [
+    "schadsoftware",
+    "virus",
+    "trojaner"
+   ],
+   "en": [
+    "malware",
+    "virus",
+    "trojan"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "measurement": {
+   "de": [
+    "messung",
+    "messwert",
+    "messergebnis"
+   ],
+   "en": [
+    "measurement",
+    "measured value",
+    "reading"
+   ],
+   "tags": [
+    "manufacturing"
+   ]
+  },
+  "meeting_notes": {
+   "de": [
+    "protokoll",
+    "sitzungsprotokoll",
+    "notizen"
+   ],
+   "en": [
+    "minutes",
+    "meeting notes"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "memo": {
+   "de": [
+    "vermerk",
+    "notiz"
+   ],
+   "en": [
+    "memo",
+    "note"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "memory": {
+   "de": [
+    "arbeitsspeicher",
+    "hauptspeicher"
+   ],
+   "en": [
+    "memory",
+    "ram"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "metric": {
+   "de": [
+    "kennzahl",
+    "metrik"
+   ],
+   "en": [
+    "metric",
+    "measure"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "migration": {
+   "de": [
+    "migration",
+    "datenmigration"
+   ],
+   "en": [
+    "migration"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "milestone": {
+   "de": [
+    "meilenstein"
+   ],
+   "en": [
+    "milestone"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "modem": {
+   "de": [
+    "modem"
+   ],
+   "en": [
+    "modem"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "monitor": {
+   "de": [
+    "bildschirm",
+    "monitor",
+    "anzeige"
+   ],
+   "en": [
+    "monitor",
+    "screen",
+    "display"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "monitoring": {
+   "de": [
+    "ueberwachung",
+    "monitoring"
+   ],
+   "en": [
+    "monitoring",
+    "supervision"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "motor": {
+   "de": [
+    "motor",
+    "elektromotor"
+   ],
+   "en": [
+    "motor",
+    "electric motor"
+   ],
+   "tags": [
+    "manufacturing"
+   ]
+  },
+  "mouse": {
+   "de": [
+    "maus",
+    "zeigegeraet"
+   ],
+   "en": [
+    "mouse",
+    "pointing device"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "network": {
+   "de": [
+    "netzwerk",
+    "netz",
+    "verbindung"
+   ],
+   "en": [
+    "network",
+    "connection",
+    "link"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "netzteil": {
+   "de": [
+    "netzteil",
+    "ladegeraet"
+   ],
+   "en": [
+    "power supply",
+    "charger"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "netzwerkverteiler": {
+   "de": [
+    "netzwerkverteiler",
+    "switcheinheit"
+   ],
+   "en": [
+    "network switch",
+    "ethernet switch"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "new_hire": {
+   "de": [
+    "neueinstellung",
+    "neuer mitarbeiter"
+   ],
+   "en": [
+    "new hire",
+    "newcomer"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "node": {
+   "de": [
+    "knoten",
+    "serverknoten"
+   ],
+   "en": [
+    "node",
+    "worker node"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "notice_period": {
+   "de": [
+    "kuendigungsfrist",
+    "austrittsdatum"
+   ],
+   "en": [
+    "notice period",
+    "termination date"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "nut": {
+   "de": [
+    "mutter",
+    "sechskantmutter"
+   ],
+   "en": [
+    "nut",
+    "hex nut"
+   ],
+   "tags": [
+    "manufacturing"
+   ]
+  },
+  "on_call": {
+   "de": [
+    "rufbereitschaft",
+    "bereitschaftsdienst"
+   ],
+   "en": [
+    "on-call",
+    "standby duty"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "onboarding": {
+   "de": [
+    "einarbeitung",
+    "einstieg",
+    "einarbeitungsplan"
+   ],
+   "en": [
+    "onboarding",
+    "induction"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "one_on_one": {
+   "de": [
+    "einzelgespraech",
+    "vier augen gespraech"
+   ],
+   "en": [
+    "one-on-one",
+    "individual meeting"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "operating_system": {
+   "de": [
+    "betriebssystem"
+   ],
+   "en": [
+    "operating system",
+    "os"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "order": {
+   "de": [
+    "bestellung",
+    "auftrag"
+   ],
+   "en": [
+    "order",
+    "purchase order"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "org_unit": {
+   "de": [
+    "organisationseinheit",
+    "fachbereich"
+   ],
+   "en": [
+    "organisational unit",
+    "business unit"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "out_of_office": {
+   "de": [
+    "abwesenheitsnotiz",
+    "abwesenheit"
+   ],
+   "en": [
+    "out of office",
+    "absence note"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "outage": {
+   "de": [
+    "unerreichbarkeit",
+    "wartungsfenster"
+   ],
+   "en": [
+    "outage",
+    "maintenance window"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "output": {
+   "de": [
+    "ausgangsleistung",
+    "durchsatz"
+   ],
+   "en": [
+    "output",
+    "power output"
+   ],
+   "tags": [
+    "manufacturing"
+   ]
+  },
+  "overtime": {
+   "de": [
+    "ueberstunden",
+    "mehrarbeit"
+   ],
+   "en": [
+    "overtime",
+    "extra hours"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "package": {
+   "de": [
+    "paket",
+    "softwarepaket"
+   ],
+   "en": [
+    "package",
+    "bundle"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "parental_leave": {
+   "de": [
+    "elternzeit",
+    "erziehungsurlaub"
+   ],
+   "en": [
+    "parental leave",
+    "family leave"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "password": {
+   "de": [
+    "passwort",
+    "kennwort",
+    "zugangscode"
+   ],
+   "en": [
+    "password",
+    "credential",
+    "passphrase"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "payload": {
+   "de": [
+    "nutzlast",
+    "datenpaket"
+   ],
+   "en": [
+    "payload",
+    "body"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "payment": {
+   "de": [
+    "zahlung",
+    "ueberweisung"
+   ],
+   "en": [
+    "payment",
+    "transfer"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "penetration_test": {
+   "de": [
+    "penetrationstest",
+    "sicherheitstest"
+   ],
+   "en": [
+    "penetration test",
+    "pentest"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "performance": {
+   "de": [
+    "leistung",
+    "geschwindigkeit"
+   ],
+   "en": [
+    "performance",
+    "speed",
+    "throughput"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "phishing": {
+   "de": [
+    "phishing",
+    "betrugsmail"
+   ],
+   "en": [
+    "phishing",
+    "spam mail"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "pipeline": {
+   "de": [
+    "pipeline",
+    "buildkette"
+   ],
+   "en": [
+    "pipeline",
+    "build chain"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "pneumatic": {
+   "de": [
+    "pneumatik",
+    "druckluft"
+   ],
+   "en": [
+    "pneumatic",
+    "compressed air"
+   ],
+   "tags": [
+    "manufacturing"
+   ]
+  },
+  "postmortem": {
+   "de": [
+    "nachbereitung",
+    "stoerungsnachbereitung"
+   ],
+   "en": [
+    "postmortem",
+    "incident review"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "power_of_attorney": {
+   "de": [
+    "vollmacht",
+    "vertretungsvollmacht"
+   ],
+   "en": [
+    "power of attorney",
+    "authorisation"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "pressure": {
+   "de": [
+    "druck",
+    "luftdruck",
+    "systemdruck"
+   ],
+   "en": [
+    "pressure",
+    "system pressure"
+   ],
+   "tags": [
+    "manufacturing"
+   ]
+  },
+  "primary_key": {
+   "de": [
+    "primaerschluessel"
+   ],
+   "en": [
+    "primary key"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "printer": {
+   "de": [
+    "drucker",
+    "druckgeraet"
+   ],
+   "en": [
+    "printer"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "priority_change": {
+   "de": [
+    "prioritaetsaenderung",
+    "umstufung"
+   ],
+   "en": [
+    "priority change",
+    "reprioritisation"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "privilege_escalation": {
+   "de": [
+    "rechteausweitung",
+    "privilegienausweitung"
+   ],
+   "en": [
+    "privilege escalation"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "problem": {
+   "de": [
+    "problem",
+    "schwierigkeit"
+   ],
+   "en": [
+    "problem",
+    "issue"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "procedure_step": {
+   "de": [
+    "arbeitsschritt",
+    "verfahrensschritt"
+   ],
+   "en": [
+    "process step",
+    "procedure step"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "process": {
+   "de": [
+    "prozess",
+    "verfahren",
+    "ablauf"
+   ],
+   "en": [
+    "process",
+    "procedure",
+    "workflow"
+   ],
+   "tags": [
+    "manufacturing"
+   ]
+  },
+  "provisioning": {
+   "de": [
+    "bereitstellungvonressourcen",
+    "ausstattung"
+   ],
+   "en": [
+    "provisioning",
+    "setup"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "proxy": {
+   "de": [
+    "proxy",
+    "vermittlungsrechner"
+   ],
+   "en": [
+    "proxy",
+    "forward proxy"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "pseudonymisierung": {
+   "de": [
+    "pseudonymisierung",
+    "anonymisierung"
+   ],
+   "en": [
+    "pseudonymisation",
+    "anonymisation"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "public_holiday": {
+   "de": [
+    "feiertag",
+    "gesetzlicher feiertag"
+   ],
+   "en": [
+    "public holiday",
+    "bank holiday"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "pull_request": {
+   "de": [
+    "zusammenfuehrungsantrag",
+    "pull request"
+   ],
+   "en": [
+    "pull request",
+    "merge request"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "pump": {
+   "de": [
+    "pumpe",
+    "foerderpumpe"
+   ],
+   "en": [
+    "pump",
+    "feed pump"
+   ],
+   "tags": [
+    "manufacturing"
+   ]
+  },
+  "purchase_order": {
+   "de": [
+    "bestellnummer",
+    "auftragsbestaetigung"
+   ],
+   "en": [
+    "po",
+    "order confirmation"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "purchase_request": {
+   "de": [
+    "bestellanforderung",
+    "bedarfsmeldung"
+   ],
+   "en": [
+    "purchase request",
+    "requisition"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "qualification": {
+   "de": [
+    "qualifikation",
+    "befaehigung"
+   ],
+   "en": [
+    "qualification",
+    "competence"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "quality": {
+   "de": [
+    "qualitaet",
+    "guete",
+    "beschaffenheit"
+   ],
+   "en": [
+    "quality",
+    "grade"
+   ],
+   "tags": [
+    "manufacturing"
+   ]
+  },
+  "query": {
+   "de": [
+    "abfrage",
+    "suchabfrage"
+   ],
+   "en": [
+    "query"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "question": {
+   "de": [
+    "frage",
+    "rueckfrage",
+    "nachfrage"
+   ],
+   "en": [
+    "question",
+    "clarification"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "quotation": {
+   "de": [
+    "angebot",
+    "kostenvoranschlag"
+   ],
+   "en": [
+    "quotation",
+    "estimate"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "ransomware": {
+   "de": [
+    "erpressersoftware",
+    "ransomware"
+   ],
+   "en": [
+    "ransomware",
+    "extortion software"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "rate_limit": {
+   "de": [
+    "ratenbegrenzung",
+    "aufrufgrenze"
+   ],
+   "en": [
+    "rate limit",
+    "throttling"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "receipt": {
+   "de": [
+    "quittung",
+    "kassenzettel"
+   ],
+   "en": [
+    "receipt",
+    "proof of purchase"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "recipient": {
+   "de": [
+    "empfaenger",
+    "adressat"
+   ],
+   "en": [
+    "recipient",
+    "addressee"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "record": {
+   "de": [
+    "akte",
+    "unterlage"
+   ],
+   "en": [
+    "file",
+    "record"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "recurrence": {
+   "de": [
+    "wiederholung",
+    "erneutes auftreten"
+   ],
+   "en": [
+    "recurrence",
+    "repeat occurrence"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "refactoring": {
+   "de": [
+    "refactoring",
+    "umbau"
+   ],
+   "en": [
+    "refactoring"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "refund": {
+   "de": [
+    "erstattung",
+    "rueckerstattung",
+    "gutschrift"
+   ],
+   "en": [
+    "refund",
+    "reimbursement",
+    "credit note"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "rejection": {
+   "de": [
+    "ablehnung",
+    "absage"
+   ],
+   "en": [
+    "rejection",
+    "denial"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "relay": {
+   "de": [
+    "relais",
+    "schuetz"
+   ],
+   "en": [
+    "relay",
+    "contactor"
+   ],
+   "tags": [
+    "manufacturing"
+   ]
+  },
+  "reminder": {
+   "de": [
+    "wiedervorlage",
+    "erinnerung"
+   ],
+   "en": [
+    "reminder",
+    "prompt"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "reminder_mail": {
+   "de": [
+    "erinnerungsmail",
+    "mahnung"
+   ],
+   "en": [
+    "reminder mail",
+    "dunning mail"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "remittance": {
+   "de": [
+    "zahlungsavis",
+    "ueberweisungsbeleg"
+   ],
+   "en": [
+    "remittance",
+    "payment advice"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "remote_access": {
+   "de": [
+    "fernzugriff",
+    "fernwartung"
+   ],
+   "en": [
+    "remote access",
+    "remote session"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "reopened": {
+   "de": [
+    "wiedereroeffnet",
+    "erneut geoeffnet"
+   ],
+   "en": [
+    "reopened",
+    "reopened case"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "replication": {
+   "de": [
+    "replikation",
+    "spiegelung"
+   ],
+   "en": [
+    "replication",
+    "mirroring"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "reply": {
+   "de": [
+    "antwortmail",
+    "erwiderung"
+   ],
+   "en": [
+    "reply",
+    "response mail"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "report": {
+   "de": [
+    "bericht",
+    "auswertung",
+    "meldung"
+   ],
+   "en": [
+    "report",
+    "analysis"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "repository": {
+   "de": [
+    "repository",
+    "quellcodearchiv"
+   ],
+   "en": [
+    "repository",
+    "repo"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "request": {
+   "de": [
+    "anfrage",
+    "anforderung"
+   ],
+   "en": [
+    "request",
+    "requirement"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "resolution_time": {
+   "de": [
+    "loesungszeit",
+    "bearbeitungsdauer"
+   ],
+   "en": [
+    "resolution time",
+    "handling time"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "resolved": {
+   "de": [
+    "geloest",
+    "erledigt"
+   ],
+   "en": [
+    "resolved",
+    "closed"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "response": {
+   "de": [
+    "antwort",
+    "antwortdaten"
+   ],
+   "en": [
+    "response"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "response_time": {
+   "de": [
+    "reaktionszeit",
+    "rueckmeldezeit"
+   ],
+   "en": [
+    "reaction time",
+    "first response time"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "responsibility": {
+   "de": [
+    "verantwortlichkeit",
+    "zustaendigkeit"
+   ],
+   "en": [
+    "responsibility",
+    "ownership"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "restore": {
+   "de": [
+    "wiederherstellung",
+    "ruecksicherung"
+   ],
+   "en": [
+    "restore",
+    "recovery"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "retention": {
+   "de": [
+    "aufbewahrungsfrist",
+    "aufbewahrung"
+   ],
+   "en": [
+    "retention",
+    "retention period"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "retrospective": {
+   "de": [
+    "retrospektive",
+    "rueckblick"
+   ],
+   "en": [
+    "retrospective",
+    "retro"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "return_goods": {
+   "de": [
+    "rueckgabe",
+    "retoure",
+    "umtausch"
+   ],
+   "en": [
+    "return",
+    "exchange"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "roadmap": {
+   "de": [
+    "fahrplan",
+    "roadmap"
+   ],
+   "en": [
+    "roadmap",
+    "plan of record"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "role": {
+   "de": [
+    "rolle",
+    "funktion"
+   ],
+   "en": [
+    "role",
+    "function"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "rollback": {
+   "de": [
+    "zuruecksetzen",
+    "rueckabwicklung"
+   ],
+   "en": [
+    "rollback",
+    "revert"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "root_cause": {
+   "de": [
+    "ursachenanalyse",
+    "grundursache"
+   ],
+   "en": [
+    "root cause",
+    "root cause analysis"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "root_fix": {
+   "de": [
+    "endlosung",
+    "dauerhafte loesung"
+   ],
+   "en": [
+    "permanent fix",
+    "definitive solution"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "router": {
+   "de": [
+    "router"
+   ],
+   "en": [
+    "router"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "row": {
+   "de": [
+    "zeile",
+    "datensatz"
+   ],
+   "en": [
+    "row",
+    "table row"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "runbook": {
+   "de": [
+    "ablaufanweisung",
+    "runbook"
+   ],
+   "en": [
+    "runbook",
+    "playbook"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "safety_guard": {
+   "de": [
+    "schutzgitter",
+    "schutztuer",
+    "schutzabdeckung"
+   ],
+   "en": [
+    "safety guard",
+    "safety door",
+    "guard"
+   ],
+   "tags": [
+    "manufacturing"
+   ]
+  },
+  "salary": {
+   "de": [
+    "gehalt",
+    "lohn",
+    "verguetung"
+   ],
+   "en": [
+    "salary",
+    "wage",
+    "pay"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "salutation": {
+   "de": [
+    "anrede"
+   ],
+   "en": [
+    "salutation",
+    "greeting"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "satisfaction": {
+   "de": [
+    "zufriedenheit",
+    "kundenzufriedenheit"
+   ],
+   "en": [
+    "satisfaction",
+    "customer satisfaction"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "scanner": {
+   "de": [
+    "scanner"
+   ],
+   "en": [
+    "scanner"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "schema": {
+   "de": [
+    "schema",
+    "datenstruktur"
+   ],
+   "en": [
+    "schema",
+    "data structure"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "scrap": {
+   "de": [
+    "ausschuss",
+    "fehlteil",
+    "ausschussquote"
+   ],
+   "en": [
+    "scrap",
+    "reject part"
+   ],
+   "tags": [
+    "manufacturing"
+   ]
+  },
+  "screw": {
+   "de": [
+    "schraube",
+    "gewinde",
+    "schraubverbindung"
+   ],
+   "en": [
+    "screw",
+    "thread",
+    "bolted joint"
+   ],
+   "tags": [
+    "manufacturing"
+   ]
+  },
+  "seal": {
+   "de": [
+    "dichtung",
+    "dichtungsring",
+    "abdichtung"
+   ],
+   "en": [
+    "seal",
+    "gasket",
+    "sealing"
+   ],
+   "tags": [
+    "manufacturing"
+   ]
+  },
+  "security_incident": {
+   "de": [
+    "sicherheitsvorfall",
+    "angriff",
+    "datenschutzvorfall"
+   ],
+   "en": [
+    "security incident",
+    "attack",
+    "breach"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "sender": {
+   "de": [
+    "absender",
+    "sender"
+   ],
+   "en": [
+    "sender",
+    "from"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "sensor": {
+   "de": [
+    "sensor",
+    "sensorik",
+    "messfuehler"
+   ],
+   "en": [
+    "sensor",
+    "sensing"
+   ],
+   "tags": [
+    "manufacturing"
+   ]
+  },
+  "server": {
+   "de": [
+    "server",
+    "host",
+    "rechensystem"
+   ],
+   "en": [
+    "server",
+    "host"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "service": {
+   "de": [
+    "dienst",
+    "webdienst"
+   ],
+   "en": [
+    "service",
+    "web service"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "service_level": {
+   "de": [
+    "servicelevel",
+    "vereinbarungsniveau"
+   ],
+   "en": [
+    "service level agreement",
+    "sla"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "session": {
+   "de": [
+    "sitzung",
+    "sessionszustand"
+   ],
+   "en": [
+    "session"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "severity": {
+   "de": [
+    "schweregrad",
+    "ausmass"
+   ],
+   "en": [
+    "severity",
+    "severity level"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "shift": {
+   "de": [
+    "schicht",
+    "schichtbetrieb",
+    "fruehschicht"
+   ],
+   "en": [
+    "shift",
+    "work shift"
+   ],
+   "tags": [
+    "manufacturing"
+   ]
+  },
+  "shift_swap": {
+   "de": [
+    "schichttausch",
+    "diensttausch"
+   ],
+   "en": [
+    "shift swap",
+    "shift exchange"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "sick_leave": {
+   "de": [
+    "krankmeldung",
+    "krankschreibung",
+    "arbeitsunfaehigkeit"
+   ],
+   "en": [
+    "sick leave",
+    "sick note",
+    "absence"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "signature": {
+   "de": [
+    "signatur",
+    "fusszeile"
+   ],
+   "en": [
+    "signature",
+    "sign-off"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "signature_legal": {
+   "de": [
+    "unterschrift",
+    "zeichnung"
+   ],
+   "en": [
+    "signing",
+    "legal signature"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "single_sign_on": {
+   "de": [
+    "einmalanmeldung",
+    "zentrale anmeldung"
+   ],
+   "en": [
+    "single sign-on",
+    "sso"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "smartphone": {
+   "de": [
+    "smartphone",
+    "diensthandy",
+    "mobiltelefon"
+   ],
+   "en": [
+    "smartphone",
+    "mobile phone"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "software_inventory": {
+   "de": [
+    "softwarebestand",
+    "softwareverzeichnis"
+   ],
+   "en": [
+    "software inventory",
+    "installed software"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "source_code": {
+   "de": [
+    "quellcode",
+    "quelltext"
+   ],
+   "en": [
+    "source code",
+    "codebase"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "spam_filter": {
+   "de": [
+    "spamfilter",
+    "werbefilter"
+   ],
+   "en": [
+    "spam filter",
+    "junk filter"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "spare_part": {
+   "de": [
+    "ersatzteil",
+    "ersatzteile"
+   ],
+   "en": [
+    "spare part",
+    "spare parts"
+   ],
+   "tags": [
+    "manufacturing"
+   ]
+  },
+  "specification": {
+   "de": [
+    "spezifikation",
+    "leistungsbeschreibung"
+   ],
+   "en": [
+    "specification",
+    "spec"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "sprint": {
+   "de": [
+    "sprint",
+    "arbeitszyklus"
+   ],
+   "en": [
+    "sprint",
+    "iteration"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "spyware": {
+   "de": [
+    "spaehsoftware",
+    "spyware"
+   ],
+   "en": [
+    "spyware",
+    "tracking software"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "ssd": {
+   "de": [
+    "ssd",
+    "halbleiterlaufwerk"
+   ],
+   "en": [
+    "ssd",
+    "solid state drive"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "standup": {
+   "de": [
+    "taegliche abstimmung",
+    "standup"
+   ],
+   "en": [
+    "standup",
+    "daily meeting"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "status_code": {
+   "de": [
+    "statuscode",
+    "httpcode"
+   ],
+   "en": [
+    "status code",
+    "http status"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "status_update": {
+   "de": [
+    "statusmeldung",
+    "zwischenstand"
+   ],
+   "en": [
+    "status update",
+    "progress report"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "storage": {
+   "de": [
+    "speicher",
+    "speicherplatz"
+   ],
+   "en": [
+    "storage",
+    "disk space"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "subject_line": {
+   "de": [
+    "betreff",
+    "betreffzeile"
+   ],
+   "en": [
+    "subject",
+    "subject line"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "subnet": {
+   "de": [
+    "subnetz"
+   ],
+   "en": [
+    "subnet"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "supervisor": {
+   "de": [
+    "vorgesetzter",
+    "leiter",
+    "fuehrungskraft"
+   ],
+   "en": [
+    "supervisor",
+    "manager",
+    "lead"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "supplier": {
+   "de": [
+    "lieferant",
+    "zulieferer",
+    "anbieter"
+   ],
+   "en": [
+    "supplier",
+    "vendor",
+    "provider"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "switch": {
+   "de": [
+    "schalter",
+    "taster",
+    "endschalter"
+   ],
+   "en": [
+    "switch",
+    "push button",
+    "limit switch"
+   ],
+   "tags": [
+    "manufacturing"
+   ]
+  },
+  "table": {
+   "de": [
+    "tabelle",
+    "datentabelle"
+   ],
+   "en": [
+    "table",
+    "data table"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "tablet": {
+   "de": [
+    "tablet"
+   ],
+   "en": [
+    "tablet"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "tax": {
+   "de": [
+    "steuer",
+    "umsatzsteuer"
+   ],
+   "en": [
+    "tax",
+    "vat"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "team_lead": {
+   "de": [
+    "teamleitung",
+    "gruppenleiter"
+   ],
+   "en": [
+    "team lead",
+    "team leader"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "team_meeting": {
+   "de": [
+    "teambesprechung",
+    "abstimmungsrunde"
+   ],
+   "en": [
+    "team meeting",
+    "team call"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "temperature": {
+   "de": [
+    "temperatur",
+    "betriebstemperatur"
+   ],
+   "en": [
+    "temperature",
+    "operating temperature"
+   ],
+   "tags": [
+    "manufacturing"
+   ]
+  },
+  "temporary_staff": {
+   "de": [
+    "leiharbeit",
+    "zeitarbeit"
+   ],
+   "en": [
+    "temporary staff",
+    "agency worker"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "test_suite": {
+   "de": [
+    "testsuite",
+    "testumfang"
+   ],
+   "en": [
+    "test suite",
+    "test set"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "threshold": {
+   "de": [
+    "schwellwert",
+    "grenzwert"
+   ],
+   "en": [
+    "threshold",
+    "limit value"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "ticket_queue": {
+   "de": [
+    "vorgangswarteschlange",
+    "ticketliste"
+   ],
+   "en": [
+    "ticket queue",
+    "queue"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "time_off_request": {
+   "de": [
+    "urlaubsantrag",
+    "abwesenheitsantrag"
+   ],
+   "en": [
+    "time off request",
+    "leave request"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "timeout": {
+   "de": [
+    "zeitueberschreitung",
+    "antwortzeit"
+   ],
+   "en": [
+    "timeout",
+    "latency",
+    "response time"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "timesheet": {
+   "de": [
+    "stundenzettel",
+    "arbeitszeitnachweis"
+   ],
+   "en": [
+    "timesheet",
+    "time record"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "token": {
+   "de": [
+    "token",
+    "zugangstoken"
+   ],
+   "en": [
+    "token",
+    "auth token"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "tolerance": {
+   "de": [
+    "toleranz",
+    "abmass"
+   ],
+   "en": [
+    "tolerance"
+   ],
+   "tags": [
+    "manufacturing"
+   ]
+  },
+  "torque": {
+   "de": [
+    "drehmoment",
+    "anzugsmoment"
+   ],
+   "en": [
+    "torque",
+    "tightening torque"
+   ],
+   "tags": [
+    "manufacturing"
+   ]
+  },
+  "training": {
+   "de": [
+    "schulung",
+    "weiterbildung",
+    "unterweisung"
+   ],
+   "en": [
+    "training",
+    "course"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "trend": {
+   "de": [
+    "verlauf",
+    "entwicklung"
+   ],
+   "en": [
+    "trend",
+    "progression"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "two_factor": {
+   "de": [
+    "zweifaktoranmeldung",
+    "zwei faktor"
+   ],
+   "en": [
+    "two-factor authentication",
+    "2fa"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "uninstall": {
+   "de": [
+    "deinstallation",
+    "entfernen"
+   ],
+   "en": [
+    "uninstall",
+    "remove"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "unit_test": {
+   "de": [
+    "unittest",
+    "modultest"
+   ],
+   "en": [
+    "unit test"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "update": {
+   "de": [
+    "aktualisierung",
+    "update",
+    "patch"
+   ],
+   "en": [
+    "update",
+    "patch",
+    "upgrade"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "uptime": {
+   "de": [
+    "verfuegbarkeit",
+    "betriebszeit"
+   ],
+   "en": [
+    "uptime",
+    "availability"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "urgent": {
+   "de": [
+    "dringend",
+    "eilig",
+    "sofort",
+    "vorrangig"
+   ],
+   "en": [
+    "urgent",
+    "asap",
+    "immediately",
+    "priority"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "usb": {
+   "de": [
+    "usb",
+    "usbanschluss"
+   ],
+   "en": [
+    "usb",
+    "usb port"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "user_account": {
+   "de": [
+    "benutzerkonto",
+    "benutzer"
+   ],
+   "en": [
+    "user account",
+    "user"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "user_story": {
+   "de": [
+    "anwenderstory",
+    "nutzergeschichte"
+   ],
+   "en": [
+    "user story"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "vacation": {
+   "de": [
+    "urlaub",
+    "erholungsurlaub",
+    "freizeitausgleich"
+   ],
+   "en": [
+    "vacation",
+    "annual leave",
+    "time off"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "valve": {
+   "de": [
+    "ventil",
+    "absperrventil"
+   ],
+   "en": [
+    "valve",
+    "shut-off valve"
+   ],
+   "tags": [
+    "manufacturing"
+   ]
+  },
+  "version": {
+   "de": [
+    "version",
+    "versionsstand"
+   ],
+   "en": [
+    "version"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "version_control": {
+   "de": [
+    "versionsverwaltung"
+   ],
+   "en": [
+    "version control",
+    "source control"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "view": {
+   "de": [
+    "sicht",
+    "datenbanksicht"
+   ],
+   "en": [
+    "view",
+    "db view"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "voltage": {
+   "de": [
+    "spannung",
+    "versorgungsspannung"
+   ],
+   "en": [
+    "voltage",
+    "supply voltage"
+   ],
+   "tags": [
+    "manufacturing"
+   ]
+  },
+  "vpn": {
+   "de": [
+    "vpn",
+    "verschluesselter tunnel"
+   ],
+   "en": [
+    "vpn",
+    "virtual private network"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "vulnerability": {
+   "de": [
+    "schwachstelle",
+    "sicherheitsluecke"
+   ],
+   "en": [
+    "vulnerability",
+    "security flaw"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "waiting_customer": {
+   "de": [
+    "wartet auf kunde",
+    "rueckfrage offen"
+   ],
+   "en": [
+    "waiting for customer",
+    "pending reply"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "waiting_third_party": {
+   "de": [
+    "wartet auf dienstleister",
+    "extern offen"
+   ],
+   "en": [
+    "waiting for third party",
+    "waiting on vendor"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "warehouse": {
+   "de": [
+    "lager",
+    "lagerbestand",
+    "materiallager"
+   ],
+   "en": [
+    "warehouse",
+    "inventory",
+    "stock"
+   ],
+   "tags": [
+    "manufacturing"
+   ]
+  },
+  "warranty": {
+   "de": [
+    "garantie",
+    "gewaehrleistung"
+   ],
+   "en": [
+    "warranty",
+    "guarantee"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "wear": {
+   "de": [
+    "verschleiss",
+    "abnutzung"
+   ],
+   "en": [
+    "wear",
+    "abrasion"
+   ],
+   "tags": [
+    "manufacturing"
+   ]
+  },
+  "webcam": {
+   "de": [
+    "webcam",
+    "kamera"
+   ],
+   "en": [
+    "webcam",
+    "camera"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "webhook": {
+   "de": [
+    "webhook",
+    "rueckruf"
+   ],
+   "en": [
+    "webhook",
+    "callback"
+   ],
+   "tags": [
+    "it"
+   ]
+  },
+  "withdrawal": {
+   "de": [
+    "ruecknahme",
+    "widerruf"
+   ],
+   "en": [
+    "withdrawal",
+    "revocation"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "workaround": {
+   "de": [
+    "ueberbrueckung",
+    "behelfsloesung"
+   ],
+   "en": [
+    "workaround",
+    "interim fix"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "working_hours": {
+   "de": [
+    "arbeitszeit",
+    "arbeitsstunden"
+   ],
+   "en": [
+    "working hours",
+    "hours"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "workload": {
+   "de": [
+    "arbeitslast",
+    "auslastung"
+   ],
+   "en": [
+    "workload",
+    "load"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  },
+  "works_agreement": {
+   "de": [
+    "betriebsvereinbarung",
+    "dienstvereinbarung"
+   ],
+   "en": [
+    "works agreement",
+    "company agreement"
+   ],
+   "tags": [
+    "everyday"
+   ]
+  }
+ },
+ "description": "Curated DE/EN vocabulary for support, process and mail routing: manufacturing, IT, everyday office.",
+ "license": "MIT",
+ "schema_version": 1,
+ "source": "klix curated (hand-written)"
 }

@@ -1,4 +1,4 @@
-"""The curated expansion: same gates as the original 124 concepts.
+"""The curated expansion: same gates as the original 124-concept core.
 
 The expansion added IT and everyday/support/mail volume while deliberately
 leaving manufacturing alone (it was already complete for the terms that matter).

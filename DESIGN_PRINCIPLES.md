@@ -146,7 +146,7 @@ being re-measured, and several were wrong the first time:
 
 | Claim | What re-measurement showed |
 |---|---|
-| "fast-path miss costs 1–2 ms" | the eliminated duplicate vectorisation costs **0.026 ms** median / 0.042 ms p95 (n=300) |
+| "fast-path miss costs 1–2 ms" | the eliminated duplicate vectorisation costs **~0.03 ms** median (n=300, load-dependent: 0.027–0.045 ms across runs) |
 | "miss is 18.4 ms faster than baseline" | the sign flipped between runs (+7.9 ms) — not resolvable on this host |
 | "20 % glossary error rate" | came from a failure-enriched probe; not the file's rate |
 | "38.8 % error rate" | scored by key, counting correct mappings as errors → corrected to 8.4 % |
@@ -234,10 +234,11 @@ below the noise floor. And establish the size of the problem before designing th
 fix.
 
 **Why.** The fast-path miss was described as a 1–2 ms penalty. Measuring the
-mechanism (how many times a query is vectorised) showed the real figure: 0.026 ms.
-The fix was correct but 20–30× smaller than assumed. In parallel, the end-to-end
-wall-clock comparison that "proved" the fix flipped sign between runs (+7.9 ms
-vs −18.4 ms) because the dense embedding pass dominates and outweighs variance.
+mechanism (how many times a query is vectorised) showed the real figure: ~0.03 ms.
+The fix was correct but several orders of magnitude smaller than assumed. In
+parallel, the end-to-end wall-clock comparison that "proved" the fix flipped sign
+between runs (+7.9 ms vs −18.4 ms) because the dense embedding pass dominates and
+outweighs variance.
 A claim built on that comparison was not merely imprecise — it was unsupportable,
 and it was stated as fact twice before being retracted.
 
@@ -268,7 +269,7 @@ probe was "20 % on domain-critical terms". Two different questions, one number
 carrying both.
 
 **How to comply.**
-* Name the population: "of 310 curated German terms", "of 124 concepts, all of
+* Name the population: "of 310 curated German terms", "of 362 concepts, all of
   them, not a sample", "of a random 300-concept sample with seed …".
 * Say whether the sample is random or selected, and if selected, on what
   criterion.
@@ -548,6 +549,10 @@ Work this before starting any non-trivial change. It is short on purpose.
       its disproof?
 - [ ] **Retractions (13).** Does this change supersede a claim made elsewhere —
       including in `README.md` and generated files? Grep for it.
+- [ ] **Measurement matches the question (8, 9).** Does the number I am about to
+      report actually answer what was asked? A coverage rate ("is this
+      independently checkable") is not an error rate ("is this right"), and a
+      metric whose reference is the thing under test cannot find its errors.
 - [ ] **Neutrality (17).** Any third-party names in what I am committing?
 
 ## Related documents
@@ -555,6 +560,7 @@ Work this before starting any non-trivial change. It is short on purpose.
 | Document | Holds |
 |---|---|
 | `docs/glossary-format.md` | The data format and its stability guarantees (public API) |
+| `docs/curated-correctness.md` | What can and cannot be measured about the curated list's correctness, with the figures and their limits |
 | `docs/rejected-approaches.md` | Paths abandoned, with the disproof |
 | `docs/proposals.md` | Suggested changes, not built (principle 6) |
 | `DATA_SOURCES.md` | Licence chain per shipped file, with verification method |

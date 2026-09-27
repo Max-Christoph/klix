@@ -7,8 +7,8 @@ alternatives were rejected, and how the generated one is rebuilt.
 ## Provenance is tracked per glossary
 
 Provenance is recorded **once per glossary**, never per concept (a format
-decision, not an implementation detail). With 124 concepts you write one
-`source`/`license` pair, not 124. The record lives:
+decision, not an implementation detail). With 362 concepts you write one
+`source`/`license` pair, not 362. The record lives:
 
 * **in the file itself** for the versioned document format —
   `{"schema_version": 1, "source": ..., "license": ..., "concepts": {...}}`
@@ -67,7 +67,11 @@ the scoring:
 | **overall** | **768** | **8.4 %** | 25 % |
 
 This table measures the **generated** (`broad()`) vocabulary against the curated
-list as ground truth. The figures moved when the curated list grew from 124 to
+list as ground truth. It is therefore a figure about the *generated* layer only:
+the curated list is the reference here, so an error **inside** the curated list is
+structurally invisible to this measurement. It is not the curated list's error
+rate — for that see `docs/curated-correctness.md`. The figures moved when the
+curated list grew from 124 to
 362 concepts: the earlier 6.6 % was measured against 310 curated terms, the
 current 8.4 % against 768. The growth added vocabulary Wikidata covers badly
 (IT and everyday), so a larger, more demanding denominator raises the measured
@@ -90,13 +94,75 @@ to an item — i.e. the concept is externally attested at all, not that the mapp
 is correct. Internal ambiguity on the shipped artifact: **0**.
 
 And the curated set itself, checked with `evals/curated_glossary_verify.py`
-(**all 124 concepts, not a sample**): 0 structural findings, 0 pairs below the
-embedding-agreement floor, 0 genuine round-trip failures.
+(**all 362 concepts, not a sample**): 0 structural findings, 0 genuine round-trip
+failures. The round-trip test produces 73 misses, but each one is a **thin-anchor
+artefact**, not a mapping error: the glossary bridges the German probe, the
+keyword channel selects the right concept, and the dense channel outvotes it
+because the anchors here are the concept's 1-3 English terms with no sentence
+context. Classified individually by `evals/roundtrip_failure_diag.py`
+(**73 thin-anchor, 0 mapping error, 0 sparse-also-wrong**). That script derives
+its failure set from the shipped artefact; it previously carried a hard-coded
+list of 10 cases, so 63 of the 73 were never classified.
+
+The dense-agreement floor is **not** clean at this size and is not claimed as
+such: 9 pairs fall below 0.35 and 30 more below 0.50, out of 362. That metric
+penalises rare-but-correct terms ('lastverteiler' / 'load balancer', 0.159), so
+every flagged pair is listed for manual reading with its cosine rather than
+counted as an error.
+
+### What is NOT known about the curated list
+
+**Correctness is measured for at most 40 % of it. For the remaining 60 %, nobody
+knows whether the mappings are right** — this is the honest state, not a
+conservative reading of it. `evals/curated_correctness_new.py` cross-validates the
+two sides against Wikidata senses (seed 20260928, n=160, same sample as the
+attestation figure above):
+
+```
+CONFIRMED  (both sides share a Wikidata item) : 53
+MISMATCH   (items present but disjoint)       : 11   -> 10 shown to be metric
+                                                        artifacts, 1 genuine
+UNDECIDABLE(no sense link on >=1 side)        : 96   -> correctness UNKNOWN
+```
+
+The undecidable remainder is concentrated in the peripheral domains, and it does
+reach manufacturing:
+
+| Domain | undecidable | of sampled |
+|---|---|---|
+| everyday | 47 | 71 |
+| IT | 41 | 73 |
+| **manufacturing** | **8** | **16** |
+
+The 8 manufacturing terms with no external ground truth are `error_code`,
+`failure_cause`, `output`, `quality`, `relay`, `safety_guard`, `spare_part`,
+`torque` — mostly compounded German industrial vocabulary for which Wikidata has
+no lexeme sense. A real error rate for the whole list needs an independent
+labelling pass by someone other than the author; until that exists, treat the
+figure above as a lower bound on the unknown, not as a clean bill of health.
+
+**Known polysemy risk (measured, not theorised).** The lookup is flat and
+context-free, so a German word carrying both an industrial and an office meaning
+resolves to whichever concept claimed it first. Confirmed reproductions:
+
+| Query | resolves to | should be |
+|---|---|---|
+| `das lager der welle ist verschlissen` (a worn shaft **bearing**) | `warehouse` | a part/wear concept |
+| `der leiter ist kaputt und muss ersetzt werden` (a broken **ladder**) | `supervisor` | a part concept |
+
+Removing the offending synonym is not a fix: dropping `leiter` from `supervisor`
+leaves the ladder query on `hr_lead` anyway, because the English *supervisor*
+anchors are semantically close to it. Real mitigations would be context
+disambiguation or per-domain glossaries — both are changes of scope, not data
+edits, and neither is in this release. Recorded here so it is a known limitation
+rather than a surprise.
+
+Full method and adjudication: `docs/curated-correctness.md`.
 
 The failure mode is what decides it: a wrong mapping does not merely fail to help
-— it silently bridges a query to the **wrong** English concept. 124 concepts with
+— it silently bridges a query to the **wrong** English concept. 362 concepts with
 no measured errors are therefore the safer default than 23,600 with a measured
-6.6 % error rate. Use `broad()` when recall matters more than precision.
+8.4 % error rate. Use `broad()` when recall matters more than precision.
 
 ### Note on measurement validity
 
@@ -132,7 +198,7 @@ layer is copyleft or share-alike and therefore incompatible with this MIT packag
 Consequence: the multi-source **consensus principle** (a mapping is trusted when
 two independent sources agree) could not be implemented. With exactly one
 licence-compatible source there is no second vote, so the curated layer had to be
-written rather than derived. That is the honest reason it is 124 hand-checked
+written rather than derived. That is the honest reason it is 362 hand-checked
 concepts and not tens of thousands.
 
 ### Wikidata licence, verified

@@ -12,13 +12,13 @@ Every preset returns a `Glossary` whose format is language agnostic::
 Presets
 -------
 - `empty()`            — no terms (pure dense+TF-IDF routing).
-- `curated()`          — **the default**: 124 hand-written concepts across
+- `curated()`          — **the default**: 362 hand-written concepts across
                          manufacturing, IT and everyday office language. See the
                          quality section below.
 - `curated_manufacturing()` / `curated_it()` / `curated_everyday()`
                        — one curated domain on its own.
 - `broad()`            — the large Wikidata-generated vocabulary (10k concepts).
-                         Opt-in, NOT the default: ~7% of its mappings are wrong
+                         Opt-in, NOT the default: ~8% of its mappings are wrong
                          (see below). Good for recall, not for precision.
 - `manufacturing()`    — historical name, returns the curated manufacturing set.
 - `workflow()`         — legacy generic routing terms.
@@ -41,9 +41,17 @@ ground truth, per domain):
     exactly what Wikidata covers worst, so a larger denominator raises the
     measured rate. Same question, different population.)
 
-and the curated set itself: 0 structural findings, 0 pairs below the dense
-agreement floor, 0 genuine round-trip failures (evals/curated_glossary_verify.py,
-all 124 concepts — not a sample).
+and the curated set itself: 0 structural findings, and 0 genuine round-trip
+failures — the German probe reaches its own concept, or the failure is a
+thin-anchor artefact (the keyword channel picks the right concept and the dense
+channel outvotes it, because these anchors are 1-3 words with no sentence
+context). Measured over **all 362 concepts, not a sample**
+(`evals/curated_glossary_verify.py`); all 73 round-trip misses are classified
+individually by `evals/roundtrip_failure_diag.py`, which reports 0 mapping
+defects and 73 thin-anchor artefacts. The agreement floor claim is NOT restated
+here: 39 pairs (9 below 0.35) sit under the dense floor, and that metric
+penalises rare terms rather than wrong ones — every flagged pair is listed for
+manual reading instead.
 
 So: a curated list with no measured errors beats 23,600 terms with a measured
 8.4% wrong-mapping rate, when the failure mode is a query being bridged to the
@@ -61,7 +69,7 @@ __all__ = ["empty", "curated", "curated_where", "curated_manufacturing",
            "merge_all", "MANUFACTURING", "WORKFLOW", "CURATED_PATH",
            "CURATED_PROVENANCE", "BROAD_PROVENANCE"]
 
-# The curated tri-domain glossary (124 concepts, original work, MIT).
+# The curated tri-domain glossary (362 concepts, original work, MIT).
 CURATED_PATH = Path(__file__).with_name("data") / "curated_glossary.json"
 # Domain of each curated concept, so callers can select a single domain.
 CURATED_DOMAINS_PATH = Path(__file__).with_name("data") / "curated_domains.json"
@@ -251,7 +259,7 @@ def _load_curated_domains() -> dict:
 
 
 def curated() -> Glossary:
-    """**The default**: 124 hand-written concepts (manufacturing + IT + everyday).
+    """**The default**: 362 hand-written concepts (manufacturing + IT + everyday).
 
     Original work, MIT-licensed, structurally validated and verified end-to-end
     (`evals/curated_glossary_verify.py`). Every candidate source that could have
@@ -292,12 +300,12 @@ def curated_manufacturing() -> Glossary:
 
 
 def curated_it() -> Glossary:
-    """The curated IT/software layer (40 concepts)."""
+    """The curated IT/software layer (186 concepts)."""
     return _curated_domain("it")
 
 
 def curated_everyday() -> Glossary:
-    """The curated everyday/office layer (40 concepts)."""
+    """The curated everyday/office layer (132 concepts)."""
     return _curated_domain("everyday")
 
 

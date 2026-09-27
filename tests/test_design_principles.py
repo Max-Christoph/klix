@@ -67,7 +67,7 @@ class TestNumbersAreReproducible:
         return p.stdout + p.stderr
 
     def test_curated_counts_match_the_documents_that_quote_them(self, text):
-        """124 concepts / 603 terms are quoted in DATA_SOURCES and proposals.
+        """362 concepts / 1495 terms are quoted in DATA_SOURCES and proposals.
 
         Not in DESIGN_PRINCIPLES.md itself — that document states principles and
         cites evidence, it does not restate every figure. Asserted against the
@@ -92,12 +92,20 @@ class TestNumbersAreReproducible:
                 f"({len(mapping)})")
 
     def test_fastpath_overhead_figure_is_reproducible(self, text):
-        """The 0.026 ms claim must appear in the script's own output."""
+        """The documented order of magnitude must match the script's own output.
+
+        The figure is load-dependent (0.027-0.045 ms measured across runs), so the
+        test pins the magnitude and its unit, not a rounded 4-decimal value: an
+        earlier revision asserted the literal "0.026" and went stale the moment the
+        script was re-run on a differently loaded host.
+        """
         out = self._run("evals.fastpath_overhead")
         m = re.search(r"median\s+([0-9.]+)\s*ms", out)
         assert m, f"no median in output:\n{out[:800]}"
-        assert m.group(1).startswith("0.0")      # sub-0.1 ms, as documented
-        assert "0.026" in text, "document does not quote the current figure"
+        assert m.group(1).startswith("0.0"), m.group(1)   # sub-0.1 ms, as documented
+        assert re.search(r"0\.0[0-9]+", m.group(1)), m.group(1)
+        assert "~0.03 ms" in text, (
+            "document does not quote the current magnitude: " + m.group(1))
 
     def test_noise_figure_is_reproducible(self, text):
         out = self._run("evals.glossary_noise")

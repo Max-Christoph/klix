@@ -146,7 +146,7 @@ Every head and the engine expose meaningful knobs:
 | `matched_concepts` | `Choice` result | The glossary concepts a query matched — the stable explanation of *what a text meant in glossary terms*. Populated even when no bridge was needed. `matched_terms` lists the cross-language terms that had to be added |
 | `per_concept_topk` | `Glossary` | Max synonyms bridged per matched concept (default `6`), allocated round-robin over the concept's languages so no language crowds out another. Plus a hard `max_added` overall. This is what keeps a 20k-concept glossary safe |
 | `glossary_weight` | `Choice` | Weight of the glossary channel (default `0.5`). Exact tokens keep weight 1.0; glossary terms enter as `alpha · v_glossary` before normalization — on queries *and* on anchor rows. `0.0` leaves the sparse vectors identical to the no-glossary baseline. Compose glossaries via `Glossary.load(...)` / `glossary.merge(other)` |
-| `sparse_fastpath` | `DecisionEngine` | Opt-in early exit: answer from the keyword channel alone *before* the dense embedding pass. Three conservative gates (sparse score, margin relative **and** absolute, reject-pole check) and all-or-nothing across heads. Counters via `engine.fastpath_stats()`; per-result provenance in `details(head)["engine"]` (`"sparse_fastpath"` / `"dense_hybrid"`). **v0.9.0: a miss costs nothing relative to the baseline.** The query is vectorized once in `decide()` and the same `SparseQuery` is handed to the gate and to `evaluate()`, so a miss vectorizes exactly as often as a schema *without* the fast path — the v0.8.8 duplicate is gone. Measured cost of that eliminated work: **0.060 ms median / 0.086 ms p95** per sparse-state build (`evals/fastpath_overhead.py`, n=300). A wall-clock miss-vs-baseline comparison is *not* usable as evidence here — the dense pass dominates and its variance exceeds the effect, so the sign flips between runs |
+| `sparse_fastpath` | `DecisionEngine` | Opt-in early exit: answer from the keyword channel alone *before* the dense embedding pass. Three conservative gates (sparse score, margin relative **and** absolute, reject-pole check) and all-or-nothing across heads. Counters via `engine.fastpath_stats()`; per-result provenance in `details(head)["engine"]` (`"sparse_fastpath"` / `"dense_hybrid"`). **v0.9.0: a miss costs nothing relative to the baseline.** The query is vectorized once in `decide()` and the same `SparseQuery` is handed to the gate and to `evaluate()`, so a miss vectorizes exactly as often as a schema *without* the fast path — the v0.8.8 duplicate is gone. Measured cost of that eliminated work: **~0.03 ms median** per sparse-state build (`evals/fastpath_overhead.py`, n=300; load-dependent, 0.027–0.045 ms across runs). A wall-clock miss-vs-baseline comparison is *not* usable as evidence here — the dense pass dominates and its variance exceeds the effect, so the sign flips between runs |
 | `reject_anchors` | `Choice` | Texts matching these return `value=None` (don't-know instead of guess); with `classifier="linear"` they are learned as their own class |
 | `keyword_boost` | `Choice` | Weight of exact keyword hits (asset IDs like `plc-34`) vs. semantic similarity |
 | `aggregation` | `Score` | `"max"` (default) or `"topk"` — topk averages the best-k anchors per pole, robust against a single noisy anchor |
@@ -223,6 +223,29 @@ the glossary is part of `schema_hash()`, so logged decisions reproduce exactly.
 sparse vector; v0.8.8's damping plus the vocabulary-aware skip fixed that). The
 measured gain applies to cross-lingual schemas — see the `glossary` row in the
 configuration table.
+
+### Limits of the bundled presets — read before trusting `curated()`
+
+What has been **measured**: internal ambiguity 0 (build-enforced on the shipped
+file), and correctness confirmed against an independent Wikidata-item ground
+truth for 40 % of a random sample. What has **not**: for the other **60 % no
+independent ground truth exists, so their correctness is unknown** — concentrated
+in the office/IT vocabulary but reaching manufacturing too (8 of 16 sampled
+manufacturing terms). Nothing here is known to be wrong; it is simply unverified.
+A real error rate needs a labelling pass by someone other than the author.
+
+Two consequences you can hit in practice:
+
+* **Flat lookup, no context.** A German word with both an industrial and an office
+  meaning resolves to whichever concept claimed it. Reproduced: `das lager der
+  welle ist verschlissen` (*shaft bearing*) resolves to `warehouse`, not to a part;
+  `der leiter ist kaputt` (*ladder*) resolves to `supervisor`.
+* **Deleting the synonym is not a fix.** It moves the error, it does not remove it.
+
+If your schema mixes domains, prefer your **own** glossary over the bundled presets
+— the presets are a starting point and a demonstration, not a calibrated artifact
+for your vocabulary. Numbers, method and adjudication: `docs/curated-correctness.md`
+and `DATA_SOURCES.md`.
 
 ## Custom Heads
 

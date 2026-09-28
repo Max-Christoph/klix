@@ -46,7 +46,58 @@ and adds the script that measures the second one.
   **P8** (per-domain presets as the recommended default, plus a part-level concept),
   deliberately not implemented here.
 
-## Unreleased (after 0.9.1)
+## [0.9.2] - 2026-09-28
+
+Measurement only. **No behaviour change, no API change** — this adds the ablation
+that was argued but never measured, and corrects the recommendation that followed
+from it.
+
+### Added
+- **`evals/glossary_vs_bilingual_anchors.py`** — the four-cell ablation on the
+  existing bilingual set, both classifiers, bootstrap CI (2000 resamples, seed
+  20260928), reproducible across runs. Answers whether a glossary replaces
+  bilingual anchors or adds to them. Write-up: `docs/glossary-vs-anchors.md`.
+- **`tests/test_glossary_vs_anchors.py`** — pins the ablation's outcome so the
+  documented numbers cannot drift silently.
+
+### Changed
+- **The README recommendation is corrected.** It said the glossary's "measured
+  gain applies to cross-lingual schemas". That was true but unquantified, and the
+  quantification narrows it: **(b) EN-anchors+glossary is as good as (c) EN+DE
+  anchors** (+5 %, 95 % CI −10…+20 %, not distinguishable) — so the glossary
+  genuinely buys the bridge while you author monolingually. But **(d) adds nothing
+  over (c)** (centroid −5 %, linear ±0). For a bilingual schema, bilingual anchors
+  are therefore the simpler and equally good route, and further glossary work is
+  worth it only where the anchors must stay monolingual.
+
+### Measured (the numbers behind the correction)
+| cell | centroid | linear |
+|---|---|---|
+| (a) EN anchors, no glossary | 15/20 | 16/20 |
+| (b) EN anchors + glossary | 16/20 | 16/20 |
+| (c) EN+DE anchors, no glossary | 15/20 | 15/20 |
+| (d) EN+DE anchors + glossary | 14/20 | 15/20 |
+
+The glossary **does** fire: it expands 6 of 10 German queries. It changes the
+answer in exactly one case under `centroid` (`elternzeit`, wrong → right) and in
+**none** under `linear`. The remaining errors are within-domain anchor ambiguity
+(`bildschirm`, `kaffeemaschine`, `erstattung` all resolving to `facility`) — a
+glossary cannot repair mutually ambiguous anchors.
+
+**Notable and recorded rather than smoothed over:** in cell (d), `auf meiner
+abrechnung stehen null stunden` moves from `hr` (correct, in (c)) to `billing`.
+Adding glossary text to an already bilingual schema made that query worse. One case
+at n=20 is not proof, but it is the direction in which the glossary does not help,
+and it is why the recommendation changed rather than being left as "more glossary
+is better".
+
+### Limits, stated where the numbers are quoted
+n=20 test cases, one domain, CI up to ±20 points, and anchor *count* is coupled to
+language coverage by design (2 vs 4 per class) — so a (b)/(c) difference is not
+attributable to language coverage alone. `docs/glossary-vs-anchors.md` carries the
+full caveat list; the README repeats the short form.
+
+## Unreleased (after 0.9.2)
 
 ### Added
 - **`DESIGN_PRINCIPLES.md`** — 18 principles, each tied to the incident that

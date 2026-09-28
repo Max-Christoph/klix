@@ -1,0 +1,66 @@
+{
+  "centroid|(a) EN anchors only, no glossary": {
+    "all": 15,
+    "de": 6,
+    "en": 9,
+    "n_all": 20,
+    "n_de": 10,
+    "n_en": 10
+  },
+  "centroid|(b) EN anchors only + glossary": {
+    "all": 16,
+    "de": 7,
+    "en": 9,
+    "n_all": 20,
+    "n_de": 10,
+    "n_en": 10
+  },
+  "centroid|(c) EN+DE anchors, no glossary": {
+    "all": 15,
+    "de": 6,
+    "en": 9,
+    "n_all": 20,
+    "n_de": 10,
+    "n_en": 10
+  },
+  "centroid|(d) EN+DE anchors + glossary": {
+    "all": 14,
+    "de": 5,
+    "en": 9,
+    "n_all": 20,
+    "n_de": 10,
+    "n_en": 10
+  },
+  "linear|(a) EN anchors only, no glossary": {
+    "all": 16,
+    "de": 6,
+    "en": 10,
+    "n_all": 20,
+    "n_de": 10,
+    "n_en": 10
+  },
+  "linear|(b) EN anchors only + glossary": {
+    "all": 16,
+    "de": 6,
+    "en": 10,
+    "n_all": 20,
+    "n_de": 10,
+    "n_en": 10
+  },
+  "linear|(c) EN+DE anchors, no glossary": {
+    "all": 15,
+    "de": 5,
+    "en": 10,
+    "n_all": 20,
+    "n_de": 10,
+    "n_en": 10
+  },
+  "linear|(d) EN+DE anchors + glossary": {
+    "all": 15,
+    "de": 5,
+    "en": 10,
+    "n_all": 20,
+    "n_de": 10,
+    "n_en": 10
+  }
+}

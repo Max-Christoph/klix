@@ -224,10 +224,10 @@ sparse vector; v0.8.8's damping plus the vocabulary-aware skip fixed that). The
 measured gain applies to cross-lingual schemas — see the `glossary` row in the
 configuration table.
 
-**How much is that gain worth?** Measured directly, because it decides how much
-glossary work is worth doing (`evals/glossary_vs_bilingual_anchors.py`, full
-write-up in `docs/glossary-vs-anchors.md`). Same schema, same 20 test cases, four
-cells, both classifiers, bootstrap CI:
+**How much is that gain worth?** Measured, because it decides how much glossary
+work is worth doing (`evals/glossary_vs_bilingual_anchors.py`, full write-up in
+`docs/glossary-vs-anchors.md`). Same schema, same 20 test cases, four cells,
+bootstrap CI:
 
 | | centroid | linear |
 |---|---|---|
@@ -236,22 +236,35 @@ cells, both classifiers, bootstrap CI:
 | (c) EN+DE anchors, no glossary | 15/20 | 15/20 |
 | (d) EN+DE anchors + glossary | 14/20 | 15/20 |
 
-Two answers, both with their limits stated:
+**The honest reading: at n=20 the difference between (b) and (c) is not
+resolvable.** The 95 % CI for (b) − (c) is −10…+20 points and includes zero. That
+is an absence of evidence in either direction, **not** a demonstrated equivalence —
+so do not read this as "bilingual anchors and a glossary are interchangeable".
+(d) − (c) is −5 points under `centroid` and 0 under `linear`.
 
-* **(b) is as good as (c)** (+5 %, 95 % CI −10…+20 % — not distinguishable). A
-  glossary really does buy the cross-lingual bridge while you author in one
-  language.
-* **(d) adds nothing over (c)** (centroid −5 %, linear ±0). On top of bilingual
-  anchors the glossary contributes no measurable gain — and in one case it moves a
-  query *off* its correct label. So **for a bilingual schema, bilingual anchors are
-  the simpler and equally good route**; more glossary vocabulary is worth it only
-  where the anchors must genuinely stay monolingual.
+**Read the `linear` column carefully: it is not a result about the glossary.** Under
+`classifier="linear"` the probe predicts from the dense vector alone and returns
+before the glossary expansion runs (`src/klix/heads.py:1170-1171`, return at
+`:1197`), so the sparse channel never reaches the decision. Verified mechanically:
+varying `glossary_weight` from 0 to 50 produces exactly one answer pattern under
+`linear`, but 2–3 patterns under `nearest`/`centroid`/`hybrid`. The (a)=(b) and
+(c)=(d) equality in that column is what the code path predicts — a useful check on
+the analysis, not a measurement of the glossary.
 
-Caveats: n=20 with a CI up to ±20 points, one domain, and anchor *count* is coupled
-to language coverage in the design — read the document before quoting the numbers.
-The glossary does fire here: it expands 6 of 10 German queries, but changes the
-answer in only one case under `centroid` and none under `linear`. The remaining
-errors are the anchors being mutually ambiguous, which a glossary cannot repair.
+**Practical consequence that *does* follow** (an architecture finding, not an
+anchor-count one): if you want the glossary to influence routing, use `nearest`,
+`centroid` or `hybrid`. With `linear` it is inert for the decision. Where the
+channel is active, the glossary fires — it expands 6 of 10 German queries — and it
+moved one query to the right answer (`elternzeit`: wrong → `hr`). The remaining
+errors are mutually ambiguous *anchors* (`bildschirm`, `kaffeemaschine`,
+`erstattung` all landing on `facility`), which no glossary can repair.
+
+Caveats that bound all of the above: n=20 test cases, one domain, CI up to ±20
+points, anchor *count* coupled to language coverage by design (2 vs 4 per class),
+and one of the two classifiers structurally inert. A test that could actually settle
+the question needs n≥60, a sparse-active configuration, and equal anchor counts
+across cells — the design and its missing data are specified in proposal P9
+(`docs/proposals.md`).
 
 ### Limits of the bundled presets — read before trusting `curated()`
 

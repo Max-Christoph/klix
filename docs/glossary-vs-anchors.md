@@ -1,116 +1,130 @@
-# Glossar vs. zweisprachige Anker: eine Ablation
+# Glossar vs. zweisprachige Anker: eine Ablation — und was sie *nicht* belegt
 
 ## Die Frage
 
-Im Chat stand die Behauptung: *ein Glossar schenkt dir beide Sprachen, während du
-einsprachig schreibst* — plausibel, aber nie gemessen. Die Alternative ist
-einfacher: Anker gleich in beiden Sprachen schreiben, das braucht gar kein Glossar.
-
-Gemessen auf **demselben Schema** und **denselben 20 Testfällen** (10 EN + 10 DE),
-für **beide Klassifikatoren**, mit Bootstrap-CI (2000 Resamples, Seed 20260928,
-gepaart über Testfälle):
+Die Behauptung: *ein Glossar schenkt dir beide Sprachen, während du einsprachig
+schreibst*. Die Alternative wäre, die Anker gleich zweisprachig zu schreiben und
+gar kein Glossar zu brauchen. Gemessen auf demselben Schema und denselben 20
+Testfällen (10 EN + 10 DE), beide Klassifikatoren, Bootstrap-CI (2000 Resamples,
+Seed 20260928). Skript: `evals/glossary_vs_bilingual_anchors.py`.
 
 | Zelle | Anker | Glossar |
 |---|---|---|
-| (a) | nur EN (2/Klasse, 10 gesamt) | nein |
+| (a) | nur EN (2/Klasse) | nein |
 | (b) | nur EN | ja |
-| (c) | EN+DE (4/Klasse, 20 gesamt) | nein |
+| (c) | EN+DE (4/Klasse) | nein |
 | (d) | EN+DE | ja |
 
-Reproduzierbar über einen zweiten Lauf (identische Zählwerte).
-Skript: `evals/glossary_vs_bilingual_anchors.py`.
+## Zuerst: auf welchem Pfad wirkt das Glossar überhaupt?
+
+Bevor Zahlen gedeutet werden, muss klar sein, **ob der Sparse-Kanal die
+Entscheidung überhaupt erreicht**. Eine Null-Differenz kann „kein Effekt" heißen
+oder „das Feature wurde nie befragt". Die Codestellen, alle in
+`src/klix/heads.py`:
+
+| classifier | Sparse-Kanal in der Entscheidung? | Wo |
+|---|---|---|
+| `nearest` | **ja** — `hybrid_sims = dense_sims + boost * sparse_sims`, dann Max über die Anker | `:1234`, Pooling `:1256-1261` |
+| `centroid` | **ja** — Sparse pro Label gemittelt und mit demselben `boost` addiert | `:1237-1247` |
+| **`linear`** | **nein** — der Probe sagt aus `encoded.dense_vec` vorher und **kehrt zurück**; die Glossar-Expansion bei `:1210` ist unerreichbar | `:1170-1171`, Rücksprung `:1197` |
+| `hybrid` | **ja** — Query-Zeile ist `[dense \| tfidf]`, aus `sparse` gebaut | `:1158-1169` |
+
+Mechanisch geprüft statt aus dem Code geschlossen — `glossary_weight` von 0 bis 50
+variiert, gezählt wie viele verschiedene Antwortmuster entstehen:
+
+```
+nearest    2 Muster   -> Kanal wirkt
+centroid   3 Muster   -> Kanal wirkt
+linear     1 Muster   -> Kanal wirkungslos, selbst bei 50-fachem Gewicht
+hybrid     2 Muster   -> Kanal wirkt
+```
+
+Zusatz bei `hybrid`: der Sparse-Teil der Query-Zeile nimmt nur Spalten
+`< sparse_part.shape[0]` auf, also nur Terme, die in der **anker-abgeleiteten
+Vokabel** des Heads stehen. Ein Glossar-Term außerhalb dieser Vokabel trägt dort
+nichts bei.
+
+**Konsequenz für die Ablation: die `linear`-Zeile hat das Glossar nie befragt.**
+Sie ist kein Messergebnis über das Glossar, sondern eine Aussage über den Code-Pfad.
+Die frühere Formulierung „unter `linear` verschiebt das Glossar keine Antwort" war
+als Befund dargestellt — das war falsch.
 
 ## Ergebnis
 
-### centroid
+### centroid (Kanal ist aktiv — die Zeile ist aussagekräftig)
 
 | Zelle | EN | DE | gesamt | Median-Latenz |
 |---|---|---|---|---|
 | (a) EN, kein Glossar | 9/10 | 6/10 | 15/20 (75 %) | 21,2 ms |
 | (b) EN + Glossar | 9/10 | 7/10 | 16/20 (80 %) | 11,0 ms |
 | (c) EN+DE, kein Glossar | 9/10 | 6/10 | 15/20 (75 %) | 10,3 ms |
-| (d) EN+DE + Glossar | 9/10 | 5/10 | **14/20 (70 %)** | 10,2 ms |
+| (d) EN+DE + Glossar | 9/10 | 5/10 | 14/20 (70 %) | 10,2 ms |
 
-### linear
+**(b) − (c) = +5,0 %, 95 %-CI [−10 %, +20 %]**
+**(d) − (c) = −5,0 %, 95 %-CI [−15 %, +0 %]**
 
-| Zelle | EN | DE | gesamt | Median-Latenz |
-|---|---|---|---|---|
-| (a) EN, kein Glossar | 10/10 | 6/10 | 16/20 (80 %) | 17,4 ms |
-| (b) EN + Glossar | 10/10 | 6/10 | 16/20 (80 %) | 17,2 ms |
-| (c) EN+DE, kein Glossar | 10/10 | 5/10 | 15/20 (75 %) | 21,1 ms |
-| (d) EN+DE + Glossar | 10/10 | 5/10 | 15/20 (75 %) | 26,0 ms |
+### linear (Kanal ist inaktiv — nicht aussagekräftig)
 
-## Die entscheidenden Vergleiche
+| Zelle | EN | DE | gesamt |
+|---|---|---|---|
+| (a) | 10/10 | 6/10 | 16/20 |
+| (b) | 10/10 | 6/10 | 16/20 |
+| (c) | 10/10 | 5/10 | 15/20 |
+| (d) | 10/10 | 5/10 | 15/20 |
 
-**(b) − (c)**: +5,0 % bei beiden Klassifikatoren, 95 %-CI [−10 %, +20 %] respektive
-[−10 %, +20 %] → **nicht unterscheidbar**. Zweisprachige Anker sind also *nicht*
-besser als einsprachige Anker plus Glossar. Die Vermutung hält der Messung stand.
+(a)=(b) und (c)=(d) **exakt** — das ist exakt, was der Code-Pfad vorhersagt. Diese
+Zeile gehört als Beleg für die Pfad-Analyse gelesen, nicht als Beleg über das
+Glossar.
 
-**(d) − (c)**: centroid −5,0 % (CI [−15 %, +0 %]), linear ±0 %
-→ das Glossar **addiert sich nicht** auf zweisprachige Anker. Es trägt nichts
-Zusätzliches bei, sobald die Anker beide Sprachen abdecken.
+## Was der Fallmechanismus zeigt (centroid, wo der Kanal greift)
 
-## Der Mechanismus, fallweise
+* Das Glossar **feuert**: es expandiert **6 von 10** deutschen Anfragen. Es ist
+  also nicht wirkungslos.
+* Es ändert die Antwort in **genau einem** Fall zum Richtigen: `elternzeit`
+  (`security` → `hr`).
+* Die übrigen Fehler liegen **innerhalb der Domäne fest**, weil die *Anker*
+  untereinander mehrdeutig sind: `erstattung`, `bildschirm`, `kaffeemaschine`
+  landen alle auf `facility`. Ein Glossar kann mehrdeutige Anker nicht reparieren.
+* Bei `glossary_weight = 5` kippt zusätzlich `wo bleibt die erstattung …` nach
+  `billing` (richtig), bei 50 wieder zurück — die Wirkung ist nicht monoton.
 
-Das Erklärungsstück fehlte in der Zählung, deshalb hier ausgeschrieben — wie viele
-der 10 deutschen Anfragen vom Glossar überhaupt berührt werden, und ob sich die
-Antwort ändert:
+## Antwort auf die gestellte Frage — mit der Einschränkung davor
 
-* **Das Glossar expandiert 6 von 10 deutschen Anfragen.** Es ist also nicht
-  wirkungslos. Die vier übrigen (`kreditkarte`, `tuerknauf`, `loesegeld`,
-  `verschluesselt` …) haben keinen Eintrag im Preset.
-* **Es ändert die Antwort nur bei `centroid` — ein einziger Fall:** `elternzeit`
-  (`security` → `hr`, korrekt). Bei `linear` bleibt die Antwort in **allen** 10
-  Fällen identisch, obwohl in denselben 6 Fällen Text ergänzt wird.
-* Alle übrigen Fehler liegen **innerhalb der Domäne fest**, weil die Anker selbst
-  mehrdeutig sind: `erstattung`/`kein Geld zurueck` → `facility`,
-  `bildschirm`/`wlan` → `facility`, `kaffeemaschine` → `facility`. Das Glossar
-  verschiebt diese Anfragen nur innerhalb eines Clusters bereits verwandter
-  Anker.
+**Diese Messung entscheidet die Frage nicht.** Der ehrliche Satz lautet:
 
-**Kontraintuitiv und deshalb ausdrücklich:** in Zelle (d) verschlechtert sich
-`auf meiner abrechnung stehen null stunden` (erwartet `hr`) von `hr` (c) auf
-`billing` (d). Das Hinzufügen von Glossar-Text zu einem bereits zweisprachigen
-Schema schadet hier — vermutlich, weil die Expansion die Abfrage näher an die
-`billing`-Anker zieht (die deutsche `rechnung wurde doppelt abgebucht` /
-`gutschrift` enthalten), während `abrechnung` selbst schon auf `hr` zeigte. Bei
-n=20 ist ein einzelner Fall kein Beweis, aber es ist die Richtung, in der das
-Glossar *nicht* hilft.
+> Auf n=20 ist der Unterschied zwischen (b) und (c) **nicht auflösbar**. Das CI
+> schließt die Null ein. Das ist kein Nachweis der Gleichwertigkeit, sondern das
+> Fehlen eines Nachweises in beide Richtungen.
 
-## Antwort auf die gestellte Frage
+Was daraus *nicht* folgt — und was in einer früheren Fassung dieses Dokuments zu
+stark behauptet wurde:
 
-1. **Ersetzt (b) den Aufwand von (c)?** Gemessen: **ja, gleichwertig** (+5 %,
-   nicht unterscheidbar). Einsprachig schreiben und das Glossar die Brücke
-   schlagen lassen kostet nichts an Qualität — auf diesem Set.
-2. **Addieren sich die Effekte in (d)?** **Nein.** Auf zweisprachigen Ankern
-   bringt das Glossar keinen messbaren Zusatz und kostet bei centroid einen Fall.
-3. **Wie viel weitere Glossararbeit lohnt sich?** Diese Messung stützt **keine**
-   Ausweitung. Das Preset wird von 6/10 Anfragen getroffen, aber der Nutzen
-   verschwindet, sobald die Anker zweisprachig sind — und das ist in einem
-   deutschen Umfeld die naheliegende Konfiguration. Der belastbare Nutzen liegt
-   in einem Fall (`elternzeit`) auf diesem Set; die Latenz-Unterschiede sind
-   Rauschen, keine Aussage.
+* **Nicht** „zweisprachige Anker sind der einfachere und ebenso gute Weg." Bei
+  n=20 und CI ±20 Punkten ist „ebenso gut" nicht belegt.
+* **Nicht** „weitere Glossararbeit lohnt sich nicht." Dafür ist der Test zu klein
+  und der Kanal nur in einer von zwei Konfigurationen überhaupt aktiv.
+* **Nicht** „das Glossar bringt nichts." Es bringt in dieser Messung einen Fall
+  (`elternzeit`) — bei n=20 ist das nicht von Rauschen zu trennen.
 
-**Die praktische Empfehlung kippt damit gegenüber der bisherigen Doku:** für ein
-zweisprachiges Schema sind **zweisprachige Anker der einfachere und ebenso gute
-Weg**, und zusätzliche Glossararbeit ist nur dort sinnvoll, wo die Anker
-*tatsächlich* einsprachig bleiben müssen (z. B. Schema aus einer fremden Quelle,
-in der die zweite Sprache nicht gepflegt werden kann).
+Der belastbare Teil des Ergebnisses ist die **Pfad-Analyse**: unter `linear` ist
+der Kanal baulich inaktiv, unter `centroid`/`nearest`/`hybrid` aktiv. Wer
+Cross-Lingual-Verhalten mit einem Glossar steuern will, muss einen dieser drei
+Klassifikatoren wählen — mit `linear` ist das Glossar für die Entscheidung
+wirkungslos. Das ist ein Befund über die Architektur, nicht über Ankerzahlen.
 
-## Grenzen dieser Messung
+## Grenzen, und was ein aussagekräftiger Test braucht
 
-Sie ist klein, und das steht hier, damit die Zahlen nicht überdehnt werden:
+Die Schwächen dieses Aufbaus, benannt:
 
-* **n = 20 Testfälle, 20 bzw. 10 Anker.** Das 95 %-CI ist entsprechend weit
-  (bis ±20 Prozentpunkte). Die Aussage „nicht unterscheidbar" ist echt — aber sie
-  heißt „diese Größe lässt sich hier nicht auflösen", nicht „die Effekte sind
-  identisch".
-* **Ein Domänenschema** (Support-Tickets, 5 Klassen). Nicht übertragbar auf
-  Fertigungsrouting, andere Klassenzahl oder Satz-Anker statt Kurzphrasen.
-* **Anzahl und Sprache sind im Design gekoppelt.** (a)/(b) haben 2 Anker pro
-  Klasse, (c)/(d) haben 4 — die Verdopplung ist gewollt (das *ist* die
-  Zweisprachigkeit), aber ein Unterschied zwischen (b) und (c) ist deshalb nicht
-  allein der Sprachabdeckung zuzuschreiben.
-* **Ein Glossar-Preset**, nicht ein maßgeschneidertes. Es deckt 12 von 20
-  Domänen-Proben ab. Ein vollständigeres Glossar könnte (b)/(d) ändern — dann
-  wäre die Messung zu wiederholen.
+1. **n = 20, ein Domänenschema, 5 Klassen.** Das gepaarte CI ist bis ±20 Punkte weit.
+2. **Ankerzahl und Sprachabdeckung sind gekoppelt.** (a)/(b) haben 2 Anker/Klasse,
+   (c)/(d) haben 4. Ein (b)/(c)-Unterschied ist damit nicht allein der
+   Sprachabdeckung zuzuschreiben.
+3. **Ein Klassifikator war inaktiv.** Die halbe Messung ist verschenkt.
+4. **Der multilinguale Backbone erledigt einen Teil der Arbeit selbst.** Deutsche
+   Anfragen gegen englische Anker laufen schon über das Dense-Modell recht gut —
+   das Glossar kann nur dort etwas bewirken, wo Dense versagt. Ohne Vorfilterung
+   auf genau solche Fälle ist der Test strukturell unterpowert.
+
+Der notwendige Aufbau steht als **Vorschlag P9** in `docs/proposals.md`, inklusive
+Power-Rechnung und der Liste, welche Testdaten dafür fehlen.

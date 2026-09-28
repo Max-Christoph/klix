@@ -197,3 +197,144 @@ wrong bridge into one silent miss.
 **Not a fix for the general case.** Removing synonyms does not help (measured: the
 ladder query stays on the office concept regardless), and context disambiguation is
 out of scope because the engine is deliberately stateless.
+
+---
+
+## P9 — A test that can actually settle the glossary-vs-bilingual-anchors question
+
+**Motivation.** `evals/glossary_vs_bilingual_anchors.py` ran the four-cell ablation
+and could not answer it: the 95 % CI for (b) − (c) spans −10…+20 points at n=20, and
+one of the two classifiers turned out to be structurally inert for the glossary
+(`classifier="linear"` predicts from the dense vector and returns before the
+expansion runs). Result: an absence of evidence that was first written up as
+equivalence — corrected in `README.md` and `docs/glossary-vs-anchors.md`. Doing it
+properly needs the following.
+
+**1. n ≥ 60 test cases per cell, paired.** At n=20 the CI on a paired difference of
+proportions is ~±20 points, which is wider than any effect worth detecting. For a
+10-point effect at 80 % power and α=0.05, a paired design needs on the order of
+60–100 *discordant* pairs, i.e. several hundred cases in total, not 60. The
+estimate must be done before the run, not after.
+
+**2. A configuration in which the sparse channel decides.** `classifier="centroid"`
+or `"hybrid"` — not `"linear"`. Verified: `glossary_weight` 0→50 yields 1 answer
+pattern under `linear`, 2–3 under the others. For `hybrid`, the query's sparse part
+only addresses columns inside the head's anchor-derived vocabulary, so the glossary's
+influence there depends on those terms being in that vocabulary — worth confirming
+per schema.
+
+**3. Equal anchor COUNTS across cells.** The current design couples anchor count to
+language coverage (2 EN vs 4 EN+DE per class), so a (b)/(c) difference is not
+attributable to language coverage alone. Needed: three cells with the *same* number
+of anchors per class, e.g. 4 anchors as (i) 4 EN, (ii) 2 EN + 2 DE, (iii) 2 EN +
+2 machine-translated DE. (iii) is the important one — it separates "two languages"
+from "two *native* languages", which is the difference the glossary is supposed to
+buy.
+
+**4. Cases where the dense model alone fails.** The multilingual backbone already
+routes many German queries against English anchors correctly, so the glossary has
+little room to show an effect. The test population must be *filtered* to queries the
+dense path gets wrong without the glossary — otherwise it is structurally
+underpowered no matter how large n is.
+
+**What test data is missing.** None of it exists in the repo today:
+
+* **A large parallel EN/DE case set with sentence-length phrasing.** The existing
+  bilingual set is 20 curated pairs of short phrases; `evals/benchmark.py` and
+  `evals/expanded_benchmark.py` carry EN-heavy domain cases, not parallel pairs.
+* **Native DE authoring, independent of the author.** Cases written by translating
+  the EN side inherit the translator's phrasing, which is exactly what makes them
+  easy for the dense model. A second native speaker must write the DE side.
+* **A machine-translated DE variant** for the (iii) cell above — produced by a
+  pinned, documented translation step so the cell is reproducible.
+* **A density-failure subset**: the cases where `nearest`/`centroid` without a
+  glossary get the German query wrong. Requires running the baseline first and
+  selecting on it, which introduces its own selection bias — must be split into a
+  selection half and an evaluation half.
+
+**Cost.** Data collection dominates: several hundred native-checked parallel cases,
+plus a filtering pass. The harness itself is a small extension of the existing
+script.
+
+**Uncertain.** Whether the effect is large enough to be worth the data collection.
+The point estimate was +5 points for (b) over (c) — if that is the true size, ~100
+pairs per cell are needed to see it. If the true size is 0, no amount of data will
+show a difference, and the honest answer is then the one already in the docs: not
+resolvable at the tested scale, and the glossary's measurable value must be argued
+per schema rather than in general.
+
+**STATUS: ZURÜCKGESTELLT — Aufwand ohne erwartbaren Nutzen.**
+
+Die Power-Rechnung ist der Grund, und sie steht gegen die Durchführung:
+
+* Beobachteter Punktschätzer für (b) − (c): **+5 Punkte**.
+* Für einen Effekt dieser Größe braucht ein gepaartes Design bei 80 % Power und
+  α = 0,05 rund **60–100 diskordante Paare**, praktisch mehrere hundert Fälle —
+  also die vollständige Neuerhebung eines parallelen EN/DE-Satzes.
+* Der Aufwand dafür liegt bei **mehreren hundert muttersprachlich geprüften
+  Testfällen** plus Vorfilterung und Selektionsbias-Trennung.
+* Der Nutzen wäre eine Aussage über *Anker-Konfiguration* in **einem** Domänenschema.
+  Die Architektur-Aussage, die tatsächlich trägt (welcher Klassifikator den
+  Sparse-Kanal überhaupt sieht), ist bereits belegt und braucht keine neuen Daten.
+* Bei einer wahren Effektgröße von 0 zeigt kein Datenvolumen einen Unterschied — der
+  Aufwand wäre dann vollständig verloren, und das ist nicht ausschließbar.
+
+Damit ist der erwartete Nutzen nicht nur klein, sondern von der Größe abhängig, die
+der Test erst bestimmen soll. Das ist die Definition eines schlechten Geschäfts.
+
+---
+
+## P10 — `classifier="linear"` + Glossar: warnen, oder ist es ein Fehler?
+
+**Motivation, gemessen.** Unter `classifier="linear"` läuft die Vorhersage über
+`self._probe.predict_proba(encoded.dense_vec)` und **kehrt zurück**
+(`src/klix/heads.py:1170-1171`, Return `:1197`), bevor die Glossar-Expansion bei
+`:1210` erreicht wird. Ein gesetztes Glossar ist auf diesem Pfad **wirkungslos** —
+und zwar **still**: gemessen löst `glossary_weight` 0,0 vs. 0,5 unter `linear`
+*keine* Änderung aus und erzeugt *keine* Warnung, während dieselbe Konfiguration
+unter `centroid` die Antwort kippt (`security` → `hr` bei `elternzeit`).
+
+**Warum das ein Problem ist.** Ein Nutzer, dem Cross-Lingual-Routing wichtig ist,
+setzt `glossary=` und `classifier="linear"` — zwei für sich vernünftige
+Entscheidungen — und bekommt ein Schema, das die eine Hälfte seiner Absicht
+stillschweigend nicht ausführt. Genau die Fehlerklasse, die Prinzip 1 verbietet
+(„fail explicitly instead of being silently wrong").
+
+**Der `auto`-Fall ist nicht betroffen, und das ist zu prüfen gewesen.**
+`classifier="auto"` löst seit v0.9.0 **immer** zu `"centroid"` auf (`:665-667`); der
+frühere „linear bei einsprachigen Ankern"-Zweig wurde mit der Sprachheuristik
+entfernt. Gemessen: `auto` → `_effective_classifier == "centroid"`,
+`_probe is None`, `_centroid_matrix` gesetzt — das Glossar **wirkt** (Antwort kippt
+von `security` auf `hr`). Eine Warnung für `auto` wäre also gegenstandslos. Offen
+ist nur, dass `auto` als veralteter Alias **ohne DeprecationWarning** parst
+(gemessen: keine Warnung) — das ist ein separater, kleinerer Punkt.
+
+**Offener zweiter Fall.** `hybrid` erreicht den Sparse-Kanal, aber nur über Spalten
+innerhalb der anker-abgeleiteten Vokabel des Heads (`:1163`). Gemessen auf diesem
+Schema liegen nur **30 von 1424** Glossar-Termen in dieser Vokabel (2 %). Ein
+`hybrid`-Schema mit Glossar kann also *teilweise* wirken — schwerer zu beurteilen
+als `linear`, aber zur Compile-Zeit berechenbar.
+
+**Drei Optionen, mit Begründung — Entscheidung liegt beim Nutzer.**
+
+1. **`UserWarning` bei Compile (empfohlen).** Erkennungsbedingung ist statisch und
+   eindeutig: `glossary is not None` **und** `glossary_weight > 0` **und**
+   `effective_classifier == "linear"`. Kein Verhaltensbruch, kein Test bricht, kein
+   bestehendes Schema hört auf zu funktionieren — und der Nutzer erfährt in dem
+   Moment davon, in dem er das Glossar verdrahtet. Für `hybrid` dieselbe Warnung,
+   wenn der Overlap zwischen Glossar-Termen und `head._vocab` **0** ist (dann ist
+   die Wirkung garantiert null); bei kleinen Overlaps nur ein Hinweis.
+2. **`ValueError` bei Compile.** Härter, aber verhaltensbrechend: jedes bestehende
+   Schema mit dieser Kombination würde beim `compile()` sterben — auch wenn das
+   Glossar dort nur „für später" gesetzt war. Das verstößt gegen Prinzip 15
+   (additive Parameter dürfen Bestehendes nicht brechen).
+3. **Nichts tun, nur dokumentieren.** Billigste Variante, aber sie lässt genau die
+   stille Fehlannahme stehen, die den Befund ausgelöst hat — und die Doku ist der
+   Ort, den ein Nutzer mit „warum routet das nicht?" am seltensten liest.
+
+**Empfehlung.** Option 1, dazu ein `DeprecationWarning` für `classifier="auto"`
+(separater kleiner Punkt). Nicht implementiert — wartet auf Entscheidung.
+
+**Cost.** Klein: eine Prüfung pro Head in `compile()`, keine Laufzeitkosten, keine
+neuen Abhängigkeiten. Bestehende Tests, die `linear` + Glossar kombinieren, müssten
+die Warnung ggf. filtern — betrifft nur eigene Tests, nicht Nutzer.

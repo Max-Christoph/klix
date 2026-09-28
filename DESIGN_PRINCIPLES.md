@@ -559,6 +559,15 @@ Work this before starting any non-trivial change. It is short on purpose.
       recommendation the docs already give. `docs/glossary-vs-anchors.md` is the
       worked example: the argument was right about (b) vs (c) and wrong about the
       value of *more* glossary work.
+- [ ] **Does the metric's mechanism exist at all? (8, 10).** Before reporting that
+      a feature "has no effect", verify the feature is *reachable* on the code path
+      being measured. Here `classifier="linear"` returns before the glossary
+      expansion runs, so "0 answers moved" was a property of the code, not a
+      finding. A flat result must be explained by a mechanism check, not asserted.
+- [ ] **Is the effect resolvable at this n? (8, 9).** An inconclusive CI is a
+      result, and it must be written as one: "not resolvable at this scale", never
+      "equivalent". State the CI, and do not let a non-result into a regression
+      test — pin the mechanism, which is stable, not the estimate, which is not.
 - [ ] **Neutrality (17).** Any third-party names in what I am committing?
 
 ## Related documents

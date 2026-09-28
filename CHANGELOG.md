@@ -97,7 +97,67 @@ language coverage by design (2 vs 4 per class) — so a (b)/(c) difference is no
 attributable to language coverage alone. `docs/glossary-vs-anchors.md` carries the
 full caveat list; the README repeats the short form.
 
-## Unreleased (after 0.9.2)
+## [0.9.3] - 2026-09-28
+
+Documentation, tests and an eval script only. **No behaviour change, no API change,
+no dependency change** — the library is identical to 0.9.2 apart from the version
+string. Released so the corrected record reaches the shipped METADATA, which for
+0.9.2 still carried the over-claimed conclusion (principle 13: retract visibly,
+everywhere the claim appears, including shipped artefacts).
+
+### Fixed (the conclusion overreached the data)
+- **The ablation's result was written up as an answer it had not established.** At
+  n=20 the 95 % CI for (b) − (c) spans −10…+20 points, so "bilingual anchors are the
+  simpler and equally good route" was an over-claim. Rewritten to what the data
+  supports: **not resolvable at this scale** — an absence of evidence in either
+  direction, not a demonstrated equivalence. Corrected in `README.md` and
+  `docs/glossary-vs-anchors.md`.
+- **One of the two measured columns was structurally inert.** Under
+  `classifier="linear"` the probe predicts from the dense vector and returns before
+  the glossary expansion runs (`src/klix/heads.py:1170-1171`, return at `:1197`), so
+  the sparse channel never reaches the decision. Verified by sweeping
+  `glossary_weight` 0 → 50: exactly **1** answer pattern under `linear`, but 2–3
+  under `nearest`/`centroid`/`hybrid`. The `linear` column's (a)=(b) and (c)=(d)
+  equality is therefore what the code path predicts — a check on the analysis, not a
+  measurement of the glossary. The earlier claim "the glossary moved no answer under
+  linear" was reported as a finding; it was an artifact.
+- **`tests/test_glossary_vs_anchors.py` no longer pins the ablation's outcome.** It
+  had asserted that (c) was not clearly better than (b) — freezing an unresolvable
+  difference into a regression gate. It now asserts the **mechanism**: that the
+  sparse channel is unreachable on `linear`, reachable on `centroid`, that the
+  glossary actually fires, and that the bridge does not lower German accuracy. If the
+  linear path ever starts consuming the sparse channel, the test fails and the README
+  explanation is flagged as stale.
+
+### Added
+- **`evals/evaluate_reports.py`** — evaluation harness for real, uncurated reports.
+  CSV in (`text`, `expected`), schema JSON, optional glossary; out come accuracy per
+  classifier with a bootstrap CI, per-class recall, and the full misclassification
+  list with confidences. Evaluation only — no feature, no tuning. The error list is
+  the primary output: on real data an aggregate hides which reports fail and how.
+  BOM and `;` delimiters are handled, since that is what a spreadsheet export here
+  produces.
+- **Code-path map of the sparse channel** in `docs/glossary-vs-anchors.md`: for
+  `nearest`, `centroid`, `linear` and `hybrid` separately, where the sparse channel
+  enters the decision (`heads.py:1234`/`:1237-1247`/`:1170-1171`/`:1158-1169`) — plus
+  the caveat that `hybrid`'s sparse query part only addresses columns inside the
+  head's anchor-derived vocabulary (measured: 30 of 1424 glossary terms on the
+  bilingual schema, 2 %).
+- **Proposal P10** (`docs/proposals.md`): whether `classifier="linear"` plus a
+  glossary should warn or fail. Investigated, **not built** — the decision is with
+  the user. Finding: the combination is silently inert. `classifier="auto"` is NOT
+  affected (since v0.9.0 it always resolves to `centroid`, and the glossary does
+  take effect there — verified: the answer flips `security` → `hr` on a German
+  query). Options and a recommendation (`UserWarning` at compile) are recorded.
+- **Proposal P9 marked "deferred — effort without expected benefit"**, with the power
+  calculation as the reason: a +5-point point estimate needs ~60–100 discordant pairs
+  for 80 % power, i.e. several hundred native-checked cases, for a claim about anchor
+  configuration in one domain — while the part that actually carries (which classifier
+  sees the sparse channel) is already established.
+
+**No library behaviour changed.** Suite: see below.
+
+## Unreleased (after 0.9.3)
 
 ### Added
 - **`DESIGN_PRINCIPLES.md`** — 18 principles, each tied to the incident that

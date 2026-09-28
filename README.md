@@ -224,6 +224,35 @@ sparse vector; v0.8.8's damping plus the vocabulary-aware skip fixed that). The
 measured gain applies to cross-lingual schemas — see the `glossary` row in the
 configuration table.
 
+**How much is that gain worth?** Measured directly, because it decides how much
+glossary work is worth doing (`evals/glossary_vs_bilingual_anchors.py`, full
+write-up in `docs/glossary-vs-anchors.md`). Same schema, same 20 test cases, four
+cells, both classifiers, bootstrap CI:
+
+| | centroid | linear |
+|---|---|---|
+| (a) EN anchors, no glossary | 15/20 | 16/20 |
+| (b) EN anchors + glossary | 16/20 | 16/20 |
+| (c) EN+DE anchors, no glossary | 15/20 | 15/20 |
+| (d) EN+DE anchors + glossary | 14/20 | 15/20 |
+
+Two answers, both with their limits stated:
+
+* **(b) is as good as (c)** (+5 %, 95 % CI −10…+20 % — not distinguishable). A
+  glossary really does buy the cross-lingual bridge while you author in one
+  language.
+* **(d) adds nothing over (c)** (centroid −5 %, linear ±0). On top of bilingual
+  anchors the glossary contributes no measurable gain — and in one case it moves a
+  query *off* its correct label. So **for a bilingual schema, bilingual anchors are
+  the simpler and equally good route**; more glossary vocabulary is worth it only
+  where the anchors must genuinely stay monolingual.
+
+Caveats: n=20 with a CI up to ±20 points, one domain, and anchor *count* is coupled
+to language coverage in the design — read the document before quoting the numbers.
+The glossary does fire here: it expands 6 of 10 German queries, but changes the
+answer in only one case under `centroid` and none under `linear`. The remaining
+errors are the anchors being mutually ambiguous, which a glossary cannot repair.
+
 ### Limits of the bundled presets — read before trusting `curated()`
 
 What has been **measured**: internal ambiguity 0 (build-enforced on the shipped

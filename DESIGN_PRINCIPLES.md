@@ -553,6 +553,12 @@ Work this before starting any non-trivial change. It is short on purpose.
       report actually answer what was asked? A coverage rate ("is this
       independently checkable") is not an error rate ("is this right"), and a
       metric whose reference is the thing under test cannot find its errors.
+- [ ] **Is the recommendation measured, or argued? (8).** Before telling a user
+      which configuration to choose, run the ablation — the plausible-sounding
+      option is not always the better one, and the measurement may narrow a
+      recommendation the docs already give. `docs/glossary-vs-anchors.md` is the
+      worked example: the argument was right about (b) vs (c) and wrong about the
+      value of *more* glossary work.
 - [ ] **Neutrality (17).** Any third-party names in what I am committing?
 
 ## Related documents
@@ -561,6 +567,7 @@ Work this before starting any non-trivial change. It is short on purpose.
 |---|---|
 | `docs/glossary-format.md` | The data format and its stability guarantees (public API) |
 | `docs/curated-correctness.md` | What can and cannot be measured about the curated list's correctness, with the figures and their limits |
+| `docs/glossary-vs-anchors.md` | The ablation: does a glossary replace bilingual anchors or add to them — with the caveats that bound the answer |
 | `docs/rejected-approaches.md` | Paths abandoned, with the disproof |
 | `docs/proposals.md` | Suggested changes, not built (principle 6) |
 | `DATA_SOURCES.md` | Licence chain per shipped file, with verification method |

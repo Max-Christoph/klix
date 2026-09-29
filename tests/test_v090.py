@@ -316,8 +316,8 @@ class TestDomainPacks:
 
     def test_workflow_pack_bridges_de_en(self):
         g = workflow_glossary()
-        assert "dringend" in g.expand_terms("this is urgent")
-        assert "urgent" in g.expand_terms("das ist dringend")
+        assert "eilig" in g.expand_terms("this is urgent")
+        assert "urgent" in g.expand_terms("das ist eilig")
 
     def test_packs_are_independent_copies(self):
         a = manufacturing_glossary()
@@ -365,7 +365,7 @@ class TestDomainPacks:
         vocab = eng.heads[0]._vocab
         # the anchor-side bridge must reach the vocabulary for BOTH directions
         assert any(t in vocab for t in ("dringend", "eilig"))       # de
-        assert any(t in vocab for t in ("critical", "priority"))    # en (workflow)
+        assert any(t in vocab for t in ("asap", "immediately"))     # en (workflow)
         assert "urgent" in vocab
 
 
@@ -421,11 +421,22 @@ class TestExpansionBounds:
         """
         g = workflow_glossary()
         out = g.expand_terms("this is urgent")
-        assert "dringend" in out, out
+        assert "eilig" in out, out
         de = [t for t in out if t in g.mapping["urgent"]["de"]]
         en = [t for t in out if t in g.mapping["urgent"]["en"]]
         assert de and en, out
-        assert abs(len(de) - len(en)) <= 1, f"unbalanced: {out}"
+        # The original property — no language crowds out another within the cap —
+        # generalizes to N languages: every language with terms gets a slot
+        # before any language gets two (max - min counts differ by <= 1).
+        counts = {}
+        for t in out:
+            for lg in g.mapping["urgent"]:
+                if t in g.mapping["urgent"][lg]:
+                    counts[lg] = counts.get(lg, 0) + 1
+                    break
+        assert counts, out
+        assert max(counts.values()) - min(counts.values()) <= 1, \
+            f"unbalanced across languages: {counts}"
 
     def test_alpha_zero_leaves_sparse_rows_untouched(self):
         """The damped-anchor contract still holds with a broad glossary."""

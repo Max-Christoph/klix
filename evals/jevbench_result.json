@@ -1,0 +1,25 @@
+{
+  "caveat": "repurposed run; anchors are the source's criteria strings; not comparable to published Tev1/Nimble/Jev figures",
+  "n": 139,
+  "n_boot": 2000,
+  "per_tier": {
+    "easy": 36,
+    "hard": 67,
+    "original": 36
+  },
+  "results": {
+    "centroid": {
+      "correct": 75,
+      "n": 139
+    },
+    "linear": {
+      "correct": 70,
+      "n": 139
+    },
+    "nearest": {
+      "correct": 75,
+      "n": 139
+    }
+  },
+  "seed": 20260928
+}

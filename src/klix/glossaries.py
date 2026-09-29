@@ -66,13 +66,24 @@ from klix.glossary import DEFAULT_GLOSSARY, Glossary
 
 __all__ = ["empty", "curated", "curated_where", "curated_manufacturing",
            "curated_it", "curated_everyday", "broad", "manufacturing", "workflow",
+           "multilingual", "language_packs", "function_words", "basic_manufacturing",
            "merge_all", "MANUFACTURING", "WORKFLOW", "CURATED_PATH",
-           "CURATED_PROVENANCE", "BROAD_PROVENANCE"]
+           "MULTILINGUAL_PATH", "FUNCTION_WORDS_PATH",
+           "CURATED_PROVENANCE", "BROAD_PROVENANCE", "MULTILINGUAL_PROVENANCE"]
 
 # The curated tri-domain glossary (362 concepts, original work, MIT).
 CURATED_PATH = Path(__file__).with_name("data") / "curated_glossary.json"
 # Domain of each curated concept, so callers can select a single domain.
 CURATED_DOMAINS_PATH = Path(__file__).with_name("data") / "curated_domains.json"
+# The hand-written multilingual core (25 concepts x 10 languages, MIT).
+MULTILINGUAL_PATH = Path(__file__).with_name("data") / "multilingual_core.json"
+# Function words per language: training corpus for klix.langid, NOT a glossary.
+FUNCTION_WORDS_PATH = Path(__file__).with_name("data") / "langid_corpus.json"
+
+# Reserved document keys, repeated here so the pack loader does not have to
+# import a private name out of the engine module.
+_RESERVED_LANGUAGE_KEYS = frozenset({"tags", "meta", "source", "license",
+                                     "glossary_license", "glossary_source"})
 
 # --------------------------------------------------------------------------
 # manufacturing: the 16 concepts klix shipped as its bundled glossary.json.
@@ -240,6 +251,28 @@ def empty() -> Glossary:
 CURATED_PROVENANCE = {"source": "klix curated (hand-written)", "license": "MIT"}
 BROAD_PROVENANCE = {"source": "Wikidata (lexemes + curated item classes)",
                     "license": "CC0-1.0"}
+MULTILINGUAL_PROVENANCE = {"source": "klix multilingual core (hand-written)",
+                           "license": "MIT"}
+
+
+def basic_manufacturing() -> Glossary:
+    """The historical 16-concept de/en production pack, verbatim.
+
+    This is the vocabulary klix first shipped as `glossary.json`: conveyor,
+    cycle_time, downtime, maintenance, spare_part, shift, hydraulic, pneumatic,
+    sensor, calibration, scrap, warehouse, safety_guard, error_code,
+    commissioning, batch. Two languages only.
+
+    It exists because the *name* is load-bearing: `manufacturing()` has returned
+    the curated manufacturing layer (44 concepts, de+en, wider than this) since
+    the curated pack landed, and redefining it back to 16 concepts would silently
+    narrow a shipped preset. So the small pack got its own name instead — same
+    content, honest label. Use it for a minimal schema, for the fast-path
+    examples, or as a fixture; use `manufacturing()` for anything real.
+    """
+    g = Glossary({k: {lg: list(t) for lg, t in v.items()} for k, v in MANUFACTURING.items()})
+    g.meta = {"source": "klix (original 16-term production pack)", "license": "MIT"}
+    return g
 
 
 def _load_curated() -> dict:
@@ -339,11 +372,97 @@ def manufacturing() -> Glossary:
 
 
 def workflow() -> Glossary:
-    """Generic intake/routing terms (error, urgent, cancel, help, approve, ...).
+    """Generic intake/routing terms, in **ten languages**.
 
-    Superseded by the curated IT + everyday layers, kept for compatibility.
+    Historically this returned the 19-concept de/en routing pack. It now loads
+    `data/multilingual_core.json` (25 concepts × 10 ISO-639-1 keys: de, en, fr,
+    es, it, pt, nl, pl, sv, da) — same purpose, same call site, more languages,
+    plus the generic domain core (maintenance, incident, safety, quality, cost,
+    training, report). The concept keys of the old pack (`error`, `bug`,
+    `urgent`, ...) are the first 19 entries of the new one and their de/en terms
+    are unchanged, so a schema built on this preset keeps working; only the
+    schema hash moves, because the glossary is part of it (by design — see
+    `DecisionEngine.schema_hash`).
+
+    See :func:`multilingual()` for the explicit spelling, and
+    :func:`language_packs` if you only want the raw ``{lang: [terms]}`` corpus.
     """
-    return Glossary({k: {lg: list(t) for lg, t in v.items()} for k, v in WORKFLOW.items()})
+    return multilingual()
+
+
+def _load_multilingual() -> dict:
+    doc = json.loads(MULTILINGUAL_PATH.read_text(encoding="utf-8"))
+    return doc.get("concepts", doc)
+
+
+def multilingual() -> Glossary:
+    """The hand-written multilingual core: 25 concepts × 10 languages.
+
+    This is the pack that makes klix's cross-lingual claim checkable rather than
+    asserted: one German query and one French query naming the same thing expand
+    to the same concept and therefore to the same synonym set. Every term is
+    hand-written (MIT); nothing is generated from a source under a copyleft
+    licence — the same rule that governs `curated()`.
+
+    It is NOT the default. `curated()` (362 concepts, de+en) stays the default
+    because it is deeper in the two languages most deployments actually use; this
+    pack is wider, not deeper.
+    """
+    g = Glossary(_load_multilingual())
+    g.meta = dict(MULTILINGUAL_PROVENANCE)
+    g.tags = {k: ["multilingual"] for k in g.mapping}
+    return g
+
+
+def function_words() -> dict[str, list[str]]:
+    """The hand-written function-word corpus per language (``klix.langid``).
+
+    Function words (and the high-frequency grammatical shapes around them) are
+    the strongest cheap signal in short-string language ID, and they are exactly
+    what a glossary cannot supply: a glossary holds *content* words. Measured on
+    the tuning split, adding this corpus to the profiles is what turns the
+    identifier from "abstains on half the input" into a usable one; the numbers
+    are in the README.
+
+    Kept separate from the glossary packs on purpose. A glossary term expands a
+    query, so putting "the" or "und" in a glossary would inject them into every
+    expanded document; this corpus only ever feeds `klix.langid.build_model`.
+    """
+    doc = json.loads(FUNCTION_WORDS_PATH.read_text(encoding="utf-8"))
+    return doc.get("words", doc)
+
+
+def language_packs(include_content: bool = True) -> dict[str, dict[str, list[str]]]:
+    """Training corpus for `klix.langid`: ``{lang: {concept: [terms]}}``.
+
+    Shaped as lang-first rather than concept-first because every consumer is
+    language-first (the n-gram profiles, the per-language coverage table in the
+    README). Built live from the packs, never cached to a file: a stale
+    side-car profile would silently describe vocabulary that no longer exists.
+
+    ``include_content`` decides which vocabulary the profiles are built from, and
+    it is a real quality lever, not a convenience:
+
+    * ``True`` (default) — multilingual core + `curated()` + function words.
+      The content vocabulary keeps the profile *in-domain*, so a query about
+      conveyors looks like klix's own text.
+    * ``False`` — function words only. Content terms are shared across languages
+      (``sensor``, ``monitor``, ``log``...), so mixing them in makes different
+      languages' profiles overlap and pushes the decision into "ambiguous".
+      Measured on the tuning/holdout split, function words alone score better
+      than the mix; see the table in README.
+    """
+    out: dict[str, dict[str, list[str]]] = {}
+    if include_content:
+        for source in (_load_multilingual(), _load_curated()):
+            for concept, langs in source.items():
+                for lang, terms in langs.items():
+                    if lang in _RESERVED_LANGUAGE_KEYS:
+                        continue
+                    out.setdefault(lang, {}).setdefault(concept, []).extend(terms)
+    for lang, terms in function_words().items():
+        out.setdefault(lang, {}).setdefault("_function_words", []).extend(terms)
+    return out
 
 
 def merge_all(*glossaries: Glossary, strict: bool = True) -> Glossary:

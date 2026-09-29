@@ -44,7 +44,27 @@ __all__ = [
     "DEFAULT_GLOSSARY",
     "MANUFACTURING_GLOSSARY",
     "SCHEMA_VERSION",
+    "SUPPORTED_LANGUAGES",
+    "is_language_key",
 ]
+
+#: The ISO-639-1 keys klix ships vocabulary for, sorted. This is a *canonical
+#: set for documentation, validation and the language identifier's profiles* —
+#: not a whitelist the format enforces. Any other ISO-639-1 key is accepted and
+#: kept (the format is language agnostic); it is merely reported as unusual by
+#: `Glossary.validate`, because a typo ("deu", "eng", "fr-FR") silently creates
+#: vocabulary that no query in that language will ever reach.
+SUPPORTED_LANGUAGES = ("da", "de", "en", "es", "fr", "it", "nl", "pl", "pt", "sv")
+
+
+def is_language_key(key: str) -> bool:
+    """True when ``key`` looks like the ISO-639-1/639-3 key the format expects.
+
+    Two or three ASCII letters. Deliberately syntactic: the engine does not own
+    a language registry, so a new language is a data change, not a code change.
+    """
+    return (isinstance(key, str) and key.isascii() and key.isalpha()
+            and len(key) in (2, 3) and key.islower())
 
 # The bundled broad DE<->EN basic vocabulary (generated offline by
 # scripts/build_default_glossary.py, CC0 / Wikidata, see DATA_SOURCES.md).
@@ -484,7 +504,29 @@ class Glossary:
                                f"different concepts {sorted(concepts)}",
                 })
 
-        # -- 3. collisions with anchors / criteria
+        # -- 3. language keys that do not look like ISO-639-1
+        #
+        # Not a hard error: the format is deliberately language agnostic and an
+        # engine that owned a language registry would go stale. But a typo'd key
+        # ("deu", "en-GB", "ger") creates vocabulary nothing can reach, and it
+        # looks identical to working vocabulary in every other respect. A
+        # three-letter ASCII code is accepted because ISO-639-3 is a legitimate
+        # choice; anything else is reported.
+        for concept in sorted(self.mapping):
+            for lang in sorted(self.mapping[concept]):
+                if not is_language_key(lang):
+                    findings.append({
+                        "kind": "language_key",
+                        "severity": "low",
+                        "concept": concept,
+                        "lang": lang,
+                        "message": f"[{concept}] language key {lang!r} is not a "
+                                   f"2- or 3-letter lowercase ISO-639 key — the "
+                                   f"terms under it are unreachable unless a query "
+                                   f"carries exactly that annotation",
+                    })
+
+        # -- 4. collisions with anchors / criteria
         if anchors is not None:
             texts: list[str] = []
             labels: list[str] = []

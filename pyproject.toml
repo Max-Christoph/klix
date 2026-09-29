@@ -1,6 +1,6 @@
 [project]
 name = "klix-engine"
-version = "0.9.3"
+version = "0.10.0"
 description = "Decoupled decision heads (Choice, Score, Flag) on a shared semantic backbone - local, deterministic, no model training."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -61,6 +61,11 @@ artifacts = [
     # Opt-in broad vocabulary (CC0/Wikidata) with its build provenance.
     "src/klix/data/default_glossary.json",
     "src/klix/data/build_meta.json",
+    # Multilingual core: 25 concepts x 10 ISO-639-1 languages (hand-written, MIT).
+    "src/klix/data/multilingual_core.json",
+    # Function-word corpus per language: trains klix.langid's profiles. NOT a
+    # glossary pack (see the note in klix/glossaries.py).
+    "src/klix/data/langid_corpus.json",
 ]
 
 [tool.pytest.ini_options]

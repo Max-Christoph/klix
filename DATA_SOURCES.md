@@ -37,6 +37,8 @@ per-term provenance — a later, separate problem. It is not pre-built.
 
 | File | Content | Origin | Licence |
 |---|---|---|---|
+| `data/multilingual_core.json` | 25 concepts × 10 languages (`multilingual()`, `workflow()`), hand-written | klix author — **original work** | **MIT** |
+| `data/langid_corpus.json` | Function words and language pack corpus for `klix.langid` across 10 languages | klix author — **original work** | **MIT** |
 | `data/curated_glossary.json` | **The default.** 362 concepts (44 manufacturing, 186 IT, 132 everyday/support/mail) × DE/EN, hand-written | klix author — **original work** | **MIT** |
 | `data/curated_domains.json` | Domain of each curated concept, as free `tags` metadata | klix author | MIT |
 | `data/glossary.schema.json` | The documented document format (JSON Schema, versioned) | klix author | MIT |
@@ -387,3 +389,22 @@ curl -sL https://raw.githubusercontent.com/nltk/nltk_data/gh-pages/packages/corp
 unzip -p /tmp/omw.zip omw-1.4/nld/wn-data-nld.tab  | head -1   # CC BY SA 4.0
 unzip -p /tmp/omw.zip omw-1.4/fra/wn-data-fra.tab  | head -1   # CeCILL-C
 ```
+
+## Multilingual core (v0.10.0): verification and the 10-of-25 gap
+
+The 25x10 pack (`data/multilingual_core.json`, consumed via `multilingual()` and its alias `workflow()`) is hand-written, single-author, MIT. It covers 10 languages: `de, en, fr, es, it, pt, nl, pl, sv, da`.
+
+Because 8 of these languages are not native to the author, the pack was spot-checked against an independent, community-maintained source (Wikidata item labels via `evals/multilingual_spotecheck.py`, seed 20260929, 12 sampled terms per new language, n=96):
+
+* **37 CONFIRMED** — the sampled term directly matches the community-authored Wikidata item label for that concept in that language.
+* **54 MISMATCH** — the item has a label in that language, but the sampled string did not match it. Every one was manually read and classified:
+  * ~32 are legitimate synonyms whose sibling term in the same concept matches the Wikidata label (e.g. French `panne` sampled for `error`, while the pack also includes `erreur` which matches the label). A string-matching check structurally cannot confirm synonyms; this is a property of the method, not an error in the pack.
+  * ~22 are legitimate sense or register nuances compared to the generic Wikidata item (e.g. `training` as professional/vocational education vs. Wikidata's sport training item; `review` as procedural assessment vs. book critique; `question` as ticket inquiry vs. linguistics).
+  * **0 confirmed wrong mappings** in the sample.
+* **5 UNDECIDABLE** — Wikidata has no label in that language for the concept.
+
+### Honest limits of the multilingual pack (Principle 13)
+
+* **10 of the 25 concepts are NOT externally verified:** For 10 concepts (`urgent`, `cancel`, `help`, `approve`, `reject`, `access`, `status`, `escalate`, `cost`, `delivery`), no clean, single unambiguous Wikidata item exists — homonyms (such as song titles or broad abstract senses) dominate search hits. Their correctness rests entirely on author curation without external verification. This is an honest gap, not a pass.
+* **Label matching proves naming, not exclusivity:** A label match confirms that the term names the target concept; it cannot prove that the term does not also carry polysemous meanings in that language.
+* **Sampled, not audited:** 96 of 250 language-term entries were checked (38.4%).

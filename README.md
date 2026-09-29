@@ -165,7 +165,8 @@ Every head and the engine expose meaningful knobs:
 | `engine.decide_batch(texts)` | `DecisionEngine` | Bulk mode: one embedding pass for the whole list — per-item overhead drops sharply for large volumes |
 | `engine.validate_anchors()` | `DecisionEngine` | Read-only anchor-quality report: overlapping classes (centroid cosine), shared confuser terms, sharpening hints, misplaced and duplicate anchors. `validate_anchors_report()` returns a formatted string |
 | `glossary.validate(anchors=None)` | `Glossary` | Read-only structural report: duplicate terms, circular/ambiguous mappings (one term under two concepts), homograph conflicts (same word, different languages, different concepts) and collisions between glossary tokens and anchor text. Also `engine.validate_glossary()` |
-| `klix.manufacturing_glossary()` / `workflow_glossary()` / `default_glossary()` / `empty_glossary()` / `merge_all(...)` | `klix.glossaries` | Domain packs, so the engine carries no vocabulary. `manufacturing()` = the 16 production terms, `workflow()` = generic routing (error/bug, urgent, cancel, help, approve, ...), `default()` = the broad bundled DE↔EN vocabulary, `empty()` = the default (pure dense+TF-IDF) |
+| `klix.langid.detect(text)` | `klix.langid` | Opt-in language identification across 10 languages (`de, en, fr, es, it, pt, nl, pl, sv, da`). Trigram rank distance + function words. Pure stdlib, ~33 µs median, budget 0.2 ms. Never called in `decide()` (verified by test) |
+| `klix.multilingual_glossary()` / `workflow_glossary()` / `basic_manufacturing()` / `manufacturing()` / `default_glossary()` / `empty_glossary()` / `merge_all(...)` | `klix.glossaries` | Domain packs, so the engine carries no vocabulary. `multilingual()` (aliased by `workflow()`) = 25 concepts across 10 languages, `basic_manufacturing()` = original 16 terms, `manufacturing()` = 44 curated concepts, `default()` = broad bundled DE↔EN vocabulary (~10k concepts), `empty()` = default (pure dense+TF-IDF) |
 
 ## Cross-lingual routing with a glossary
 
@@ -265,6 +266,17 @@ and one of the two classifiers structurally inert. A test that could actually se
 the question needs n≥60, a sparse-active configuration, and equal anchor counts
 across cells — the design and its missing data are specified in proposal P9
 (`docs/proposals.md`).
+
+### Limits of `multilingual()` / `workflow()` — read before adopting 10 languages
+
+The 25x10 pack (`multilingual()`, aliased by `workflow()`) covers 10 languages (`de, en, fr, es, it, pt, nl, pl, sv, da`). It is hand-written, single-author, MIT.
+
+A spot-check of 96 terms across the 8 non-native languages against independent Wikidata item labels (`evals/multilingual_spotecheck.py`, seed 20260929, 12 terms per language) confirmed 37 terms directly, while the 54 mismatches were all read manually and classified as legitimate synonyms (~32, whose sibling in the same concept matched the label, e.g. French `panne` vs. `erreur`) or register/sense nuances (~22, e.g. vocational training vs. sports), with **0 confirmed wrong mappings in the sample**.
+
+**The honest limits (Principle 13):**
+* **10 of 25 concepts are NOT externally verified:** For 10 concepts (`urgent`, `cancel`, `help`, `approve`, `reject`, `access`, `status`, `escalate`, `cost`, `delivery`), no clean, single unambiguous Wikidata item exists (homonyms dominate search hits, e.g. songs or broad concepts). Their correctness rests solely on author curation — an honest unverified gap, not a pass. Full sense disambiguation would need SPARQL over senses, which was in a hard outage during this check.
+* **Label matching proves naming, not exclusivity:** A label match confirms that the term names the target concept; it cannot prove that the word does not also carry polysemous meanings in that language.
+* **Sampled, not audited:** 96 of 250 language-term entries were checked (38.4%), not the entire pack.
 
 ### Limits of the bundled presets — read before trusting `curated()`
 
@@ -571,6 +583,9 @@ results are snapshots in time — re-running may show different numbers).
 
 | Script | Purpose | Status |
 |---|---|---|
+| `multilingual_spotecheck.py` | Wikidata item-label spot check of the 10-language core (96 terms) | live |
+| `langid_bench.py` | Accuracy, per-language breakdown, tuning calibration for `klix.langid` | live |
+| `langid_experiment.py`, `langid_hybrid.py` | Language ID ablation studies (n-gram order, channel weights, profiles) | live |
 | `benchmark.py` | Cross-domain routing (6 domains, 70 cases) — the README table | live |
 | `benchmark_bilingual.py` | Bilingual routing (EN/DE, 20 cases) — the README table | live |
 | `setfit_baseline.py` | SetFit few-shot comparison (n=60, leakage-verified) | live |

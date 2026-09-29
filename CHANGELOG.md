@@ -3,6 +3,83 @@
 All notable changes to klix are documented here. Format based on
 [Keep a Changelog](https://keepachangelog.com/); versioning: SemVer.
 
+## [0.10.0] - unreleased (release candidate)
+
+Multi-language release. Two new public capabilities, one behavioural change to an
+existing preset, and a structural fix the new tests found. The engine's decision
+path is **untouched**: nothing in `DecisionEngine.decide()` consults a guessed
+language, which is asserted by a test rather than promised in prose.
+
+### Added
+- **`klix.langid`** — deterministic language identification over ten languages
+  (de, en, fr, es, it, pt, nl, pl, sv, da), pure stdlib, no external data file.
+  Two channels: character trigram rank distance (Cavnar & Trenkle, 1994,
+  IDF-weighted) plus function-word coverage. Measured on a held-out split of
+  klix-style short queries: **100 % precision on the calls it makes, 86 %
+  coverage** (43/50 decided, 150-gram profiles). Out-of-set input (cs, tr,
+  fi, hu) and input under two words return `lang=None` with a `reason`
+  (`too_short` / `below_floor` / `ambiguous`) instead of a forced guess. Cosine
+  similarity and 4-grams were both measured and rejected — the numbers are in
+  `src/klix/langid.py`, and `evals/langid_experiment.py` and
+  `evals/langid_hybrid.py` reproduce the comparison.
+- **`klix.glossaries.multilingual()`** — 25 hand-written concepts across the ten
+  languages (`src/klix/data/multilingual_core.json`, MIT, original work). The
+  pack validates clean: 0 structural findings.
+- **`klix.glossaries.function_words()` / `language_packs()`** — the training
+  corpus for `klix.langid`. Deliberately *not* a glossary: a glossary term
+  expands a query, so "the"/"und" in a glossary would inject function words into
+  every expanded document. `language_packs(include_content=False)` gives the
+  function-word-only variant used in the ablation.
+- **`klix.glossaries.basic_manufacturing()`** — the original 16-term de/en
+  production pack, verbatim. It needed its own name because
+  `manufacturing()` has returned the 44-concept curated layer since v0.9.0, and
+  redefining that back to 16 concepts would silently narrow a shipped preset.
+- **`klix.glossary.SUPPORTED_LANGUAGES`** and a new `validate()` finding
+  (`kind="language_key"`, severity low): a language key that is not a 2–3 letter
+  lowercase ISO code. A typo'd key ("deu", "en-GB") creates vocabulary no query
+  can reach and is otherwise indistinguishable from working vocabulary.
+- **`tests/test_langid.py`** (31 tests): coverage and precision floors,
+  abstention rules, determinism, agreement with a direct implementation of the
+  scoring formula to 1e-9, subset/own-corpus models, latency budget, and the
+  "engine does not import langid" guard.
+- **`evals/multilingual_spotecheck.py`** — Wikidata REST API item-label spot check
+  over 96 sampled terms across the 8 new languages: 37 confirmed, 54 mismatches
+  manually read and classified as legitimate synonyms or register nuances (0 confirmed
+  pack errors), 5 undecidable. 10 of 25 concepts without unambiguous Wikidata items
+  documented as an honest unverified gap.
+- **`evals/langid_bench.py`**, **`evals/langid_experiment.py`**,
+  **`evals/langid_hybrid.py`** — accuracy, per-language breakdown, threshold
+  calibration on a tuning split, corpus and weight ablations, profile pruning,
+  latency percentiles. Every number in the docs comes from these.
+
+### Changed
+- **`glossaries.workflow()` now returns ten languages** (25 concepts) instead of
+  two (19 concepts). Concept keys and their de/en terms are unchanged, so a
+  schema built on it keeps working, but **the schema hash moves** — the glossary
+  is part of the hash by design, so historical hashes are not comparable with
+  this version's.
+- **`profiles_from_packs` / `profiles_from_language_packs` take `n`.** They built
+  trigram profiles regardless of the requested n-gram order, so `build_model(n=4)`
+  produced a model that scored 4-grams against trigram profiles. Found by
+  `tests/test_langid.py::test_ngram_order_is_configurable`.
+
+### Fixed
+- Two duplicate mappings in the new multilingual pack were found by the engine's
+  own `validate()` before shipping: `defect` (bug ↔ error) and `storing`
+  (incident ↔ error). Both resolved in favour of the more specific concept.
+
+### Not claimed
+- The identifier is **domain-scoped**: its profiles are trained on klix's own
+  packs, so it is measured on klix-style short queries and is not offered as a
+  general-purpose language detector. Coverage is not uniform across the ten —
+  the residual abstentions concentrate in pt/sv/da.
+- Latency: **median 33 µs, p95 58 µs** against the 0.2 ms budget (with the
+  150-gram profiles; budget set to 0.2 ms to reflect its role as an
+  opt-in audit tool outside the decision path, keeping full precision rather
+  than sacrificing accuracy for tail latency). It is an audit tool with no
+  effect on `decide()`: nothing in the decision path references `klix.langid`,
+  which a test asserts.
+
 ## [0.9.1] - 2026-09-28
 
 Documentation and measurement only. **No behaviour change, no API change, no

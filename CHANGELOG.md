@@ -3,6 +3,25 @@
 All notable changes to klix are documented here. Format based on
 [Keep a Changelog](https://keepachangelog.com/); versioning: SemVer.
 
+## [0.10.1] - 2026-09-30
+
+### Changed
+- docs: consolidate benchmark tables into a unified at-a-glance matrix and
+  streamline the classifier selection guide, so the PyPI project page shows the
+  same honest numbers as the repository:
+  - one comparison matrix replaces the seven scattered tables; latency (~46 ms
+    single call) and throughput (~13.9 ms/item, 72 docs/s) are now stated as the
+    different things they are;
+  - model size corrected to the measured 240 MB on disk (was "~120 MB"/"118 MB",
+    the latter a hardcoded label that was never a measurement);
+  - `few_shot_k3` vs bare-label anchors measured on MASSIVE-en too: the bare label
+    wins there by 4.1 pt (47.9 % vs 43.8 %), so the docs no longer claim few-shot
+    anchors are universally better;
+  - classifier guidance is now three rules with their measured caveats
+    (`centroid` is neutral on mixed-language sets, `linear` overfits there).
+
+No code change: `src/klix/` is byte-identical to 0.10.0 apart from `__version__`.
+
 ## [0.10.0] - 2026-09-30
 
 Multi-language release. Two new public capabilities, one behavioural change to an

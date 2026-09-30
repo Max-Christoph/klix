@@ -37,7 +37,7 @@ from klix.rules import Rule
 # ============================================================================
 # DecisionEngine(model_name=..., stop_words=...)
 #   model_name : any FastEmbed-compatible embedding model
-#                (default: multilingual MiniLM, ~120 MB, one-time download)
+#                (default: multilingual MiniLM, 240 MB on disk, one-time download)
 #   stop_words : None = built-in EN+DE list (default)
 #                []    = stop-word filtering fully OFF
 #                ["die","the",...] = custom list (e.g. a third language)

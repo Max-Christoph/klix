@@ -3,6 +3,16 @@
 All notable changes to klix are documented here. Format based on
 [Keep a Changelog](https://keepachangelog.com/); versioning: SemVer.
 
+## [0.11.1] - 2026-09-30
+
+### Changed
+- **Benchmark Sample Disambiguation (`README.md`, `docs/BENCHMARKS.md`)**:
+  - Clarified that the BANKing77 anchor density scaling table is evaluated on the deterministic $n=500$ subsampled split ($k=3$ nearest @ 60.2%, $k=3$ centroid @ 64.8%, $k=20$ linear @ 85.2%), fully disambiguating it from the full $n=3,080$ test split baseline in the At-a-glance matrix (61.4%).
+
+### Added
+- **Committed Benchmark Artifacts**:
+  - Added and tracked the three empirical evaluation JSONs in `evals/` (`bespoke_result_banking77_few_shot_k3_nearest.json`, `..._k3_centroid.json`, and `..._k20_linear.json`), guaranteeing 100% repo-internal provenance for all scaling metrics.
+
 ## [0.11.0] - 2026-09-30
 
 ### Added

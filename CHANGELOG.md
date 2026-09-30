@@ -3,6 +3,26 @@
 All notable changes to klix are documented here. Format based on
 [Keep a Changelog](https://keepachangelog.com/); versioning: SemVer.
 
+## [0.12.1] - 2026-10-01
+
+### Added
+- **Out-of-Scope (OOD) Evaluation Harness (CLINC150, 150 Classes)**:
+  - Added `evals/clinc_loader.py` and `evals/clinc_fetcher.py` with automated SHA256 integrity verification.
+  - Added `evals/run_clinc_oos.py` evaluating in-scope intent routing ($K=150$, $N=4,500$) alongside Out-of-Domain discrimination ($N=1,000$ OOS queries).
+  - Evaluated and committed empirical artifacts: `evals/clinc_result_k3_centroid.json` (78.8% in-scope acc, 92.9% AUROC, 32.3% FPR@95) and `..._k10_centroid.json` (86.9% in-scope acc, 94.8% AUROC, 23.1% FPR@95, ~10.1 ms/doc on CPU).
+  - Added dataset provenance and license documentation in `evals/data/clinc/PROVENANCE.md` (CC BY 3.0, Larson et al., EMNLP 2019).
+- **MASSIVE Anchor-Label Hybridization Ablation**:
+  - Added `few_shot_k3_plus_label` anchor extraction method in `evals/bespoke_anchors.py` and `evals/run_bespoke.py`.
+  - Evaluated on full test splits ($N=2,974$): English reaches 57.3% accuracy (+13.5 pt over nearest anchors) and German reaches 44.4% accuracy under centroid aggregation.
+
+### Changed
+- **Documentation & Scientific Framing (`README.md`, `docs/BENCHMARKS.md`)**:
+  - Replaced promotional phrasing with formal mathematical formulations for all four decision heads.
+  - Added explicit `Scope, Limitations & Non-Goals` section defining architectural boundaries (differentiating localized contrastive hard negatives from open-world OOD thresholding, and clarifying linear probe equivalence to regularized logistic regression).
+  - Clarified latency metrics between single-item interactive execution (~26–30 ms) and vectorized batch throughput (~13.9 ms/doc).
+  - Clarified that Matryoshka dimension truncation requires an MRL-trained backbone and causes information loss on default MiniLM.
+- **Package Metadata**: Updated `description` in `pyproject.toml` to remove inaccurate claims and accurately reflect CPU inference over frozen embeddings.
+
 ## [0.12.0] - 2026-09-30
 
 ### Added

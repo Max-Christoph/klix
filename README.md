@@ -5,15 +5,84 @@
 [![CI](https://github.com/Max-Christoph/klix/actions/workflows/ci.yml/badge.svg)](https://github.com/Max-Christoph/klix/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/Max-Christoph/klix/blob/main/LICENSE)
 
-**Fast, zero-training semantic decisions on CPU. Route text, assign multi-label scores, extract boolean flags, and score continuous axes — by providing example sentences instead of training models.**
+**Lightweight multi-task decision runtime over frozen sentence embeddings for CPU.**  
+Evaluates categorical routing, calibrated multi-label scoring, bounded scalar metric projection, and ternary polarity gates over a single shared vector forward pass.
 
 ---
 
-- **High Throughput on CPU:** **~13.9 ms/doc** in bulk (72 docs/s sustained → **100,000 documents in ~24 minutes** on a standard laptop CPU).
-- **Accurate & Scalable:** **61.4 %** on 77 classes with minimal anchors ($k=3$), scaling up to **85.2 %** with $k=20$ anchors on BANKing77.
-- **Four Decoupled Decision Heads:** `Choice` (single-label routing), `MultiLabel` (calibrated continuous scores $[0, 1]$), `Score` (1D axis), and `Flag` (boolean confidence).
-- **Self-Contained & Offline:** 240 MB on-disk multilingual ONNX model (`paraphrase-multilingual-MiniLM-L12-v2`). No GPU required, 0 € API costs.
-- **Deterministic Guardrails:** Layer exact business rules (`Rule`) and cross-lingual synonym bridges (`Glossary`) over vector geometry without fine-tuning.
+## Technical Overview
+
+Klix is a deterministic inference runtime designed for low-latency decision boundaries in automated pipelines and agent architectures. Rather than executing autoregressive language models or orchestrating multiple disjoint estimators, Klix projects input text into a dense embedding space once and evaluates heterogeneous linear decision heads concurrently via vectorized BLAS operations.
+
+* **Inference Complexity:** Embedding cost is $O(L \cdot D)$ via an ONNX-runtime encoder (`paraphrase-multilingual-MiniLM-L12-v2`, 240 MB footprint, $D=384$). Multi-head evaluation is $O(K \cdot D)$ linear algebra, executing in $< 100\,\mu\text{s}$ post-embedding.
+* **Throughput:** ~13.9 ms per document in bulk vectorization mode (sustained 72 documents/s on a single commodity x86 CPU core).
+* **Out-of-Domain Rejection:** Reject anchor sets and neutral simplex poles allow decision heads to decline classification (`value=None`) when input density falls outside defined class distributions.
+* **Symbolic Constraints:** Deterministic regular expression and exact token rules (`Rule`) evaluate as hard boolean constraints alongside vector similarity.
+* **Zero PyTorch Runtime Dependency:** Pure CPU execution backed by ONNX Runtime, FastEmbed, NumPy, and scikit-learn.
+
+---
+
+## Architectural Comparison
+
+| Dimension | Custom `scikit-learn` + `sentence-transformers` | `semantic-router` | `SetFit` | `Klix` |
+|---|---|---|---|---|
+| **Runtime Dependencies** | Heavy (PyTorch, transformers, CUDA/C++) | Lightweight (NumPy, FastEmbed) | Heavy (PyTorch, transformers) | **Lightweight** (ONNX Runtime, NumPy, scikit-learn) |
+| **Model Footprint** | ~2–4 GB memory allocation | ~240 MB on-disk ONNX | ~2–4 GB memory allocation | **~240 MB on-disk ONNX** |
+| **Evaluation Scope** | Typically single-task pipelines | Single-label route thresholding | Fine-tuned single-task classifier | **Multi-task:** Single-label, Multi-label, 1D Scalar, Ternary Flag |
+| **Pass Architecture** | Repeated forward passes for multiple heads | Single vector pass for routing | Single vector pass per model | **Single forward pass shared across all $N$ heads** |
+| **Training Paradigm** | Manual fit loop per task | Parameter-free anchor matching | Contrastive fine-tuning (backpropagation) | **Frozen backbone; parameter-free centroids or convex $L_2$ probe** |
+| **Rejection Mechanism** | Manual probability thresholding | Distance thresholding | Manual probability thresholding | **Dual rejection:** Explicit negative poles + cosine thresholds |
+| **Symbolic Overrides** | External wrapper required | External wrapper required | External wrapper required | **Native compiled hard/boost rules (`Rule`)** |
+
+---
+
+## Mathematical Formulation
+
+Let $\mathbf{q} \in \mathbb{R}^D$ denote the $L_2$-normalized dense query representation ($\|\mathbf{q}\|_2 = 1$) produced by the shared embedding backbone. Let $\{\mathbf{x}_{k,1}, \dots, \mathbf{x}_{k,n_k}\}$ denote the normalized anchor embeddings provided for class $k \in \{1, \dots, K\}$.
+
+### 1. Categorical Choice (`Choice`)
+
+#### Mode: Centroid (`classifier="centroid"`, Default)
+The class representative $\mathbf{c}_k$ is the normalized geometric mean of its constituent anchor vectors:
+$$\mathbf{c}_k = \frac{\sum_{i=1}^{n_k} \mathbf{x}_{k,i}}{\|\sum_{i=1}^{n_k} \mathbf{x}_{k,i}\|_2}$$
+Cosine similarities across all $K$ classes are computed via a single matrix-vector product $\mathbf{s} = \mathbf{C}\mathbf{q}$, where $\mathbf{C} \in \mathbb{R}^{K \times D}$. The optimal label is selected via:
+$$k^* = \arg\max_{k \in \{1,\dots,K\}} (\mathbf{q} \cdot \mathbf{c}_k)$$
+
+#### Out-of-Domain Rejection
+Given an optional set of reject anchors $\mathbf{R} = \{\mathbf{r}_1, \dots, \mathbf{r}_M\}$, the decision is nullified (`value=None`) if the maximum similarity to any rejection anchor exceeds the target class similarity, or if similarity fails a minimum threshold $\tau_{\min}$:
+$$\text{output} = \begin{cases} \text{None}, & \text{if } \max_{m} (\mathbf{q} \cdot \mathbf{r}_m) > \mathbf{q} \cdot \mathbf{c}_{k^*} \;\lor\; (\mathbf{q} \cdot \mathbf{c}_{k^*}) < \tau_{\min} \\ k^*, & \text{otherwise} \end{cases}$$
+
+#### Mode: Linear Probe (`classifier="linear"`)
+Fits an $L_2$-regularized multinomial logistic regression boundary directly over anchor representations at compile time:
+$$k^* = \arg\max_{k \in \{1,\dots,K\}} (\mathbf{w}_k^T \mathbf{q} + b_k), \quad \text{subject to } \min_{\mathbf{W}, \mathbf{b}} \mathcal{L}_{\text{CE}}(\mathbf{W}, \mathbf{b}) + \frac{\lambda}{2} \|\mathbf{W}\|_F^2$$
+
+#### Mode: Hybrid Sparse-Dense (`classifier="hybrid"`)
+Blends dense cosine similarity with sparse BM25 scores over anchor lexical tokens:
+$$S(q, k) = \alpha (\mathbf{q} \cdot \mathbf{c}_k) + (1 - \alpha) S_{\text{BM25}}(q, k)$$
+
+---
+
+### 2. Calibrated Multi-Label Scoring (`MultiLabel`)
+
+Unlike softmax-based categorical routing, `MultiLabel` treats each category as an independent decision boundary. The raw cosine alignment $a_k = \mathbf{q} \cdot \mathbf{c}_k$ is mapped onto a calibrated probability $s_k \in [0, 1]$ via a parameterized sigmoid transformation:
+$$s_k(\mathbf{q}) = \sigma\left(\gamma \cdot (a_k - c_0)\right) = \frac{1}{1 + \exp\left(-\gamma \cdot (a_k - c_0)\right)}$$
+where $\gamma$ denotes the calibration sharpness (`sharpness=12.0`) and $c_0$ denotes the cosine inflection center (`center=0.40`). The set of active labels is defined by threshold truncation:
+$$\mathcal{Y}(\mathbf{q}) = \{k \mid s_k(\mathbf{q}) \ge \tau\}$$
+
+---
+
+### 3. Continuous Metric Projection (`Score`)
+
+Maps a query onto a bounded continuous interval $[V_{\min}, V_{\max}]$ based on its relative proximity to two polar anchor distributions $\mathcal{A}_{\text{low}}$ and $\mathcal{A}_{\text{high}}$:
+$$v(\mathbf{q}) = V_{\min} + (V_{\max} - V_{\min}) \cdot \frac{\text{top}_k(\mathbf{q}, \mathcal{A}_{\text{high}}) - \text{top}_k(\mathbf{q}, \mathcal{A}_{\text{low}}) + 1}{2}$$
+
+---
+
+### 4. Ternary Polarity Flag (`Flag`)
+
+Evaluates binary classification against an explicit neutral rejection pole over a 3-component simplex:
+$$P(y) = \frac{\exp((\mathbf{q} \cdot \mathbf{c}_y) / T)}{\sum_{j \in \{\text{true}, \text{false}, \text{neutral}\}} \exp((\mathbf{q} \cdot \mathbf{c}_j) / T)}, \quad y \in \{\text{true}, \text{false}, \text{neutral}\}$$
+The output resolves to boolean `True` or `False` if $P(y) \ge \tau$. If the neutral pole dominates ($P(\text{neutral}) > \max(P(\text{true}), P(\text{false}))$), the head returns `None`.
 
 ---
 
@@ -21,22 +90,22 @@
 
 ```bash
 pip install klix-engine
-# or with uv
-uv add klix-engine
+# Optional LangChain/LangGraph integration:
+pip install "klix-engine[langchain]"
 ```
 
-*On first import, FastEmbed caches the multilingual ONNX model (240 MB on disk). Afterwards, everything runs 100 % offline.*
+*Note: On initial invocation, FastEmbed downloads and caches the multilingual ONNX model (`paraphrase-multilingual-MiniLM-L12-v2`, ~240 MB) locally. Subsequent runs execute entirely offline.*
 
 ---
 
-## Quickstart
+## Minimal Example
 
 ```python
 from klix import DecisionEngine, Choice, MultiLabel, Score, Flag
 
 engine = DecisionEngine()
 
-# 1. Single-label routing
+# 1. Categorical routing with out-of-domain rejection pole
 engine.add_head(
     Choice(
         name="queue",
@@ -49,7 +118,7 @@ engine.add_head(
     )
 )
 
-# 2. Multi-label classification with continuous scores [0.0, 1.0]
+# 2. Independent calibrated multi-label scoring
 engine.add_head(
     MultiLabel(
         name="tags",
@@ -62,7 +131,7 @@ engine.add_head(
     )
 )
 
-# 3. Continuous 1D metric axis
+# 3. Continuous scalar metric axis
 engine.add_head(
     Score(
         name="urgency",
@@ -73,7 +142,7 @@ engine.add_head(
     )
 )
 
-# 4. Boolean flag with neutral rejection pole
+# 4. Binary flag with neutral rejection pole
 engine.add_head(
     Flag(
         name="is_security",
@@ -85,14 +154,11 @@ engine.add_head(
 
 engine.compile()
 
-# Evaluate text in milliseconds
+# Evaluate single query
 res = engine.decide("PLC-34 reports critical hardware error, production halted!")
 
-print(res)
-# <DecisionResult (46.2ms): queue=ot_plant, tags=['critical', 'hardware'], urgency=4.8, is_security=False>
-
 print(res.queue)                       # 'ot_plant'
-print(res.tags)                        # ['critical', 'hardware'] (categories with score >= 0.5)
+print(res.tags)                        # ['critical', 'hardware'] (scores >= threshold)
 print(res.details("tags")["scores"])   # {'critical': 0.94, 'hardware': 0.88, 'network': 0.12}
 print(res.urgency)                     # 4.82
 print(res.is_security)                 # False (probability=0.04)
@@ -100,122 +166,114 @@ print(res.is_security)                 # False (probability=0.04)
 
 ---
 
-## The Four Decision Heads
+## Empirical Benchmarks & Methodological Analysis
 
-Each text is embedded **exactly once** by the shared semantic backbone; each head then evaluates in microseconds:
+All evaluations were executed on commodity x86 CPU hardware without GPU acceleration. Evaluation harnesses, test split integrity assertions, and JSON artifacts are archived in [`docs/BENCHMARKS.md`](https://github.com/Max-Christoph/klix/blob/main/docs/BENCHMARKS.md).
 
-| Head | Purpose | Output (`res.<name>`) | Key Knobs |
-|---|---|---|---|
-| [`Choice`](#choosing-a-classifier-mode-3-simple-rules) | Single-label classification & routing | Winning label string (or `None`) | `classifier="centroid"`, `reject_anchors`, `keyword_boost` |
-| **`MultiLabel`** | Multi-label classification with continuous scores | List of active label strings $\ge$ threshold | `threshold=0.5`, `sharpness=12.0`, `center=0.40`, `calibration="sigmoid"` |
-| `Score` | Calibrated continuous metric axis (e.g. 0 to 5) | Float in `[min_val, max_val]` | `aggregation="topk"`, `min_coverage` |
-| `Flag` | Binary boolean decision with neutral pole | `True`, `False`, or `None` | `threshold=0.5`, `temp=0.12`, `neutral_anchors` |
+### Summary of Empirical Results
+
+| Benchmark / Corpus | Task Type | Classes ($K$) | Prior ($1/K$) | Test Split ($N$) | Klix Performance | Baseline / Reference | Sustained Throughput |
+|---|---|:---:|:---:|:---:|---|---|:---:|
+| **BANKing77** | Intent Routing | 77 | 1.3 % | 3,080 *(full)* | **61.4 % Acc** *(k=3 anchors)* | 53.3 % *(canonical labels)* | **72 docs/s** |
+| **MASSIVE** (English) | Intent Routing | 60 | 1.7 % | 2,974 *(full)* | **43.8 % Acc** *(k=3 anchors)* | 47.9 % *(canonical labels)* | **72 docs/s** |
+| **MASSIVE** (German) | Intent Routing | 60 | 1.7 % | 2,974 *(full)* | **36.2 % Acc** *(k=3 anchors)* | 40.5 % *(Qwen-2B LLM)* | **72 docs/s** |
+| **GoEmotions** | Multi-Label (28 Affects) | 28 | 3.6 % | 500 *(subsample)* | **19.5 % Micro-F1** *(k=10 centroid)* | 9.8 % F1 *(k=3 anchors)* | **55 docs/s** |
+| **Cross-Domain Routing** | Intent Routing | 6 | 16.7 % | 70 *(sanity check)* | **84.3 % Acc** *(centroid / linear)* | 78.0 % *(Embed-KNN)* | **72 docs/s** |
+| **Few-Shot vs. Fine-Tuning** | Classification Probe | 5 | 20.0 % | 60 *(sanity check)* | **85.0 % Acc** *(linear probe)* | 85.0 % *(SetFit trained)* | **72 docs/s** |
 
 ---
 
-## Performance & Benchmarks
+### Methodological Observations & Limitations
 
-Every metric is measured on a standard Intel CPU without a GPU. Full provenance and test setups are documented in [`docs/BENCHMARKS.md`](https://github.com/Max-Christoph/klix/blob/main/docs/BENCHMARKS.md).
+1. **Anchor Noise vs. Canonical Label Semantics (MASSIVE Corpus):**  
+   On the 60-class MASSIVE benchmark, using $k=3$ arbitrary anchor sentences per class yields **43.8%** accuracy, whereas using bare, human-curated label names (e.g., `alarm_set`, `datetime_query`) achieves **47.9%**. This demonstrates that arbitrary few-shot sentence sampling without outlier filtering introduces intra-class variance in a frozen embedding space, whereas concise canonical label descriptors align tightly with pre-trained lexical associations.
 
-### At a Glance
+2. **Fine-Grained Multi-Label Classification with Frozen Backbones (GoEmotions Corpus):**  
+   GoEmotions evaluates 28 fine-grained affective categories with substantial label co-occurrence and semantic overlap (e.g., *admiration* vs. *approval* vs. *pride*). Without domain-specific metric fine-tuning, a frozen 384-dimensional representation attains a Micro-F1 of **19.5%** ($k=10$ centroid, Macro-F1 18.1%) against a random prior of 3.6%. Centroid aggregation outperforms 1-nearest-neighbor matching (14.1% Micro-F1) by +5.4 percentage points while reducing inference to a single BLAS matrix-vector product.
 
-| Benchmark / Task | Classes | Test Cases | Klix Result | Baseline | Bulk Throughput |
-|---|:---:|:---:|:---:|:---:|:---:|
-| **BANKing77** *(77 banking intents)* | 77 | 3,080 *(full split)* | **61.4 %** *(k=3 anchors)* | 53.3 % *(bare labels)* | **72 docs/s** |
-| **MASSIVE** *(Amazon intent, EN)* | 60 | 2,974 | **43.8 %** *(k=3 anchors)* | 47.9 % *(bare labels)* | **72 docs/s** |
-| **MASSIVE** *(Amazon intent, DE)* | 60 | 2,974 | **36.2 %** *(k=3 anchors)* | 40.5 % *(Qwen 2B LLM)* | **72 docs/s** |
-| **GoEmotions** *(MultiLabel, 28 emotions)* | 28 | 500 *(subsample)* | **19.5 % F1** *(k=10 centroid)* | 9.8 % F1 *(k=3 anchors)* | **55 docs/s** |
-| **Cross-Domain Routing** *(6 domains)* | 6 | 70 | **84.3 %** *(centroid / linear)* | 78.0 % *(dense Embed-KNN)* | **72 docs/s** |
-| **Few-Shot vs. Training** | 5 | 60 | **85.0 %** *(linear probe)* | 85.0 % *(SetFit contrastive)* | **72 docs/s** |
+3. **Sample Size Scope:**  
+   The cross-domain ($N=70$) and SetFit ablation ($N=60$) test sets represent small qualitative smoke tests for domain-specific schemas. For high-cardinality statistical characterization, primary reference should be made to the full public test splits of BANKing77 ($N=3,080$, $K=77$) and MASSIVE ($N=2,974$, $K=60$).
 
-### Accuracy Scales with Anchor Density (BANKing77, 77 classes, n=500 subsample)
+4. **Selective Classification (The Reject Option in Agent Routing):**  
+   In agent dispatch architectures, an unconstrained multi-class error rate over 60–77 classes does not directly map to pipeline failures. By configuring rejection thresholds or explicit `reject_anchors`, the system operates in a selective classification regime: high-confidence queries ($\ge 0.80$, exhibiting 90–98% precision on bounded action domains) are routed immediately in $< 15\,\text{ms}$, while low-confidence or out-of-domain instances return `None` and escalate to an autoregressive LLM fallback.
 
-On complex, fine-grained taxonomies (BANKing77 has 77 distinct classes, random chance = 1.3%), accuracy scales directly with anchor quality and classifier choice on the exact same CPU. Evaluated on a deterministic 500-case stride subsample (where $k=3$ nearest scores 60.2%, compared to 61.4% on the full 3,080-case test split in the table above):
+---
 
-| Classifier | Anchors / class ($k$) | Compile Time | Accuracy | Bulk Latency |
+### Anchor Density Scaling (BANKing77, 77 Classes)
+
+Evaluated on a deterministic 500-sample stride subsample of BANKing77 ($k=3$ nearest scores 60.2% on this subsample vs. 61.4% on the full 3,080 test split):
+
+| Classifier Mode | Anchors per Class ($k$) | Compilation Time | Test Accuracy | Per-Item Latency |
 |---|:---:|:---:|:---:|:---:|
 | `nearest` | $k=3$ | 4.7 s | 60.2 % | 29.7 ms/doc |
-| `centroid` | $k=3$ | 5.3 s | **64.8 %** *(+4.6 pt)* | 26.6 ms/doc |
-| `linear` | $k=3$ | 10.5 s | **67.8 %** *(+7.6 pt)* | 26.1 ms/doc |
-| `centroid` | $k=10$ | 22.4 s | **76.6 %** *(+16.4 pt)* | 31.3 ms/doc |
-| `linear` | $k=10$ | 85.0 s | **79.8 %** *(+19.6 pt)* | 28.1 ms/doc |
-| `centroid` | $k=20$ | 39.6 s | **79.6 %** *(+19.4 pt)* | 26.7 ms/doc |
-| **`linear`** | **$k=20$** | 132 s | **85.2 %** *(+25.0 pt!)* | 41.9 ms/doc |
+| `centroid` | $k=3$ | 5.3 s | **64.8 %** (+4.6 pt) | 26.6 ms/doc |
+| `linear` | $k=3$ | 10.5 s | **67.8 %** (+7.6 pt) | 26.1 ms/doc |
+| `centroid` | $k=10$ | 22.4 s | **76.6 %** (+16.4 pt) | 31.3 ms/doc |
+| `linear` | $k=10$ | 85.0 s | **79.8 %** (+19.6 pt) | 28.1 ms/doc |
+| `centroid` | $k=20$ | 39.6 s | **79.6 %** (+19.4 pt) | 26.7 ms/doc |
+| `linear` | $k=20$ | 132 s | **85.2 %** (+25.0 pt) | 41.9 ms/doc |
 
-*Key takeaway:* Evaluated on 500 subsampled test cases from BANKing77 (all result JSONs tracked in `evals/`). `centroid` delivers massive gains (64.8 % → 79.6 %) with **zero training overhead** (compile is a pure embedding pass), while `linear` reaches **85.2 %** with 20 examples per class.
-
-> **Anchor Rule of Thumb:** While 2–3 example sentences per class work as a quick zero-shot baseline (60–65 % on 77 classes), production schemas benefit significantly from providing **10–20 representative sentences** per category. Combined with `classifier="linear"` or `centroid`, this pushes accuracy into the **80–85 %+** range while keeping evaluation in the ~25–40 ms range on CPU.
-
-### Throughput & Efficiency
-
-* **Single Interactive Call:** **~46 ms** (p50) on dev CPU.
-* **Bulk Processing (`decide_batch`):** **~13.9 ms/doc (72 docs/s)** sustained $\to$ **100,000 documents in ~24 minutes** on 1 core.
-* **vs. Local LLMs (Ollama `qwen3.5:2b` / `nimble:9b`):** A 2B LLM on the same CPU achieves 40.5 % (+4.3 pt over Klix k=3) on MASSIVE-de, but takes **~9,000 ms/call (650× slower)** and requires **2.7 GB to 9.5 GB** memory. Klix provides the instant, deterministic System-1 layer.
-
----
-
-## Choosing a Classifier Mode (3 Simple Rules)
-
-1. **`classifier="centroid"` — Recommended for 90 % of schemas:**
-   Scores against the normalized mean anchor vector per category. Fully deterministic, zero training overhead, robust against outliers, and scales independently of anchor count.
-2. **`classifier="linear"` — For maximum accuracy on single-language schemas with 5+ anchors:**
-   Fits a regularized logistic decision boundary at compile time. Reaches 85.2 % on 77 classes.
-3. **`classifier="hybrid"` — When matching technical codes, asset IDs, or SKUs:**
-   Fuses dense semantics with exact BM25 keyword matching (e.g. matching `plc-34` or error codes).
+*Observation:* Centroid projection consistently improves accuracy over nearest-neighbor matching by +4.6 to +19.4 percentage points while maintaining $O(K \cdot D)$ computational complexity. Regularized linear probes reach 85.2% accuracy when anchor density satisfies $k \ge 10$ examples per class.
 
 ---
 
 ## Configuration Reference
 
-| Parameter | Applies To | Description |
-|---|---|---|
-| `options` | `Choice`, `MultiLabel` | Mapping of `{label: [example_sentences, ...]}` |
-| `classifier` | `Choice`, `MultiLabel` | `"centroid"` (default), `"linear"`, `"nearest"`, `"hybrid"` |
-| `threshold` | `MultiLabel`, `Flag` | Decision threshold for active categories / boolean flag |
-| `sharpness` / `center` | `MultiLabel` | Sigmoid steepness and cosine similarity center for $[0, 1]$ scoring |
-| `calibration` | `MultiLabel` | Score mapping: `"sigmoid"` (default), `"linear"`, `"cosine"` |
-| `reject_anchors` | `Choice` | Out-of-domain examples; matching queries return `value=None` |
-| `neutral_anchors` | `Flag` | Third pole for ambiguous/irrelevant queries (returns `value=None`) |
-| `sparse_fastpath` | `DecisionEngine` | Opt-in early-exit gate: resolves exact keyword matches in < 1 ms before dense pass |
-| `glossary` | `Choice`, `DecisionEngine` | Language-agnostic concept map bridging synonyms cross-lingually |
-| `truncate_dim` | `DecisionEngine` | Matryoshka dimension truncation (e.g. 128 dims) for lower memory & latency |
+| Parameter | Scope | Type | Description |
+|---|---|---|---|
+| `options` | `Choice`, `MultiLabel` | `dict[str, list[str]]` | Mapping of class identifier to anchor sentence corpus. |
+| `classifier` | `Choice`, `MultiLabel` | `str` | Inference mode: `"centroid"` (default), `"linear"`, `"nearest"`, `"hybrid"`. |
+| `threshold` | `MultiLabel`, `Flag` | `float` | Minimum decision threshold for active category membership or boolean assertion. |
+| `sharpness` | `MultiLabel` | `float` | Logistic steepness parameter $\gamma$ for calibrated sigmoid scoring (default: `12.0`). |
+| `center` | `MultiLabel` | `float` | Cosine similarity inflection center $c_0$ for sigmoid calibration (default: `0.40`). |
+| `calibration` | `MultiLabel` | `str` | Score mapping: `"sigmoid"` (default), `"linear"`, `"cosine"`. |
+| `reject_anchors` | `Choice` | `list[str]` | Out-of-domain negative pole; dominant similarity resolves to `value=None`. |
+| `neutral_anchors` | `Flag` | `list[str]` | Ambiguity pole on the 3-simplex; dominant similarity resolves to `value=None`. |
+| `rules` | `Choice` | `list[Rule]` | Deterministic symbolic constraints: `Rule(label=..., any_of=[...], mode="force"|"boost")`. |
+| `sparse_fastpath` | `DecisionEngine` | `bool` | Deterministic exact keyword index bypassing embedding inference when unambiguous ($< 1\,\text{ms}$). |
+| `glossary` | `Choice`, `DecisionEngine` | `dict` | Pre-compiled cross-lingual lexical synonym map. |
+| `truncate_dim` | `DecisionEngine` | `int` | Matryoshka dimension truncation (e.g. 128) for reduced vector footprint. |
 
 ---
 
-## Batch Mode & Multiprocessing
+## Vectorized Batch Inference
 
-Process large document streams in a single embedding pass:
+To evaluate document corpora without per-item framework overhead:
 
 ```python
-texts = ["First document text...", "Second document text...", ...]
-results = engine.decide_batch(texts)  # 72 docs/s on CPU
+texts = ["First query document...", "Second query document...", ...]
+results = engine.decide_batch(texts)  # Vectorized ONNX forward pass; sustained 72 docs/s
 ```
 
 ---
 
 ## LangChain & LangGraph Integration
 
-Use Klix as an ultra-fast **System-1 Semantic Router** (< 15 ms, 0 € API costs) before invoking expensive LLMs:
+Klix provides a native low-latency routing and state-enrichment layer for agent execution graphs:
 
 ```python
 from klix.integrations.langchain import KlixRouterRunnable, create_klix_router
 
-# 1. LangChain Runnable: returns route string or enriches pipeline state
+# 1. LangChain Runnable: returns route key or enriches state dictionary
 router = KlixRouterRunnable(engine=engine, route_head="queue", enrich_state=True)
 chain = router | RunnableBranch(...)
 
-# 2. LangGraph Conditional Edge: routes graph flow without LLM tool-calling latency
+# 2. LangGraph Conditional Edge: low-latency (< 15 ms) graph routing
 workflow.add_conditional_edges(
     "supervisor",
     create_klix_router(engine, head_name="queue"),
-    {"it_ops": "it_agent", "finance": "finance_agent", None: "fallback"},
+    {
+        "it_ops": "it_agent",
+        "finance": "finance_agent",
+        None: "fallback_llm",
+    },
 )
 ```
 
-See [`examples/langchain_agent_router.py`](https://github.com/Max-Christoph/klix/blob/main/examples/langchain_agent_router.py) for the complete runnable example.
+See [`examples/langchain_agent_router.py`](https://github.com/Max-Christoph/klix/blob/main/examples/langchain_agent_router.py) for the executable reference pipeline.
 
 ---
 
 ## License
 
-MIT License. Designed and built for fast, local, reproducible text intelligence.
+This project is licensed under the MIT License. See [LICENSE](https://github.com/Max-Christoph/klix/blob/main/LICENSE) for details.

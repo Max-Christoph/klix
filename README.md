@@ -8,6 +8,11 @@
 **Sort text into categories, get yes/no flags, score on an axis — by writing
 example sentences instead of training a model.**
 
+A **high-throughput semantic decision engine**: dense sentence embeddings (ONNX
+Runtime, CPU-only) feed decoupled decision heads, each reasoning in its own
+mathematical space. ~46 ms per single call, ~13.9 ms per document in bulk
+(72 docs/s → 100k documents in ~24 minutes).
+
 ```python
 from klix import DecisionEngine, Choice, Score, Flag
 
@@ -53,7 +58,8 @@ pip install klix-engine
 ```
 
 On first use, FastEmbed downloads the `paraphrase-multilingual-MiniLM-L12-v2` model
-(~120 MB, one-time, then cached locally). Everything runs offline afterwards.
+(**240 MB on disk**: 224 MB ONNX + 16 MB tokenizer, one-time, then cached locally;
+~0.3 GB resident once loaded). Everything runs offline afterwards.
 
 ## What you get
 
@@ -407,8 +413,42 @@ the measured evidence: `Score` docstring, "WHEN NOT TO USE THIS HEAD".
 
 ## Benchmarks
 
-All benchmarks are **reproducible** — scripts live in `evals/` and every method is
-trained/evaluated on the *same* labeled data (the anchors are the few-shot training set).
+Every number below is **reproducible from this repo** — the scripts live in
+`evals/`, and within a benchmark all methods see the *same* labeled data. Where a
+figure comes from an external harness or a vendor, the table says so.
+
+### At a glance
+
+| Benchmark / domain | Classes | Test cases | klix | Baseline to compare against | Throughput (CPU) |
+|---|:---:|:---:|:---:|:---:|:---:|
+| **BANKing77** *(bank intents)* | 77 | 3,080 | **61.4 %** *(k=3 anchors)* | 53.3 % *(bare label as anchor)* | 72 docs/s |
+| **MASSIVE** *(voice assistant, EN)* | 60 | 2,974 | **43.8 %** *(k=3 anchors)* | **47.9 %** *(bare label as anchor)* | 72 docs/s |
+| **MASSIVE** *(voice assistant, DE)* | 60 | 2,974 | **36.2 %** *(k=3 anchors)* | 40.5 % *(Qwen2B LLM, 500-case subset)* | 72 docs/s |
+| **Cross-domain support** | 6 | 70 | **84 %** *(linear / centroid)* | 78 % *(dense Embed-KNN)* — 67 % *(Laya, other harness)* | 72 docs/s |
+| **Few-shot vs. training** | 5 | 60 | **85 %** *(linear, no training)* | 85 % *(SetFit, trained, same CPU)* | 72 docs/s |
+| Bilingual EN/DE *(small)* | 5 | 20 | 16/20 *(nearest + topk2)* | 16/20 *(dense Embed-KNN)* | 72 docs/s |
+
+**The honest readings — including the ones that don't flatter klix:**
+
+- **Three real examples per class (k=3) beat a bare label on two of three sets,
+  and lose on the third.** BANKing77 +8.2 pt, MASSIVE-de +6.1 pt — but on
+  MASSIVE-en the bare label *wins* by 4.1 pt (47.9 % vs 43.8 %). The reason is not
+  established; the MASSIVE-en labels are short and near-verbatim English
+  (`alarm_set` → `alarm set`), which is a plausible contributor but not something
+  we measured in isolation. Anyone citing "few-shot anchors always help" should
+  read that row first.
+- **A 2B LLM on the same CPU buys +4.3 pt for ~650× the latency** on MASSIVE-de
+  (40.5 % vs 36.2 %), and it is a 500-case subsample against klix's full split,
+  with all 60 labels in its prompt while klix sees 3 anchors per class. Not a
+  like-for-like comparison — see the section below.
+- **MASSIVE's own data caps the German number.** 3.9 % of German test texts appear
+  verbatim in `train`, 8 of them with a contradictory label. Measured, documented,
+  and asserted by tests — it is a property of the dataset, not of klix.
+- **At n=20 and n=70, small differences are noise.** The bilingual table is 20
+  cases (±20 pt CI); in the cross-domain table only the `linear`/`centroid` row
+  separates clearly from the rest (±9 pt CI at n=70). Treat both as directional.
+- **Everything here runs on CPU, offline**, no GPU and no API calls. `72 docs/s`
+  is the sustained `decide_batch()` rate, not a peak.
 
 ### Throughput and cost per document
 
@@ -429,13 +469,16 @@ one pass (`evals/bench_batch.py`, n=500, one `Choice` + one `Score` head):
 **≈ 72 sentences/s sustained → 100,000 documents in ~24 minutes** on one CPU
 core, no GPU, no API calls, no per-document cost. The single-call figure
 (~46 ms) and the bulk figure (~14 ms) differ because the forward pass amortizes
-across the batch.
+across the batch. The ~46 ms is a *latency* figure (one text, waiting for the
+answer); the ~13.9 ms is a *throughput* figure (large list, total time divided by
+items). Quoting one as the other is the most common way to misread this table.
 
 Footprint, measured (not estimated): the package wheel is **289 KB**; the
 multilingual embedding model is **240 MB on disk** (224 MB ONNX + 16 MB
 tokenizer) and ~0.3 GB resident once loaded. Note: the `118 MB` figure that
-circulated in the repo was a hardcoded label in `evals/backbone_shootout.py`,
-never a measurement — the numbers above are.
+circulated in earlier README versions was a hardcoded label in
+`evals/backbone_shootout.py`, never a measurement — the numbers above are;
+`~120 MB` elsewhere in this file is corrected to the same 240 MB.
 
 ### On large public datasets (MASSIVE, BANKing77)
 
@@ -451,14 +494,20 @@ defects in `evals/data/bespoke/PROVENANCE.md`.
 |---|---|---|---|---|---|
 | **BANKing77** | 77 | 3,080 | few_shot_k3 | **61.4 %** | [59.8, 63.2] |
 | BANKing77 | 77 | 3,080 | label_string | 53.3 % | [51.5, 55.1] |
-| **MASSIVE** (en) | 60 | 2,974 | few_shot_k3 | **43.9 %** | [41.9, 45.7] |
+| **MASSIVE** (en) | 60 | 2,974 | few_shot_k3 | **43.8 %** | [41.9, 45.7] |
+| MASSIVE (en) | 60 | 2,974 | label_string | **47.9 %** | [46.1, 49.7] |
 | **MASSIVE** (de) | 60 | 2,974 | few_shot_k3 | **36.2 %** | [34.5, 38.0] |
 | MASSIVE (de) | 60 | 2,974 | label_string | 30.1 % | [28.5, 31.8] |
 
-The k=3 anchors beat the label-string lower bound by +8.2 pt (BANKing77) and
-+6.1 pt (MASSIVE de), so the anchor construction carries signal rather than
-noise. Coverage is 100 % throughout — klix answers every case rather than
-abstaining.
+The k=3 anchors beat the label-string baseline on BANKing77 (+8.2 pt) and
+MASSIVE-de (+6.1 pt) — but **lose on MASSIVE-en** (43.8 % vs 47.9 %, −4.1 pt).
+All three CIs are non-overlapping, so this is a real effect rather than noise.
+The likely reason is that MASSIVE-en's labels are short and near-verbatim
+English (`alarm_set` → `alarm set`, `weather_query` → `weather query`), which
+makes the bare label a strong anchor; we did not isolate that cause, so treat it
+as a hypothesis. The practical reading: **few-shot anchors are not universally
+better — test both on your own schema.** Coverage is 100 % throughout — klix
+answers every case rather than abstaining.
 
 **Known defect in the source data, measured:** MASSIVE's `train`/`test` splits
 are not sentence-disjoint. In German, 115/2974 (3.9 %) of test texts appear
@@ -493,14 +542,11 @@ all. Published vendor figures for Tev1 (Together AI) and Nimble (Bespoke Labs)
 are **not** reproduced here; if you quote them, quote them as vendor numbers —
 nothing in this repository measures them.
 
-### Bilingual routing (EN/DE, 5 classes, support tickets)
+### Bilingual routing (EN/DE, 5 classes, n=20) — small, directional
 
 `evals/benchmark_bilingual.py` — 10 English + 10 German test cases with parallel
-meaning, anchors mixed EN/DE. Reproduce with:
-
-```bash
-uv run python -m evals.benchmark_bilingual
-```
+meaning, anchors mixed EN/DE. **n=20, so the 95 % CI is roughly ±20 pt: read this
+as directional, not as a ranking.** `uv run python -m evals.benchmark_bilingual`
 
 | Method | EN | DE | Combined |
 |---|---|---|---|
@@ -510,13 +556,13 @@ uv run python -m evals.benchmark_bilingual
 | klix nearest + topk2 | 9/10 | 7/10 | 16/20 |
 | klix linear | 9/10 | 6/10 | 15/20 |
 
-**Latency per decision (CPU, includes the embedding forward pass):**
-TF-IDF+LogReg ≈ 1–5 ms (no embeddings); embedding-based methods
-≈ 46–80 ms single-call, dominated by the ~40 ms MiniLM forward pass. Under
-`decide_batch()` the same work costs ~14 ms/item (see
-[Throughput](#throughput-and-cost-per-document)). Measured 2026-09-24/30 on the
-dev workstation; absolute values are hardware-dependent (see the version note
-below).
+**Why this small set still earns a place here:** it is the one benchmark that
+isolates the *mixed-language few-anchor* case, and there the `linear` probe
+overfits to English (90 % EN / 60 % DE) while dense Embed-KNN stays the most
+language-robust. That is the measurement behind rule 2 of [Choosing a
+variant](#choosing-a-variant--three-rules): mixed-language anchors → `centroid` or
+`nearest`, not `linear`. Latency: TF-IDF+LogReg ≈ 1–5 ms (no embeddings),
+embedding-based methods ≈ 46–80 ms single-call (see [Throughput](#throughput-and-cost-per-document)).
 
 **Reading this honestly:** on this *mixed-language, few-anchor* schema the
 `linear` probe overfits to English (90 % EN / 60 % DE). The dense Embed-KNN is
@@ -581,9 +627,10 @@ set the klix accuracy is unchanged (nearest 41/60 = 68 %, linear 51/60 =
 `klix nearest` moved 76 % → 72 % and `klix linear` 86 % → 84 %, because
 that harness includes the GUARD set. Latency was re-measured as well:
 the ~10 ms claims of earlier README versions predate the current FastEmbed
-release; the forward pass now measures ~50–90 ms on the dev workstation —
-still CPU-only and offline, but expect tens of milliseconds per query on
-similar hardware.
+release. **Current measurement (2026-09-30): ~46 ms p50 / ~77 ms p95 single-call
+and ~13.9 ms/item in bulk** — see
+[Throughput](#throughput-and-cost-per-document). Still CPU-only and offline, but
+expect tens of milliseconds per query on similar hardware.
 
 ### vs. SetFit (few-shot training, same examples)
 
@@ -625,8 +672,14 @@ Measured on the same 70 cases on **CPU**:
 |---|---|---|
 | accuracy | **86 %** | 67 % |
 | latency (CPU) | **~13 ms** | ~1.3–1.5 s |
-| model size | ~120 MB | ~2 GB |
+| model size | 240 MB | ~2 GB |
 | setup | anchors (few-shot) | instructions + criteria (zero-shot) |
+
+*Note on the `~13 ms` klix figure: it comes from the Laya comparison harness, which
+measures a warm query against a small schema — it is not comparable to the ~46 ms
+p50 in [Throughput](#throughput-and-cost-per-document), which is a 60-call
+distribution on a different schema. Treat the ratio (≈100×) as the meaningful part,
+not the absolute milliseconds.*
 
 **The honest trade-off:** Laya needs *no* examples and natively routes 100+
 languages with automatic script detection — a real advantage for low-resource
@@ -634,25 +687,35 @@ scripts on GPU. Klix is the opposite design point: a tiny model, few-shot anchor
 you fully control, and 100× lower CPU latency. They are complements, not
 substitutes.
 
-### Choosing a variant
+### Choosing a variant — three rules
 
-- **`classifier="nearest"` (default)** — most robust with few or mixed-language
-  anchors; always a safe baseline.
-- **`classifier="centroid"`** — cosine to the per-label mean anchor vector.
-  Deterministic, no training, and reaches the trained probe's accuracy on the
-  cross-domain and expanded corpora (see the `classifier` row in the
-  configuration table for the measured deltas with bootstrap CIs). Neutral on
-  the mixed-language bilingual set, so it is not a drop-in replacement for
-  `nearest` there.
-- **`classifier="linear"`** — highest accuracy on single-language schemas with
-  3+ anchors per class; watch for overfitting with mixed-language few-shot data.
-- **`classifier="hybrid"`** — learned dense+sparse fusion; wins on keyword-rich
-  schemas (asset IDs, SKU codes, error codes). Trails `linear` on plain
-  natural-language sets (81.7 % vs 85.0 % at n=60) — opt-in, not a default.
-- **`sparse_metric="bm25"`** — BM25 instead of TF-IDF cosine; better when
-  anchor lengths vary a lot (+3 pts at n=60 on the nearest path). Combined
-  with `topk3 + coverage` it matches `linear` accuracy *without any probe
-  training* (85 % at n=60).
+1. **`classifier="centroid"` — start here for most schemas.** Cosine to the
+   per-label mean anchor vector. Deterministic, no training, robust to a single
+   odd anchor, and it **scales independently of anchor count** at volume (one
+   vector comparison per label, however many anchors feed it). It reaches the
+   trained probe's accuracy on the repo's own corpora: cross-domain 71.4 % → 84.3 %
+   (+12.9 pt, CI [+2.9, +22.9]), 273-case corpus 93.0 % → 96.7 % (+3.7 pt,
+   CI [+1.5, +6.2]). **Caveat measured on the bilingual set: it is neutral there,
+   not better — so it is not a drop-in replacement for `nearest` on mixed-language
+   few-anchor schemas.** The `"auto"` value is a deprecated alias for `"centroid"`.
+2. **`classifier="linear"` — when you have 5+ anchors per class and one language.**
+   Learns a logistic separation plane; the accuracy ceiling on focused,
+   single-language schemas. Measured +12 pt over the nearest-anchor ceiling on the
+   cross-domain set (84 % vs 72 % at 3 anchors/class). It **overfits on
+   mixed-language few-shot data** (90 % EN / 60 % DE measured) — if your anchors
+   are mixed-language, use `centroid` instead.
+3. **`classifier="hybrid"` — for asset IDs, SKUs, error numbers.** Fuses dense
+   semantics with exact BM25 keyword matching, so an identifier is matched
+   literally rather than approximately. It trails `linear` on plain
+   natural-language sets (81.7 % vs 85.0 % at n=60), so do not reach for it unless
+   your texts actually contain keyword-like tokens.
+
+Two more knobs worth knowing:
+
+- **`sparse_metric="bm25"`** — BM25 instead of TF-IDF cosine; better when anchor
+  lengths vary a lot (+3 pts at n=60 on the nearest path). Combined with
+  `topk3 + coverage` it matches `linear` accuracy *without any probe training*
+  (85 % at n=60).
 - **`label_aggregation="topk"`** — damps single-anchor noise when you have 4+
   anchors per label.
 - **Hard negatives** — for production schemas, collect low-confidence live
@@ -738,7 +801,7 @@ git push origin main vX.Y.Z
 ## Offline / air-gapped deployment
 
 Klix needs no API keys, but the first run downloads the ONNX embedding model
-(~120 MB) into the fastembed cache. To prepare an air-gapped machine, cache
+(240 MB) into the fastembed cache. To prepare an air-gapped machine, cache
 the model on a connected machine and transfer it:
 
 ```bash

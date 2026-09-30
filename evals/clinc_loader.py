@@ -26,13 +26,17 @@ class ClincSplit:
     classes: list[str]                 # 150 unique in-scope intent names
 
 
-def load_clinc_dataset(path: Path = DATA_FULL_PATH) -> ClincSplit:
-    """Loads and validates the CLINC150 dataset."""
+def load_clinc_dataset(path: Path = DATA_FULL_PATH, auto_fetch: bool = True) -> ClincSplit:
+    """Loads and validates the CLINC150 dataset, fetching it if missing."""
     if not path.exists():
-        raise FileNotFoundError(
-            f"CLINC dataset not found at {path}. "
-            f"Please run the download script or have Hermes fetch data_full.json into {CLINC_DIR}."
-        )
+        if auto_fetch:
+            from evals.clinc_fetcher import fetch_clinc_data
+            fetch_clinc_data()
+        else:
+            raise FileNotFoundError(
+                f"CLINC dataset not found at {path}. "
+                f"Run `uv run python evals/clinc_fetcher.py` to download."
+            )
 
     with open(path, "r", encoding="utf-8") as f:
         raw = json.load(f)

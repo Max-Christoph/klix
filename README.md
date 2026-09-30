@@ -188,28 +188,32 @@ All evaluations were executed on commodity x86 CPU hardware without GPU accelera
 
 | Benchmark / Corpus | Task Type | Classes ($K$) | Prior ($1/K$) | Test Split ($N$) | Klix Performance | Baseline / Reference | Sustained Throughput |
 |---|---|:---:|:---:|:---:|---|---|:---:|
+| **CLINC150** | Intent + OOD Rejection | 150 | 0.7 % | 5,500 *(full)* | **86.9 % Acc / 94.8 % AUROC** *(k=10)* | 78.8 % Acc / 92.9 % AUROC *(k=3)* | **99 docs/s** |
 | **BANKing77** | Intent Routing | 77 | 1.3 % | 3,080 *(full)* | **61.4 % Acc** *(k=3 anchors)* | 53.3 % *(canonical labels)* | **72 docs/s** |
-| **MASSIVE** (English) | Intent Routing | 60 | 1.7 % | 2,974 *(full)* | **43.8 % Acc** *(k=3 anchors)* | 47.9 % *(canonical labels)* | **72 docs/s** |
-| **MASSIVE** (German) | Intent Routing | 60 | 1.7 % | 2,974 *(full)* | **36.2 % Acc** *(k=3 anchors)* | 40.5 % *(Qwen-2B LLM)* | **72 docs/s** |
+| **MASSIVE** (English) | Intent Routing | 60 | 1.7 % | 2,974 *(full)* | **57.3 % Acc** *(k=3 + label centroid)* | 47.9 % *(canonical labels)* | **72 docs/s** |
+| **MASSIVE** (German) | Intent Routing | 60 | 1.7 % | 2,974 *(full)* | **44.4 % Acc** *(k=3 + label centroid)* | 40.5 % *(Qwen-2B LLM)* | **72 docs/s** |
 | **GoEmotions** | Multi-Label (28 Affects) | 28 | 3.6 % | 500 *(subsample)* | **19.5 % Micro-F1** *(k=10 centroid)* | 9.8 % F1 *(k=3 anchors)* | **55 docs/s** |
 | **Cross-Domain Routing** | Intent Routing | 6 | 16.7 % | 70 *(sanity check)* | **84.3 % Acc** *(centroid / linear)* | 78.0 % *(Embed-KNN)* | **72 docs/s** |
 | **Few-Shot vs. Fine-Tuning** | Classification Probe | 5 | 20.0 % | 60 *(sanity check)* | **85.0 % Acc** *(linear probe)* | 85.0 % *(SetFit trained)* | **72 docs/s** |
 
 ---
 
-### Methodological Observations & Limitations
+### Methodological Observations & Ablations
 
-1. **Anchor Noise vs. Canonical Label Semantics (MASSIVE Corpus):**  
-   On the 60-class MASSIVE benchmark, using $k=3$ arbitrary anchor sentences per class yields **43.8%** accuracy, whereas using bare, human-curated label names (e.g., `alarm_set`, `datetime_query`) achieves **47.9%**. This demonstrates that arbitrary few-shot sentence sampling without outlier filtering introduces intra-class variance in a frozen embedding space, whereas concise canonical label descriptors align tightly with pre-trained lexical associations.
+1. **Out-of-Scope (OOD) Gating on CLINC150 ($K=150$ Intents + 1,000 OOS Queries):**  
+   Evaluated on the full 5,500-sample benchmark (Larson et al., EMNLP 2019). Maximum centroid cosine similarity ($\max_k (\mathbf{q} \cdot \mathbf{c}_k)$) achieves **92.92% AUROC** ($k=3$) and **94.79% AUROC** ($k=10$) on Out-of-Domain discrimination, reducing False Positive Rate at 95% TPR to **23.10%** with a per-query latency of ~10.1 ms on CPU (99.1 docs/s).
 
-2. **Fine-Grained Multi-Label Classification with Frozen Backbones (GoEmotions Corpus):**  
+2. **Anchor-Label Hybridization on MASSIVE ($K=60$):**  
+   While raw arbitrary few-shot sentence sampling alone ($k=3$, 43.8% on English) scores lower than bare curated label names (47.9%), combining the canonical label name into the anchor pool under centroid aggregation anchors the semantic subspace: accuracy jumps to **57.3%** on English (+13.5 pt) and **44.4%** on German (+8.2 pt), outperforming the local 2B parameter autoregressive LLM baseline (40.5%).
+
+3. **Fine-Grained Multi-Label Classification with Frozen Backbones (GoEmotions Corpus):**  
    GoEmotions evaluates 28 fine-grained affective categories with substantial label co-occurrence and semantic overlap (e.g., *admiration* vs. *approval* vs. *pride*). Without domain-specific metric fine-tuning, a frozen 384-dimensional representation attains a Micro-F1 of **19.5%** ($k=10$ centroid, Macro-F1 18.1%) against a random prior of 3.6%. Centroid aggregation outperforms 1-nearest-neighbor matching (14.1% Micro-F1) by +5.4 percentage points while reducing inference to a single BLAS matrix-vector product.
 
-3. **Sample Size Scope:**  
-   The cross-domain ($N=70$) and SetFit ablation ($N=60$) test sets represent small qualitative smoke tests for domain-specific schemas. For high-cardinality statistical characterization, primary reference should be made to the full public test splits of BANKing77 ($N=3,080$, $K=77$) and MASSIVE ($N=2,974$, $K=60$).
+4. **Sample Size Scope:**  
+   The cross-domain ($N=70$) and SetFit ablation ($N=60$) test sets represent small qualitative smoke tests for domain-specific schemas. For high-cardinality statistical characterization, primary reference should be made to the full public test splits of CLINC150 ($N=5,500$, $K=150$), BANKing77 ($N=3,080$, $K=77$), and MASSIVE ($N=2,974$, $K=60$).
 
-4. **Selective Classification (The Reject Option in Agent Routing):**  
-   In agent dispatch architectures, an unconstrained multi-class error rate over 60–77 classes does not directly map to pipeline failures. By configuring rejection thresholds or explicit `reject_anchors`, the system operates in a selective classification regime: high-confidence queries ($\ge 0.80$, exhibiting 90–98% precision on bounded action domains) are routed immediately in $< 15\,\text{ms}$, while low-confidence or out-of-domain instances return `None` and escalate to an autoregressive LLM fallback.
+5. **Selective Classification (The Reject Option in Agent Routing):**  
+   In agent dispatch architectures, an unconstrained multi-class error rate over 60–150 classes does not directly map to pipeline failures. By configuring rejection thresholds or explicit `reject_anchors`, the system operates in a selective classification regime: high-confidence queries ($\ge 0.80$, exhibiting 90–98% precision on bounded action domains) are routed immediately in $< 15\,\text{ms}$, while low-confidence or out-of-domain instances return `None` and escalate to an autoregressive LLM fallback.
 
 ---
 

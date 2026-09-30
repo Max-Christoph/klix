@@ -3,6 +3,23 @@
 All notable changes to klix are documented here. Format based on
 [Keep a Changelog](https://keepachangelog.com/); versioning: SemVer.
 
+## [0.12.0] - 2026-09-30
+
+### Added
+- **LangChain & LangGraph Integration (`klix.integrations.langchain`)**:
+  - `KlixRouterRunnable`: Runnable for LangChain pipelines (`router | RunnableBranch(...)`) enabling ultra-fast System-1 semantic routing (< 15 ms, 0 € API costs) before invoking expensive LLMs. Supports single string/dict invoke, batch execution (`decide_batch()`), and state enrichment.
+  - `create_klix_router`: Helper for LangGraph `workflow.add_conditional_edges(...)` supporting string, dict, or message list states.
+  - Zero core dependency bloat: `langchain-core` is an optional extra (`pip install 'klix-engine[langchain]'`).
+  - Added runnable cookbook in `examples/langchain_agent_router.py`.
+- **Empirical Multi-Label Evaluation (GoEmotions, 28 Categories)**:
+  - Added `evals/multilabel_loader.py` (downloads Google Research GoEmotions Parquet from Hugging Face with 0 repo vendoring).
+  - Added `evals/multilabel_anchors.py` (monolabel-prioritized anchor extraction with zero test leakage check).
+  - Added `evals/run_multilabel.py` measuring Micro-F1, Macro-F1, Subset Accuracy, Hamming Loss, and Latency/Throughput.
+  - Evaluated and committed proof artifacts: `evals/bespoke_result_go_emotions_k3.json` (9.81% Micro-F1) and `..._k10.json` (19.51% Micro-F1, +9.7 pt jump at 55 docs/s).
+  - Documented in `docs/BENCHMARKS.md` Section 3 and `README.md` benchmark matrix.
+- **`DecisionResult.to_dict()`**: Added method returning `{head_name: evaluated_value}` across all heads.
+- **Updated `examples/demo.py`**: Now showcases all four heads (Choice, MultiLabel, Score, Flag) simultaneously on the shared semantic backbone.
+
 ## [0.11.2] - 2026-09-30
 
 ### Fixed

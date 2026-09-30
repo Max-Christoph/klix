@@ -1,6 +1,6 @@
 [project]
 name = "klix-engine"
-version = "0.11.2"
+version = "0.12.0"
 description = "Decoupled decision heads (Choice, MultiLabel, Score, Flag) on a shared semantic backbone - local, deterministic, no model training."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -27,6 +27,11 @@ dependencies = [
     "scikit-learn>=1.3",
 ]
 
+[project.optional-dependencies]
+langchain = [
+    "langchain-core>=0.2.0",
+]
+
 [project.urls]
 Homepage = "https://github.com/Max-Christoph/klix"
 Documentation = "https://github.com/Max-Christoph/klix/blob/main/docs/BENCHMARKS.md"
@@ -40,6 +45,7 @@ dev = [
     # Schemas are validated against the real JSON-Schema file in the test suite.
     # Test-only: the runtime package still imports nothing beyond its three deps.
     "jsonschema>=4.0",
+    "langchain-core>=0.2.0",
 ]
 
 [build-system]

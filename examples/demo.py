@@ -1,13 +1,14 @@
-"""Demo: Klix engine with three heads (Choice, Score, Flag) on IT/OT tickets."""
+"""Demo: Klix engine with four heads (Choice, MultiLabel, Score, Flag) on IT/OT tickets."""
 
 import time
 
-from klix import DecisionEngine, Flag, Score, Choice
+from klix import DecisionEngine, Flag, Score, Choice, MultiLabel
 
 
 def main() -> None:
     engine = DecisionEngine()
 
+    # 1. Single-label routing
     engine.add_head(
         Choice(
             name="target",
@@ -20,6 +21,20 @@ def main() -> None:
         )
     )
 
+    # 2. Multi-label tags with calibrated continuous scores [0.0, 1.0]
+    engine.add_head(
+        MultiLabel(
+            name="tags",
+            options={
+                "hardware": ["laptop screen broken", "motor failure", "cable snapped", "physical defect"],
+                "critical": ["production line halted", "acute danger", "emergency stop", "system crash"],
+                "network":  ["packet loss", "wifi disconnected", "DNS resolution failed", "timeout"],
+            },
+            threshold=0.5,
+        )
+    )
+
+    # 3. Continuous 1D metric axis
     engine.add_head(
         Score(
             name="urgency",
@@ -30,6 +45,7 @@ def main() -> None:
         )
     )
 
+    # 4. Boolean flag with neutral rejection pole
     engine.add_head(
         Flag(
             name="is_security",
@@ -54,7 +70,7 @@ def main() -> None:
     ]
 
     print("=" * 72)
-    print("Klix engine demo - 3 heads, shared backbone")
+    print("Klix engine demo - 4 heads, shared backbone")
     print("=" * 72)
 
     for ticket in tickets:
@@ -64,6 +80,7 @@ def main() -> None:
         print(f"Result : {result}")
         print(
             f"  target={result.target} (confidence {result.details('target')['confidence']:.0%}) | "
+            f"tags={result.tags} | "
             f"urgency={result.urgency}/3.0 | "
             f"is_security={result.is_security} (p={security['probability']:.1%})"
         )
@@ -81,7 +98,7 @@ def main() -> None:
         avg = sum(times) / len(times)
         total += avg
         print(f"  {avg:6.1f} ms avg  |  {ticket[:50]}")
-    print(f"\nShared backbone: 8 tickets x 3 heads = 24 head decisions at only "
+    print(f"\nShared backbone: 8 tickets x 4 heads = 32 head decisions at only "
           f"{total / 3:.0f} ms avg embedding cost per pass.")
 
 

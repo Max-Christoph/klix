@@ -124,6 +124,7 @@ Every metric is measured on a standard Intel CPU without a GPU. Full provenance 
 | **BANKing77** *(77 banking intents)* | 77 | 3,080 *(full split)* | **61.4 %** *(k=3 anchors)* | 53.3 % *(bare labels)* | **72 docs/s** |
 | **MASSIVE** *(Amazon intent, EN)* | 60 | 2,974 | **43.8 %** *(k=3 anchors)* | 47.9 % *(bare labels)* | **72 docs/s** |
 | **MASSIVE** *(Amazon intent, DE)* | 60 | 2,974 | **36.2 %** *(k=3 anchors)* | 40.5 % *(Qwen 2B LLM)* | **72 docs/s** |
+| **GoEmotions** *(MultiLabel, 28 emotions)* | 28 | 500 *(subsample)* | **19.5 % F1** *(k=10 centroid)* | 9.8 % F1 *(k=3 anchors)* | **55 docs/s** |
 | **Cross-Domain Routing** *(6 domains)* | 6 | 70 | **84.3 %** *(centroid / linear)* | 78.0 % *(dense Embed-KNN)* | **72 docs/s** |
 | **Few-Shot vs. Training** | 5 | 60 | **85.0 %** *(linear probe)* | 85.0 % *(SetFit contrastive)* | **72 docs/s** |
 
@@ -189,6 +190,29 @@ Process large document streams in a single embedding pass:
 texts = ["First document text...", "Second document text...", ...]
 results = engine.decide_batch(texts)  # 72 docs/s on CPU
 ```
+
+---
+
+## LangChain & LangGraph Integration
+
+Use Klix as an ultra-fast **System-1 Semantic Router** (< 15 ms, 0 € API costs) before invoking expensive LLMs:
+
+```python
+from klix.integrations.langchain import KlixRouterRunnable, create_klix_router
+
+# 1. LangChain Runnable: returns route string or enriches pipeline state
+router = KlixRouterRunnable(engine=engine, route_head="queue", enrich_state=True)
+chain = router | RunnableBranch(...)
+
+# 2. LangGraph Conditional Edge: routes graph flow without LLM tool-calling latency
+workflow.add_conditional_edges(
+    "supervisor",
+    create_klix_router(engine, head_name="queue"),
+    {"it_ops": "it_agent", "finance": "finance_agent", None: "fallback"},
+)
+```
+
+See [`examples/langchain_agent_router.py`](https://github.com/Max-Christoph/klix/blob/main/examples/langchain_agent_router.py) for the complete runnable example.
 
 ---
 

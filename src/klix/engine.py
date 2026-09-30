@@ -49,6 +49,10 @@ class DecisionResult:
             return {"note": f"head '{name}' does not support explanations"}
         return head.explain_decision(self.text, self.data.get(name, {}), backbone=self._engine.backbone)
 
+    def to_dict(self) -> dict:
+        """Mapping of `{head_name: evaluated_value}` across all heads."""
+        return {key: value["value"] for key, value in self.data.items()}
+
     def __repr__(self):
         items = [f"{key}={value['value']}" for key, value in self.data.items()]
         return f"<DecisionResult ({self.latency_ms:.1f}ms): {', '.join(items)}>"

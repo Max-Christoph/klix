@@ -43,7 +43,24 @@ On 77 fine-grained classes (random chance = 1.3%), scaling the anchor set from 3
 
 ---
 
-## 3. vs. Local 2B/9B LLMs (Ollama)
+## 3. Multi-Label Classification (GoEmotions, 28 Categories)
+
+Evaluates the `MultiLabel` head on Google Research GoEmotions (Reddit comments labeled with 27 emotions + neutral; multi-label distribution where samples can carry multiple emotions simultaneously).
+
+* **Architecture:** Centroid aggregation (`_centroid_matrix @ q`), sigmoid calibration (`sharpness=12.0`, `center=0.42`, `threshold=0.60`).
+* **Anchors:** Monolabel-prioritized few-shot anchors drawn from `train` only. Leakage check: `assert_no_leakage()` confirmed **0 test leaks**.
+* **Footprint:** Single matrix-vector dot product evaluating 28 categories in **< 5 µs** per query after backbone embedding.
+
+| Setup | Anchors / class ($k$) | Micro-F1 | Macro-F1 | Precision | Recall | Bulk Throughput | Latency |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| `MultiLabel` (centroid) | $k=3$ | 9.81 % | 7.13 % | 15.89 % | 7.09 % | 51.8 docs/s | 19.3 ms/doc |
+| `MultiLabel` (centroid) | $k=10$ | **19.51 %** *(+9.7 pt)* | **18.10 %** | **17.03 %** | **22.84 %** | **55.0 docs/s** | **18.2 ms/doc** |
+
+*Evaluated on 500 subsampled test cases from GoEmotions. Fully reproducible via `evals/run_multilabel.py` with committed result JSONs in `evals/bespoke_result_go_emotions_k3.json` and `..._k10.json`.*
+
+---
+
+## 4. vs. Local 2B/9B LLMs (Ollama)
 
 Evaluated on 500 MASSIVE-de cases on an Intel Core Ultra 5 CPU (no dedicated GPU):
 
@@ -60,7 +77,7 @@ The LLM buys +4.3 percentage points on German MASSIVE at the cost of **650× hig
 
 ---
 
-## 4. Cross-Domain Routing (6 domains, 70 cases)
+## 5. Cross-Domain Routing (6 domains, 70 cases)
 
 Evaluated via `evals/benchmark.py` (HR, Finance, Image-captions, Tasks, Shop, Guardrails):
 
@@ -74,7 +91,7 @@ Evaluated via `evals/benchmark.py` (HR, Finance, Image-captions, Tasks, Shop, Gu
 
 ---
 
-## 5. vs. SetFit (Contrastive Few-Shot Training)
+## 6. vs. SetFit (Contrastive Few-Shot Training)
 
 `evals/setfit_baseline.py` — SetFit trained on the same anchor texts (`num_epochs=1`, MiniLM backbone, CPU):
 
@@ -91,7 +108,7 @@ Evaluated via `evals/benchmark.py` (HR, Finance, Image-captions, Tasks, Shop, Gu
 
 ---
 
-## 6. vs. Laya (`convaiinnovations/laya`)
+## 7. vs. Laya (`convaiinnovations/laya`)
 
 Measured on the 70 cross-domain cases on **CPU**:
 

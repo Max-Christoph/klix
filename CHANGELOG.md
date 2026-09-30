@@ -3,6 +3,20 @@
 All notable changes to klix are documented here. Format based on
 [Keep a Changelog](https://keepachangelog.com/); versioning: SemVer.
 
+## [0.11.0] - 2026-09-30
+
+### Added
+- **`MultiLabel` Decision Head**: Independent multi-label classification returning active categories exceeding a decision threshold along with continuous calibrated scores in $[0.0, 1.0]$ per category.
+  - Vectorized centroid similarity via single BLAS matrix-vector product, evaluating 30+ categories in $< 5\,\mu\text{s}$ per query.
+  - Configurable continuous calibration modes: `"sigmoid"` (with tunable `sharpness` and `center`), `"linear"`, and `"cosine"`.
+  - Fully integrated with `DecisionEngine.decide_batch()`, `schema_hash()`, and `res.explain()`.
+- **Anchor Scaling Benchmarks**: Added empirical scaling measurements on BANKing77 (77 classes), demonstrating how Klix scales from 60.2% ($k=3$) to **85.2%** ($k=20$) on CPU with zero GPU cost.
+- **Enhanced `evals/run_bespoke.py`**: Added `--classifier` flag (`nearest`, `centroid`, `linear`, `hybrid`), dynamic few-shot $k$ anchor selection, and vectorized batch inference via `decide_batch()`.
+- **`docs/BENCHMARKS.md`**: Dedicated document preserving detailed historical and comparative benchmark reports (SetFit, Laya, JevBench/Nimble/Qwen, and dataset flaw analyses).
+
+### Changed
+- **Streamlined `README.md`**: Completely overhauled root documentation into a crisp, high-signal developer overview highlighting the four decision heads, the 13.9 ms / 72 docs/s bulk throughput, and anchor scaling without textbook clutter.
+
 ## [0.10.1] - 2026-09-30
 
 ### Changed

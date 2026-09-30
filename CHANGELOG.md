@@ -3,6 +3,13 @@
 All notable changes to klix are documented here. Format based on
 [Keep a Changelog](https://keepachangelog.com/); versioning: SemVer.
 
+## [0.11.2] - 2026-09-30
+
+### Fixed
+- **PyPI Documentation & License Links**: Replaced relative links in `README.md` (`docs/BENCHMARKS.md`, `LICENSE`) with canonical absolute GitHub URLs so links resolve cleanly on `pypi.org` instead of generating 404s.
+- Fixed internal header anchor link for `Choice` to match `## Choosing a Classifier Mode (3 Simple Rules)`.
+- Added explicit `Documentation` and `Changelog` URLs to `[project.urls]` in `pyproject.toml`.
+
 ## [0.11.1] - 2026-09-30
 
 ### Changed

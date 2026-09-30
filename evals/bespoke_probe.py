@@ -24,6 +24,23 @@ WHAT IT MEASURES
     problems: `unparseable` is reported separately and never folded into accuracy.
   * projected full-sweep time for the given case count
 
+WHEN THE PROJECTION IS WRONG
+----------------------------
+Single-sample projections on this machine proved unreliable, and the reason is not
+established — so this records the measurements rather than a theory:
+
+  idle (first probe, 20 cases):        p50 9.0 s/case, p95 10.4 s/case
+  steady state, test suite alongside:  4.8 s/case (125 -> 150 cases in 120 s)
+  first hour, averaged:                28 s/case (125 cases in ~59 min)
+
+Three rates spanning a factor of six for the same model, dataset and prompt. The
+slow first hour is the part that matters operationally: dividing elapsed time by
+completed cases early in a run overestimates the remaining cost badly, and an idle
+probe does not predict the loaded rate either. The only number worth scheduling on
+is the steady-state rate measured over a short window *while the real workload
+runs* — which is what pointed at ~28 remaining minutes here, against a "4.7 hours"
+extrapolation from the first hour.
+
 It does NOT measure accuracy. 20 cases cannot, and a 20-case accuracy has misled
 this project before.
 

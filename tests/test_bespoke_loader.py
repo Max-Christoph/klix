@@ -29,6 +29,7 @@ from evals.bespoke_loader import (  # noqa: E402
     intents_from_rows,
     normalize_massive,
     normalize_paws_pair,
+    resolve_banking77_label,
 )
 
 MASSIVE_ROW = {
@@ -38,6 +39,42 @@ MASSIVE_ROW = {
     "text": "weck mich am freitag um neun uhr auf",
     "lang": "de",
 }
+
+
+class TestBanking77LabelResolution:
+    """banking77 ships integer label indices; the names live in parquet metadata.
+
+    This is the bug the first version of the loader had: it wrote `label: 11` while
+    `options` held strings, every prediction was then compared against an int, and
+    the run reported `accuracy=None` over 100 cases. The old test asserted
+    `label in options`, which is vacuously true for `11 in [0..76]` — so the test
+    suite was green while the pipeline was broken. These tests use names.
+    """
+
+    NAMES = ["activate_my_card", "age_limit", "apple_pay_or_google_pay"]
+
+    def test_index_becomes_the_class_name(self):
+        assert resolve_banking77_label(1, self.NAMES) == "age_limit"
+        assert resolve_banking77_label("2", self.NAMES) == "apple_pay_or_google_pay"
+
+    def test_index_zero_is_not_confused_with_missing(self):
+        # `if not value` would swallow index 0 and silently mislabel the first class.
+        assert resolve_banking77_label(0, self.NAMES) == "activate_my_card"
+
+    def test_numeric_strings_are_indices_not_labels(self):
+        # A republication may hand the column over as strings; "1" is still index 1.
+        assert resolve_banking77_label("1", self.NAMES) == "age_limit"
+
+    def test_real_label_strings_pass_through(self):
+        assert resolve_banking77_label("age_limit", self.NAMES) == "age_limit"
+
+    def test_missing_class_names_refuses_instead_of_guessing(self):
+        with pytest.raises(ValueError, match="cannot resolve the label"):
+            resolve_banking77_label(1, None)
+
+    def test_out_of_range_index_is_rejected(self):
+        with pytest.raises(ValueError, match="outside"):
+            resolve_banking77_label(99, self.NAMES)
 
 
 class TestMassiveNormalisation:
@@ -139,6 +176,35 @@ class TestDownloadedFilesAreConsistent:
         assert all(set(r) == {"id", "text", "label", "options"} for r in lines)
         assert all(len(r["options"]) == expect_options for r in lines)
         assert all(r["label"] in r["options"] for r in lines)
+
+    @pytest.mark.parametrize("name", [
+        "massive_intent.de.jsonl", "massive_intent.en.jsonl", "banking77.jsonl",
+        "paws_adversarial.jsonl",
+    ])
+    def test_labels_are_names_not_integer_indices(self, name):
+        """Every `label` must be a class NAME and a real member of `options`.
+
+        This is the assertion the banking77 bug slipped through. The old check was
+        `label in options`, which is vacuously true when both sides hold integers —
+        a file full of `label: 11` / `options: [0..76]` passed it. Requiring the
+        label to be non-numeric, to be a member of options AND (where the options
+        are names) to look like a name makes the integer case impossible to miss.
+        """
+        path = Path(DATA_DIR) / name
+        if not path.exists():
+            pytest.skip(f"{name} not downloaded yet")
+        lines = [json.loads(l) for l in path.read_text(encoding="utf-8").splitlines() if l.strip()]
+        for rec in lines[:500]:
+            label, options = rec["label"], rec["options"]
+            assert isinstance(label, str), f"{name}: label {label!r} is not a string"
+            assert not label.isdigit(), (
+                f"{name}: label {label!r} is an integer index, not a class name — "
+                f"the loader skipped the metadata lookup"
+            )
+            assert label in options, f"{name}: {label!r} not among options"
+            assert any(not o.isdigit() for o in options), (
+                f"{name}: options are all integers, expected class names"
+            )
 
     @pytest.mark.parametrize("lang", ["de", "en"])
     def test_massive_has_no_more_than_the_measured_train_test_overlap(self, lang):

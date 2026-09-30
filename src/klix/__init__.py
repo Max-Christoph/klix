@@ -19,7 +19,7 @@ from klix.glossaries import manufacturing as manufacturing_glossary
 from klix.glossaries import multilingual as multilingual_glossary
 from klix.glossaries import workflow as workflow_glossary
 from klix.hard_negatives import HardNegativeStore, attach_counterexamples
-from klix.heads import BaseHead, Choice, Flag, Score
+from klix.heads import BaseHead, Choice, Flag, MultiLabel, Score
 from klix.monitoring import DriftMonitor
 from klix.rules import Rule
 
@@ -32,6 +32,7 @@ __all__ = [
     "Choice",
     "Score",
     "Flag",
+    "MultiLabel",
     "Rule",
     "Glossary",
     "GlossaryConflict",

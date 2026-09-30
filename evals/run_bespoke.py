@@ -68,7 +68,7 @@ def _read_jsonl(path: Path) -> list[dict]:
 def build_anchors(train_rows: list[dict], method: str, k: int = 3,
                   seed: int = DEFAULT_SEED) -> dict[str, list[str]]:
     """Anchor variants — see evals/bespoke_anchors.py for why there are two."""
-    if method == "few_shot_k3":
+    if method in ("few_shot_k3", "few_shot"):
         return few_shot_anchors(train_rows, k=k, seed=seed)
     if method == "label_string":
         labels = sorted({r["label"] for r in train_rows})
@@ -137,15 +137,17 @@ def subsample(cases: list[dict], n: int, seed: int = DEFAULT_SEED) -> list[dict]
 # systems
 # --------------------------------------------------------------------------
 
-def run_klix(cases: list[dict], anchors: dict[str, list[str]]) -> list[str | None]:
+def run_klix(cases: list[dict], anchors: dict[str, list[str]],
+             classifier: str = "nearest") -> list[str | None]:
     from klix import Choice, DecisionEngine
 
     eng = DecisionEngine()
-    eng.add_head(Choice(name="c", options=anchors))
+    eng.add_head(Choice(name="c", options=anchors, classifier=classifier))
     eng.compile()
+    texts = [case["text"] for case in cases]
+    results = eng.decide_batch(texts)
     out: list[str | None] = []
-    for case in cases:
-        res = eng.decide(case["text"])
+    for res in results:
         value = getattr(res, "c", None)
         out.append(value if isinstance(value, str) else None)
     return out
@@ -183,7 +185,10 @@ def main() -> int:
     ap.add_argument("--system", action="append", required=True,
                     help="'klix' or 'ollama:<model>'; repeatable")
     ap.add_argument("--anchors", default="few_shot_k3",
-                    choices=["few_shot_k3", "label_string"])
+                    choices=["few_shot_k3", "few_shot", "label_string"])
+    ap.add_argument("--classifier", default="nearest",
+                    choices=["nearest", "centroid", "linear", "hybrid"],
+                    help="Choice head classifier algorithm (default: nearest)")
     ap.add_argument("--k", type=int, default=3)
     ap.add_argument("--subsample", type=int, default=0,
                     help="0 = full split; recorded in the result when used")
@@ -210,8 +215,8 @@ def main() -> int:
         train_rows = _read_jsonl(Path(DATA_DIR) / spec["train"])
         anchors = build_anchors(train_rows, method=args.anchors, k=args.k, seed=args.seed)
         overlap = assert_no_leakage(anchors, {c["text"] for c in cases})
-        print(f"anchors: {args.anchors}, {len(anchors)} labels, "
-              f"{sum(len(v) for v in anchors.values())} anchors, "
+        print(f"anchors: {args.anchors} (k={args.k}, classifier={args.classifier}), "
+              f"{len(anchors)} labels, {sum(len(v) for v in anchors.values())} anchors, "
               f"overlap with test set: {len(overlap)}")
 
     per_system: dict[str, list[dict]] = {}
@@ -220,7 +225,7 @@ def main() -> int:
         print(f"\n--- {spec_sys} ---")
         t0 = time.perf_counter()
         if spec_sys == "klix":
-            preds = run_klix(cases, anchors)
+            preds = run_klix(cases, anchors, classifier=args.classifier)
         elif spec_sys.startswith("ollama:"):
             preds = run_ollama(cases, spec_sys.split(":", 1)[1])
         else:
@@ -252,6 +257,8 @@ def main() -> int:
         "subsampled": bool(args.subsample),
         "seed": args.seed,
         "anchor_method": args.anchors if anchors else None,
+        "k": args.k if anchors else None,
+        "classifier": args.classifier if anchors else None,
         "anchor_provenance": anchor_provenance(k=args.k, seed=args.seed) if anchors else None,
         "anchor_overlap_with_test": len(overlap),
         "case_aligned": aligned,
@@ -261,7 +268,15 @@ def main() -> int:
                  "evals/data/bespoke/PROVENANCE.md 1.1): achievable accuracy is capped "
                  "and some anchors mirror test sentences."),
     }
-    out = Path("evals") / f"bespoke_result_{args.dataset}_{args.anchors if anchors else 'noanchors'}.json"
+    if not anchors:
+        tag = "noanchors"
+    elif args.anchors == "few_shot_k3" and args.classifier == "nearest" and args.k == 3:
+        tag = "few_shot_k3"
+    elif args.anchors == "label_string" and args.classifier == "nearest":
+        tag = "label_string"
+    else:
+        tag = f"{args.anchors}_k{args.k}_{args.classifier}"
+    out = Path("evals") / f"bespoke_result_{args.dataset}_{tag}.json"
     out.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
     print(f"\nwritten: {out}")
     return 0

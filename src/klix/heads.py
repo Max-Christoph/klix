@@ -1881,3 +1881,150 @@ class Flag(BaseHead):
             ),
             "threshold": self.threshold,
         }
+
+
+class MultiLabel(BaseHead):
+    """Multi-label classification with continuous calibrated scores per category.
+
+    Unlike `Choice` (which forces a single winning category) or `Score` (which evaluates
+    a single 1D axis), `MultiLabel` independently scores the query against any number of
+    categories. Each category is defined by example anchor sentences, and similarities
+    are calibrated into continuous scores in [0.0, 1.0].
+
+    Parameters
+    ----------
+    name : str
+        Head name (accessible via `res.<name>` or `res.details('<name>')`).
+    options : dict[str, list[str]]
+        Mapping of `{label_name: [anchor_sentences, ...]}`.
+    threshold : float, default=0.5
+        Score threshold above which a category is included in `value` (list of active labels).
+    sharpness : float, default=10.0
+        Sigmoid steepness parameter. Higher = sharper 0/1 separation; lower = smoother continuous score.
+    center : float, default=0.35
+        Cosine similarity center point where calibrated sigmoid score equals 0.5.
+    classifier : str, default="centroid"
+        Anchor aggregation mode:
+        - `"centroid"`: Mean normalized anchor vector per label (vectorized BLAS dot product, fast, robust).
+        - `"max"`: Single nearest anchor per label.
+        - `"topk"`: Mean of top-k nearest anchors per label.
+    topk : int, default=2
+        Number of anchors to pool when `classifier="topk"`.
+    calibration : str, default="sigmoid"
+        How similarity in [-1, 1] is mapped to [0, 1]:
+        - `"sigmoid"`: 1 / (1 + exp(-sharpness * (sim - center)))
+        - `"linear"`: Clamped affine mapping: clip((sim - center) / (1 - center), 0, 1)
+        - `"cosine"`: Direct normalized cosine (sim + 1) / 2
+    suppress_when : dict, optional
+        Conditional gating based on prior heads.
+    """
+
+    def __init__(
+        self,
+        name: str,
+        options: dict[str, list[str]],
+        threshold: float = 0.5,
+        sharpness: float = 12.0,
+        center: float = 0.40,
+        classifier: str = "centroid",
+        topk: int = 2,
+        calibration: str = "sigmoid",
+        suppress_when: dict[str, set | list] | None = None,
+    ):
+        super().__init__(name, suppress_when=suppress_when)
+        if not options:
+            raise ValueError(f"MultiLabel head '{name}' requires at least one category in `options`.")
+        for label, anchors in options.items():
+            if not anchors:
+                raise ValueError(f"MultiLabel category '{label}' has no anchor texts.")
+        self.options = options
+        self.labels = sorted(options.keys())
+        self.threshold = threshold
+        self.sharpness = sharpness
+        self.center = center
+        self.classifier = classifier
+        self.topk = topk
+        self.calibration = calibration
+
+        self._centroid_matrix: np.ndarray | None = None
+        self._anchor_matrices: dict[str, np.ndarray] = {}
+
+    def get_reference_texts(self) -> list[str]:
+        return [t for texts in self.options.values() for t in texts]
+
+    def fit(self, backbone: HybridBackbone) -> None:
+        if self.classifier == "centroid":
+            centroids = []
+            for label in self.labels:
+                anchors = self.options[label]
+                vecs = np.array(list(backbone.embed_model.embed(anchors)))
+                normed = _normalize_rows(vecs)
+                c = np.mean(normed, axis=0)
+                norm_c = float(np.linalg.norm(c))
+                c = c / (norm_c if norm_c > 0 else 1.0)
+                centroids.append(c)
+            self._centroid_matrix = np.vstack(centroids)  # shape (K, D)
+        else:
+            for label in self.labels:
+                anchors = self.options[label]
+                vecs = np.array(list(backbone.embed_model.embed(anchors)))
+                self._anchor_matrices[label] = _normalize_rows(vecs)
+
+    def _calibrate_score(self, sim: float) -> float:
+        if self.calibration == "sigmoid":
+            val = 1.0 / (1.0 + np.exp(-self.sharpness * (sim - self.center)))
+        elif self.calibration == "linear":
+            denom = 1.0 - self.center if (1.0 - self.center) > 1e-6 else 1e-6
+            val = float(np.clip((sim - self.center) / denom, 0.0, 1.0))
+        elif self.calibration == "cosine":
+            val = float(np.clip((sim + 1.0) / 2.0, 0.0, 1.0))
+        else:
+            raise ValueError(f"Unknown calibration {self.calibration!r}")
+        return round(float(val), 4)
+
+    def evaluate(self, encoded: EncodedInput, sparse=None) -> dict:
+        q = encoded.dense_vec
+        sims: dict[str, float] = {}
+
+        if self.classifier == "centroid" and self._centroid_matrix is not None:
+            # Single vectorized BLAS matrix-vector product across all classes
+            dot_sims = self._centroid_matrix @ q
+            for label, sim in zip(self.labels, dot_sims):
+                sims[label] = float(sim)
+        else:
+            for label in self.labels:
+                mat = self._anchor_matrices[label]
+                dot_sims = mat @ q
+                if self.classifier == "topk":
+                    k = max(1, min(self.topk, len(dot_sims)))
+                    sims[label] = float(np.mean(np.sort(dot_sims)[-k:]))
+                else:  # "max"
+                    sims[label] = float(np.max(dot_sims))
+
+        # Calibrate raw similarities into continuous scores in [0.0, 1.0]
+        scores = {label: self._calibrate_score(sim) for label, sim in sims.items()}
+
+        # Active labels exceeding threshold, sorted descending by score
+        active_labels = [
+            label for label, score in sorted(scores.items(), key=lambda kv: kv[1], reverse=True)
+            if score >= self.threshold
+        ]
+
+        return {
+            "value": active_labels,
+            "scores": scores,
+            "similarities": {k: round(v, 4) for k, v in sims.items()},
+            "threshold": self.threshold,
+        }
+
+    def explain_decision(self, text: str, details: dict, backbone=None) -> dict:
+        return {
+            "value": details.get("value", []),
+            "scores": details.get("scores", {}),
+            "similarities": details.get("similarities", {}),
+            "threshold": self.threshold,
+            "interpretation": (
+                f"MultiLabel detected {len(details.get('value', []))} active categories "
+                f"(score >= {self.threshold:.2f}): {details.get('value', [])}"
+            ),
+        }

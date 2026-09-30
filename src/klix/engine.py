@@ -3,7 +3,7 @@
 import time
 
 from klix.backbone import HybridBackbone
-from klix.heads import BaseHead, Choice, Flag, Score
+from klix.heads import BaseHead, Choice, Flag, MultiLabel, Score
 
 
 def _klix_version() -> str:
@@ -221,6 +221,16 @@ class DecisionEngine:
                     "temp": h.temp,
                     "aggregation": h.aggregation,
                     "topk": h.topk,
+                })
+            elif isinstance(h, MultiLabel):
+                state.update({
+                    "options": {k: sorted(v) for k, v in h.options.items()},
+                    "threshold": h.threshold,
+                    "sharpness": h.sharpness,
+                    "center": h.center,
+                    "classifier": h.classifier,
+                    "topk": h.topk,
+                    "calibration": h.calibration,
                 })
             else:
                 # Custom head subclass: serialize __dict__ best-effort (sorted

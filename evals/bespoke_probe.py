@@ -30,16 +30,21 @@ Single-sample projections on this machine proved unreliable, and the reason is n
 established — so this records the measurements rather than a theory:
 
   idle (first probe, 20 cases):        p50 9.0 s/case, p95 10.4 s/case
-  steady state, test suite alongside:  4.8 s/case (125 -> 150 cases in 120 s)
-  first hour, averaged:                28 s/case (125 cases in ~59 min)
+  full sweep, over all intervals:      7.8 - 12.8 s/case, mean 14.4 s/case
+                                       (7176 s / 500 cases, includes model load)
 
-Three rates spanning a factor of six for the same model, dataset and prompt. The
-slow first hour is the part that matters operationally: dividing elapsed time by
-completed cases early in a run overestimates the remaining cost badly, and an idle
-probe does not predict the loaded rate either. The only number worth scheduling on
-is the steady-state rate measured over a short window *while the real workload
-runs* — which is what pointed at ~28 remaining minutes here, against a "4.7 hours"
-extrapolation from the first hour.
+The per-interval rates across the whole run are consistent with the idle probe
+(~9.8 s/case); the run total is higher only because start-up is included once.
+
+Do NOT trust a two-minute window either: an earlier note in this file claimed a
+4.8 s/case "steady state" from a 25-case window (125 -> 150 in 120 s). That figure
+is an artefact of a short sample and contradicts every 75+ case interval of the
+same run. Project from a window long enough to cover warm-up, or from the run
+total — and record the interval you used.
+
+Operationally the mistake that matters is the other direction: dividing early
+elapsed time by completed cases over-estimated the remaining runtime here as
+"4.7 hours" where the run actually needed ~2 h total.
 
 It does NOT measure accuracy. 20 cases cannot, and a 20-case accuracy has misled
 this project before.

@@ -15,10 +15,24 @@ Evaluates categorical routing, calibrated multi-label scoring, bounded scalar me
 Klix is a deterministic inference runtime designed for low-latency decision boundaries in automated pipelines and agent architectures. Rather than executing autoregressive language models or orchestrating multiple disjoint estimators, Klix projects input text into a dense embedding space once and evaluates heterogeneous linear decision heads concurrently via vectorized BLAS operations.
 
 * **Inference Complexity:** Embedding cost is $O(L \cdot D)$ via an ONNX-runtime encoder (`paraphrase-multilingual-MiniLM-L12-v2`, 240 MB footprint, $D=384$). Multi-head evaluation is $O(K \cdot D)$ linear algebra, executing in $< 100\,\mu\text{s}$ post-embedding.
-* **Throughput:** ~13.9 ms per document in bulk vectorization mode (sustained 72 documents/s on a single commodity x86 CPU core).
+* **Latency & Throughput:**
+  - *Interactive Single-Item Execution (`decide`):* ~26–30 ms (p50 on a single commodity x86 CPU core).
+  - *Vectorized Batch Throughput (`decide_batch`):* ~13.9 ms per document (sustained 72 docs/s at batch sizes $\ge 64$).
 * **Out-of-Domain Rejection:** Reject anchor sets and neutral simplex poles allow decision heads to decline classification (`value=None`) when input density falls outside defined class distributions.
 * **Symbolic Constraints:** Deterministic regular expression and exact token rules (`Rule`) evaluate as hard boolean constraints alongside vector similarity.
 * **Zero PyTorch Runtime Dependency:** Pure CPU execution backed by ONNX Runtime, FastEmbed, NumPy, and scikit-learn.
+
+---
+
+## Scope, Limitations & Non-Goals
+
+To maintain technical clarity and prevent architectural mismatch, Klix explicitly defines its operational boundaries:
+
+1. **Not a Generative Language Model:** Klix does not generate text, extract open entities, or conduct multi-step conversational reasoning. It is strictly an anchor-based decision boundary runtime.
+2. **Contrastive Hard Negatives vs. Open-World OOD:** Supplying `reject_anchors` does not solve the unbounded open-set problem ($\mathbb{R}^D \setminus \bigcup \mathcal{C}_k$). A reject anchor carves out a localized Voronoi suppression cell against known false positives. Universal open-world Out-of-Domain (OOD) rejection relies on similarity thresholds ($\max_k s_k < \tau_{\min}$) or margin gating between leading classes.
+3. **Algorithmic Transparency on Linear Probes:** The `linear` classifier mode compiles an $L_2$-regularized multinomial logistic regression probe over frozen representations (essentially FastEmbed + scikit-learn). Klix does not claim a novel optimization solver; its engineering contribution is unified multi-head compilation, single-pass vector reuse, symbolic rule overrides, and sub-15ms agent graph integration.
+4. **No Backbone Fine-Tuning:** Transformer backbone weights remain strictly frozen. Tasks requiring domain-adapted metric representations should use contrastive fine-tuning frameworks (e.g. SetFit) before exporting to an ONNX runtime.
+5. **Matryoshka Truncation Requires MRL Backbones:** Slicing dimensions via `truncate_dim` preserves semantic fidelity only when using models trained with Matryoshka Representation Learning (MRL, e.g. `nomic-embed-text` or `bge-m3`). The default MiniLM model was not trained with MRL; truncating it induces arbitrary geometric distortion.
 
 ---
 
@@ -227,12 +241,12 @@ Evaluated on a deterministic 500-sample stride subsample of BANKing77 ($k=3$ nea
 | `sharpness` | `MultiLabel` | `float` | Logistic steepness parameter $\gamma$ for calibrated sigmoid scoring (default: `12.0`). |
 | `center` | `MultiLabel` | `float` | Cosine similarity inflection center $c_0$ for sigmoid calibration (default: `0.40`). |
 | `calibration` | `MultiLabel` | `str` | Score mapping: `"sigmoid"` (default), `"linear"`, `"cosine"`. |
-| `reject_anchors` | `Choice` | `list[str]` | Out-of-domain negative pole; dominant similarity resolves to `value=None`. |
+| `reject_anchors` | `Choice` | `list[str]` | Targeted contrastive hard negatives; dominant similarity resolves to `value=None`. |
 | `neutral_anchors` | `Flag` | `list[str]` | Ambiguity pole on the 3-simplex; dominant similarity resolves to `value=None`. |
 | `rules` | `Choice` | `list[Rule]` | Deterministic symbolic constraints: `Rule(label=..., any_of=[...], mode="force"|"boost")`. |
 | `sparse_fastpath` | `DecisionEngine` | `bool` | Deterministic exact keyword index bypassing embedding inference when unambiguous ($< 1\,\text{ms}$). |
 | `glossary` | `Choice`, `DecisionEngine` | `dict` | Pre-compiled cross-lingual lexical synonym map. |
-| `truncate_dim` | `DecisionEngine` | `int` | Matryoshka dimension truncation (e.g. 128) for reduced vector footprint. |
+| `truncate_dim` | `DecisionEngine` | `int` | Matryoshka prefix dimension truncation. Note: requires MRL-trained backbone (e.g. `nomic-embed-text`). |
 
 ---
 

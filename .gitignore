@@ -24,3 +24,5 @@ venv/
 # (decision §7.4 — the repo keeps the loader + SHA256, not the ~5 MB of JSONL).
 # Provenance, licences and hashes: evals/data/bespoke/PROVENANCE.md
 evals/data/bespoke/*.jsonl
+evals/data/clinc/*.json
+

@@ -44,6 +44,7 @@ from evals.bespoke_anchors import (  # noqa: E402
     anchor_provenance,
     assert_no_leakage,
     few_shot_anchors,
+    few_shot_plus_label_anchors,
     label_string_anchors,
 )
 from evals.bespoke_loader import DATA_DIR  # noqa: E402
@@ -67,12 +68,14 @@ def _read_jsonl(path: Path) -> list[dict]:
 
 def build_anchors(train_rows: list[dict], method: str, k: int = 3,
                   seed: int = DEFAULT_SEED) -> dict[str, list[str]]:
-    """Anchor variants — see evals/bespoke_anchors.py for why there are two."""
+    """Anchor variants — see evals/bespoke_anchors.py for why there are multiple."""
     if method in ("few_shot_k3", "few_shot"):
         return few_shot_anchors(train_rows, k=k, seed=seed)
     if method == "label_string":
         labels = sorted({r["label"] for r in train_rows})
         return label_string_anchors(labels)
+    if method in ("few_shot_k3_plus_label", "few_shot_plus_label"):
+        return few_shot_plus_label_anchors(train_rows, k=k, seed=seed)
     raise ValueError(f"unknown anchor method {method!r}")
 
 
@@ -185,7 +188,7 @@ def main() -> int:
     ap.add_argument("--system", action="append", required=True,
                     help="'klix' or 'ollama:<model>'; repeatable")
     ap.add_argument("--anchors", default="few_shot_k3",
-                    choices=["few_shot_k3", "few_shot", "label_string"])
+                    choices=["few_shot_k3", "few_shot", "label_string", "few_shot_k3_plus_label", "few_shot_plus_label"])
     ap.add_argument("--classifier", default="nearest",
                     choices=["nearest", "centroid", "linear", "hybrid"],
                     help="Choice head classifier algorithm (default: nearest)")

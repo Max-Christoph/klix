@@ -1,0 +1,17 @@
+{
+  "k_per_class": 3,
+  "classifier": "centroid",
+  "use_oos_reject_anchors": false,
+  "in_scope_samples": 4500,
+  "oos_samples": 1000,
+  "in_scope_accuracy": 78.78,
+  "auroc_max_sim": 92.92,
+  "fpr95_max_sim": 32.3,
+  "auroc_reject_margin": 92.92,
+  "fpr95_reject_margin": 32.3,
+  "auroc_confidence": 70.69,
+  "fpr95_confidence": 88.6,
+  "compile_time_s": 2.67,
+  "latency_ms_per_doc": 10.54,
+  "throughput_docs_per_s": 94.9
+}

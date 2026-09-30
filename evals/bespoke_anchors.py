@@ -44,7 +44,7 @@ from __future__ import annotations
 
 import random
 
-ANCHOR_METHODS = ("few_shot_k3", "label_string")
+ANCHOR_METHODS = ("few_shot_k3", "label_string", "few_shot_k3_plus_label")
 
 REPURPOSING_CAVEAT = (
     "repurposed run; anchors are constructed by klix (see anchor_provenance), not "
@@ -65,6 +65,15 @@ def label_to_anchor(label: str) -> str:
 def label_string_anchors(labels: list[str]) -> dict[str, list[str]]:
     """One anchor per label — the lower-bound variant."""
     return {lab: [label_to_anchor(lab)] for lab in labels}
+
+
+def few_shot_plus_label_anchors(
+    rows: list[dict], k: int = 3, seed: int = 20260930,
+    label_key: str = "label", text_key: str = "text",
+) -> dict[str, list[str]]:
+    """Combines canonical label string with k real examples per label from `rows`."""
+    base = few_shot_anchors(rows, k=k, seed=seed, label_key=label_key, text_key=text_key)
+    return {lab: [label_to_anchor(lab)] + anchors for lab, anchors in base.items()}
 
 
 def few_shot_anchors(rows: list[dict], k: int = 3, seed: int = 20260930,

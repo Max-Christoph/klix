@@ -9,8 +9,17 @@ Metrics:
 
 import argparse
 import json
+import sys
 import time
 from pathlib import Path
+
+# Ensure repo root and src are on sys.path
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+_SRC_DIR = _REPO_ROOT / "src"
+if str(_SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(_SRC_DIR))
 
 import numpy as np
 from sklearn.metrics import roc_auc_score, roc_curve
@@ -76,15 +85,24 @@ def run_clinc_evaluation(
     results = engine.decide_batch(all_texts)
     eval_time = time.perf_counter() - t0_eval
 
-    # Extract confidence scores and predictions
-    scores = []
+    # Extract confidence scores, max similarities, and predictions
+    confidences = []
+    max_sims = []
+    reject_margins = []
     preds = []
     for r in results:
         details = r.details("intent")
-        scores.append(details.get("confidence", 0.0))
+        c = details.get("confidence", 0.0)
+        s = details.get("score", 0.0)
+        rj = details.get("reject_score", 0.0)
+        confidences.append(c)
+        max_sims.append(s)
+        reject_margins.append(s - rj)
         preds.append(r.intent)
 
-    scores = np.array(scores)
+    confidences = np.array(confidences)
+    max_sims = np.array(max_sims)
+    reject_margins = np.array(reject_margins)
 
     # In-Scope accuracy (only evaluated on in-scope ground truth)
     in_scope_preds = preds[: len(in_scope_test)]
@@ -94,9 +112,17 @@ def run_clinc_evaluation(
     )
     in_scope_acc = correct / len(in_scope_test)
 
-    # OOD Detection Metrics (AUROC & FPR@95)
-    auroc = float(roc_auc_score(y_true, scores))
-    fpr95 = compute_fpr95(y_true, scores)
+    # OOD Detection Metrics (AUROC & FPR@95) for max_sim (thresholding)
+    auroc_sim = float(roc_auc_score(y_true, max_sims))
+    fpr95_sim = compute_fpr95(y_true, max_sims)
+
+    # If reject anchors used, also evaluate reject margin
+    auroc_margin = float(roc_auc_score(y_true, reject_margins)) if use_oos_reject_anchors else auroc_sim
+    fpr95_margin = compute_fpr95(y_true, reject_margins) if use_oos_reject_anchors else fpr95_sim
+
+    # Also check confidence
+    auroc_conf = float(roc_auc_score(y_true, confidences))
+    fpr95_conf = compute_fpr95(y_true, confidences)
 
     latency_per_doc_ms = (eval_time / len(all_texts)) * 1000.0
     throughput = len(all_texts) / eval_time
@@ -108,18 +134,24 @@ def run_clinc_evaluation(
         "in_scope_samples": len(in_scope_test),
         "oos_samples": len(oos_test),
         "in_scope_accuracy": round(in_scope_acc * 100.0, 2),
-        "auroc": round(auroc * 100.0, 2),
-        "fpr95": round(fpr95 * 100.0, 2),
+        "auroc_max_sim": round(auroc_sim * 100.0, 2),
+        "fpr95_max_sim": round(fpr95_sim * 100.0, 2),
+        "auroc_reject_margin": round(auroc_margin * 100.0, 2),
+        "fpr95_reject_margin": round(fpr95_margin * 100.0, 2),
+        "auroc_confidence": round(auroc_conf * 100.0, 2),
+        "fpr95_confidence": round(fpr95_conf * 100.0, 2),
         "compile_time_s": round(compile_time, 2),
         "latency_ms_per_doc": round(latency_per_doc_ms, 2),
         "throughput_docs_per_s": round(throughput, 1),
     }
 
     print("\n--- CLINC150 Benchmark Results ---")
-    print(f"In-Scope Accuracy: {summary['in_scope_accuracy']:.2f}% (Prior: {100/150:.2f}%)")
-    print(f"OOD AUROC:         {summary['auroc']:.2f}%")
-    print(f"OOD FPR@95:        {summary['fpr95']:.2f}%")
-    print(f"Throughput:        {summary['throughput_docs_per_s']} docs/s ({summary['latency_ms_per_doc']:.2f} ms/doc)")
+    print(f"In-Scope Accuracy:       {summary['in_scope_accuracy']:.2f}% (Prior: {100/150:.2f}%)")
+    print(f"OOD AUROC (Max Cosine):  {summary['auroc_max_sim']:.2f}% (FPR@95: {summary['fpr95_max_sim']:.2f}%)")
+    if use_oos_reject_anchors:
+        print(f"OOD AUROC (Reject Margin): {summary['auroc_reject_margin']:.2f}% (FPR@95: {summary['fpr95_reject_margin']:.2f}%)")
+    print(f"OOD AUROC (Confidence):  {summary['auroc_confidence']:.2f}% (FPR@95: {summary['fpr95_confidence']:.2f}%)")
+    print(f"Throughput:              {summary['throughput_docs_per_s']} docs/s ({summary['latency_ms_per_doc']:.2f} ms/doc)")
 
     if output_json:
         output_json.parent.mkdir(parents=True, exist_ok=True)

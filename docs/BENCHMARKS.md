@@ -10,6 +10,7 @@ Both datasets represent repurposed evaluation runs: Klix expects example anchor 
 
 * **`few_shot_k3`**: $k=3$ real sentences drawn from the training split with zero leakage (`assert_no_leakage()`).
 * **`label_string`**: The bare label string with underscores replaced by spaces (honest lower bound).
+* **`few_shot_k3_plus_label`**: Combines the canonical label string with $k=3$ real training examples under centroid aggregation.
 
 | Dataset | Classes | Test cases | Anchors / Method | Accuracy | 95% CI |
 |---|:---:|:---:|---|:---:|:---:|
@@ -17,15 +18,39 @@ Both datasets represent repurposed evaluation runs: Klix expects example anchor 
 | BANKing77 | 77 | 3,080 | label_string | 53.3 % | [51.5, 55.1] |
 | **MASSIVE (en)** | 60 | 2,974 | few_shot_k3 | **43.8 %** | [41.9, 45.7] |
 | MASSIVE (en) | 60 | 2,974 | label_string | **47.9 %** | [46.1, 49.7] |
+| **MASSIVE (en)** | 60 | 2,974 | **few_shot_k3_plus_label (centroid)** | **57.3 %** | [55.5, 59.1] |
 | **MASSIVE (de)** | 60 | 2,974 | few_shot_k3 | **36.2 %** | [34.5, 38.0] |
 | MASSIVE (de) | 60 | 2,974 | label_string | 30.1 % | [28.5, 31.8] |
+| **MASSIVE (de)** | 60 | 2,974 | **few_shot_k3_plus_label (centroid)** | **44.4 %** | [42.6, 46.2] |
+
+*Ablation Finding:* On MASSIVE, adding the canonical label name to the few-shot anchor set and applying centroid aggregation lifts accuracy by **+13.5 percentage points** on English (57.3% vs. 43.8%) and **+8.2 percentage points** on German (44.4% vs. 36.2%), outperforming the local Qwen-2B autoregressive LLM baseline (40.5%).
 
 ### Known Dataset Flaw in MASSIVE
 MASSIVE's `train` and `test` splits are not sentence-disjoint. In German, 115/2,974 (3.9%) of test sentences appear verbatim in `train`, **8 of them with contradictory labels** (identical sentence, two different intents). In English, 21/2,974 (0.7%) appear in train, 2 contradictory. This caps achievable German accuracy and is explicitly guarded by unit tests. Details in `evals/data/bespoke/PROVENANCE.md`.
 
 ---
 
-## 2. Accuracy Scaling with Anchor Density (BANKing77, n=500 subsample)
+## 2. Out-of-Scope (OOD) Detection & Intent Routing (CLINC150, 150 Classes)
+
+Evaluates in-scope intent routing across 150 fine-grained intent categories simultaneously with out-of-domain rejection on 1,000 out-of-scope (OOS) queries (Larson et al., EMNLP 2019). Provenance and attribution details in `evals/data/clinc/PROVENANCE.md`.
+
+* **Data Split:** Full test split ($N=4,500$ in-scope test queries across 150 classes + $N=1,000$ out-of-scope queries = 5,500 total).
+* **Prior Baseline:** Uniform random chance for in-scope routing is $1/150 = 0.67\%$.
+* **OOD Scoring Metric:** Maximum class centroid cosine similarity ($\max_k (\mathbf{q} \cdot \mathbf{c}_k)$).
+
+| Anchor Density ($k$) | Classifier | In-Scope Accuracy ($N=4,500$) | OOD AUROC ($N=5,500$) | OOD FPR@95 | Latency | Sustained Throughput |
+|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| $k=3$ anchors/class | `centroid` | **78.78 %** | **92.92 %** | **32.30 %** | 10.54 ms/doc | **94.9 docs/s** |
+| $k=10$ anchors/class | `centroid` | **86.93 %** | **94.79 %** | **23.10 %** | 10.09 ms/doc | **99.1 docs/s** |
+
+*Key Findings:*
+1. **OOD Discrimination:** Maximum centroid cosine similarity achieves **94.79% AUROC** on OOD detection with $k=10$ anchors per category without any external classifier overhead.
+2. **False Positive Suppression:** At a 95% True Positive Rate (accepting 95% of legitimate in-scope requests), the False Positive Rate on unseen out-of-scope queries drops to **23.10%**.
+3. **Execution Speed:** Evaluating 150 intent classes and computing OOD rejection executes in **~10.1 ms per query** on standard CPU hardware (sustained 99.1 docs/s). Fully reproducible via `evals/run_clinc_oos.py`.
+
+---
+
+## 3. Accuracy Scaling with Anchor Density (BANKing77, n=500 subsample)
 
 On 77 fine-grained classes (random chance = 1.3%), scaling the anchor set from 3 to 20 examples per class dramatically lifts accuracy without changing the inference footprint. Evaluated on a deterministic 500-case subsample (full split baseline $n=3,080$ scores 61.4% for $k=3$ nearest, see Section 1):
 

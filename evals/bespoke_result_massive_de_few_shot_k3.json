@@ -1,0 +1,41 @@
+{
+  "dataset": "massive_de",
+  "full_split_cases": 2974,
+  "scored_cases": 2974,
+  "subsampled": false,
+  "seed": 20260930,
+  "anchor_method": "few_shot_k3",
+  "anchor_provenance": {
+    "methods": [
+      "few_shot_k3",
+      "label_string"
+    ],
+    "main_method": "few_shot_k3",
+    "lower_bound_method": "label_string",
+    "k": 3,
+    "seed": 20260930,
+    "split": "train",
+    "no_leakage": "anchors are drawn from `train` only; overlap with `test` is measured with assert_no_leakage() and reported",
+    "built_by": "klix (evals/bespoke_anchors.py)",
+    "caveat": "repurposed run; anchors are constructed by klix (see anchor_provenance), not shipped by the dataset; not comparable to published Tev1/Nimble/JevBench figures"
+  },
+  "anchor_overlap_with_test": 7,
+  "case_aligned": true,
+  "systems": {
+    "klix": {
+      "n": 2974,
+      "correct": 1077,
+      "answered": 2974,
+      "unparseable": 0,
+      "accuracy": 0.36213853396099527,
+      "coverage": 1.0,
+      "accuracy_ci95": [
+        0.3447,
+        0.38
+      ],
+      "seconds": 155.0
+    }
+  },
+  "caveat": "repurposed run; anchors are constructed by klix (see anchor_provenance), not shipped by the dataset; not comparable to published Tev1/Nimble/JevBench figures",
+  "note": "MASSIVE train/test are not sentence-disjoint (see evals/data/bespoke/PROVENANCE.md 1.1): achievable accuracy is capped and some anchors mirror test sentences."
+}

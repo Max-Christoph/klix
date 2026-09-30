@@ -97,6 +97,11 @@ class TestAnchors:
         out = build_anchors([{"label": "alarm_set", "text": "x"}], method="label_string")
         assert out == {"alarm_set": ["alarm set"]}
 
+    def test_few_shot_supports_variable_k(self):
+        train = [{"label": "alarm_set", "text": f"s{i}"} for i in range(10)]
+        out = build_anchors(train, method="few_shot", k=5)
+        assert len(out["alarm_set"]) == 5
+
     def test_unknown_method_is_rejected(self):
         with pytest.raises(ValueError, match="unknown anchor method"):
             build_anchors([], method="invented")

@@ -89,7 +89,7 @@ Text ──► HybridBackbone (FastEmbed dense + TF-IDF sparse, once, tens of ms
 ## Quickstart
 
 ```python
-from klix import DecisionEngine, Choice, Score, Flag
+from klix import DecisionEngine, Choice, Score, Flag, MultiLabel
 
 engine = DecisionEngine()
 
@@ -104,6 +104,18 @@ engine.add_head(
         },
         # Optional: texts resembling these get value=None instead of a forced guess.
         reject_anchors=["casual office chat", "birthday wishes", "off topic request"],
+    )
+)
+
+engine.add_head(
+    MultiLabel(
+        name="tags",
+        options={
+            "hardware": ["laptop won't boot", "broken screen", "PLC hardware failure"],
+            "network": ["VPN disconnected", "wifi unreachable", "DNS issue"],
+            "critical": ["production halted", "urgent line stop", "immediate danger"],
+        },
+        threshold=0.5,
     )
 )
 
@@ -136,8 +148,10 @@ engine.compile()
 
 res = engine.decide("plc-34 reports a fault, conveyor belt stopped immediately!")
 
-print(res)                                   # e.g. <DecisionResult (61 ms): target=ot_plant, urgency=2.4, is_security=False>
+print(res)                                   # e.g. <DecisionResult (61 ms): target=ot_plant, tags=['critical'], urgency=2.4, is_security=False>
 print(res.target)                            # 'ot_plant'
+print(res.tags)                              # ['critical'] (multi-label list of active categories >= threshold)
+print(res.details("tags")["scores"])         # {'critical': 0.88, 'hardware': 0.42, 'network': 0.12} (continuous [0, 1])
 print(res.urgency)                           # continuous score between 0.0 and 3.0
 print(res.is_security)                       # True / False / None (neutral won)
 print(res.details("is_security"))            # full dict: value, probability, probabilities
@@ -170,6 +184,10 @@ Every head and the engine expose meaningful knobs:
 | `neutral_anchors` | `Flag` | Third pole for out-of-domain: returns `value=None` when it wins |
 | `aggregation` | `Flag` | `"max"` (default) or `"topk"` — topk averages the best-k anchors per pole, robust against a single noisy anchor |
 | `threshold` / `temp` | `Flag` | Decision cutoff and softmax temperature (lower = sharper) |
+| `options`, `threshold` | `MultiLabel` | Multi-label classification: returns all categories with calibrated score ≥ `threshold` |
+| `sharpness` / `center` | `MultiLabel` | Sigmoid steepness and cosine similarity midpoint for continuous $[0.0, 1.0]$ scores |
+| `classifier` | `MultiLabel` | `"centroid"` (default, vectorized BLAS product), `"max"`, or `"topk"` anchor pooling |
+| `calibration` | `MultiLabel` | `"sigmoid"` (default), `"linear"`, or `"cosine"` continuous mapping |
 | `model_name` | `DecisionEngine` | Any FastEmbed-compatible embedding model |
 | `truncate_dim` | `DecisionEngine` | Opt-in: slice every dense vector to N dims + re-normalize (MRL-style, no training, deterministic). Lowers cosine cost proportionally. **Measured on the repo's own corpora it improves `nearest` accuracy consistently** (60 cases 68.3 % → 76.7 %, 70 cases 71.4 % → 77.1 %, 273 cases 93.0 % → 94.9 % at 64 dims) — but the curve is **not monotone** on the hard sets (96 dims dips below 128 dims) and the corpus is small, so it stays opt-in. Tested with `classifier="nearest"` only; not recommended together with the `linear` probe. See `evals/backbone_compare.py` |
 | `stop_words` | `DecisionEngine` | Custom stopword list for the TF-IDF index (default: extended EN+DE list filtering grammatical fillers; pass `[]` to disable filtering) |
@@ -516,6 +534,22 @@ sentence, two different intents); English 21/2974 (0.7 %), 2 contradictory. This
 caps achievable accuracy on the German set and is the main reason MASSIVE-de
 scores below MASSIVE-en. Details and the assertions that pin it:
 `evals/data/bespoke/PROVENANCE.md` §1.1.
+
+### Accuracy scales with anchor density (BANKing77, 77 classes)
+
+The runs above used minimal few-shot anchoring ($k=3$). On large, fine-grained schemas (like BANKing77 with 77 distinct banking intents, random chance = 1.3 %), accuracy scales directly with anchor density and classifier choice on the exact same CPU without increasing model footprint:
+
+| Classifier | Anchors / class ($k$) | Compile time | Accuracy | Latency (bulk) |
+|---|---|---|---|---|
+| `nearest` | $k=3$ | 4.7 s | 60.2 % | 29.7 ms/doc |
+| `centroid` | $k=3$ | 5.3 s | **64.8 %** (+4.6 pt) | 26.6 ms/doc |
+| `linear` | $k=3$ | 10.5 s | **67.8 %** (+7.6 pt) | 26.1 ms/doc |
+| `centroid` | $k=10$ | 22.4 s | **76.6 %** (+16.4 pt) | 31.3 ms/doc |
+| `linear` | $k=10$ | 85.0 s | **79.8 %** (+19.6 pt) | 28.1 ms/doc |
+| `centroid` | $k=20$ | 39.6 s | **79.6 %** (+19.4 pt) | 26.7 ms/doc |
+| `linear` | **$k=20$** | 132 s | **85.2 %** (+25.0 pt) | 41.9 ms/doc |
+
+*Measured on 500 subsampled test cases from BANKing77.* Note that `centroid` delivers massive zero-training gains (64.8 % → 79.6 %) with purely an embedding pass at compile time, while `linear` reaches **85.2 %** when provided with 20 examples per class — remaining orders of magnitude faster and lighter than 9B LLMs (like Nimble).
 
 ### vs. a local 2B LLM (same 60-class task, same CPU)
 

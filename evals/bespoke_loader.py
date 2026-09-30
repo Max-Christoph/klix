@@ -175,6 +175,35 @@ def fetch_parquet_rows(dataset: str, config: str, split: str) -> list[dict]:
     return table.to_pylist()
 
 
+def fetch_parquet_label_names(dataset: str, config: str, split: str) -> list[str] | None:
+    """The class names behind an integer label column, or None if not encoded.
+
+    banking77 stores `label` as int64 and carries the 77 class names ONLY in the
+    parquet schema metadata (`huggingface` -> features -> label -> names). Reading
+    the rows alone yields integers 0..76, which look like perfectly valid labels
+    until you notice they are indices — the first version of this loader scored
+    `accuracy=None` for exactly that reason.
+
+    The order of `names` was cross-checked against the dataset's own README listing
+    (77 entries, identical except index 53 which the metadata spells
+    "reverted_card_payment?"); the metadata is used because it is what the column
+    actually indexes into.
+    """
+    import pyarrow.parquet as pq  # noqa: PLC0415
+
+    payload = _fetch(_parquet_url(dataset, config, split))
+    table = pq.read_table(io.BytesIO(payload))
+    raw = (table.schema.metadata or {}).get(b"huggingface")
+    if not raw:
+        return None
+    try:
+        info = json.loads(raw.decode("utf-8"))
+        names = info["info"]["features"]["label"]["names"]
+    except (KeyError, ValueError, UnicodeDecodeError):
+        return None
+    return list(names) if names else None
+
+
 def fetch_rows_api(dataset: str, config: str, split: str,
                    page: int = 100, pace: float = 0.0) -> list[dict]:
     """Read a split through the datasets-server /rows endpoint (stdlib only)."""
@@ -249,15 +278,47 @@ def load_massive(lang: str, split: str = "test") -> tuple[Path, Path]:
     return out, train_out
 
 
+def resolve_banking77_label(value, class_names: list[str] | None) -> str:
+    """Turn banking77's integer label index into its class name.
+
+    The dataset ships `label` as an integer index; the name lives only in the
+    parquet schema metadata. A loader that skips this step produces records whose
+    `label` is `11` while `options` holds strings — every prediction then looks
+    like a parse failure, and the run reports `accuracy=None` with full coverage
+    of nothing. That is exactly what happened on the first attempt, so this
+    conversion is a named, tested function rather than an inline expression.
+
+    Passing `class_names=None` is an error, not a fallback: guessing names from
+    indices would be inventing labels.
+    """
+    if isinstance(value, str) and not value.isdigit():
+        return value  # already a name (some republications do this)
+    if class_names is None:
+        raise ValueError(
+            "banking77 label is an integer index but the parquet schema carries no "
+            "class names — cannot resolve the label without inventing one"
+        )
+    idx = int(value)
+    if not 0 <= idx < len(class_names):
+        raise ValueError(f"banking77 label index {idx} outside 0..{len(class_names) - 1}")
+    return class_names[idx]
+
+
 def load_banking77(split: str = "test") -> tuple[Path, Path]:
     """banking77 `test` + `train` (the latter for few-shot anchors, §7.2)."""
+    class_names = fetch_parquet_label_names("banking77", "default", split)
+    if class_names is None:
+        raise RuntimeError("banking77: no class names in the parquet metadata — refusing "
+                           "to write records with integer labels")
     rows = fetch_parquet_rows("banking77", "default", split)
     train = fetch_parquet_rows("banking77", "default", "train")
 
-    # The option list must be the *full* class set across both splits, not just
-    # the classes that happen to appear in `test` — otherwise the task is easier
-    # than the 77 classes the dataset claims.
-    options = sorted({r["label"] for r in train} | {r["label"] for r in rows})
+    # The option list must be the *full* class set, not just the classes that
+    # happen to appear in `test` — otherwise the task is easier than the 77 the
+    # dataset claims.
+    observed = {resolve_banking77_label(r["label"], class_names) for r in rows}
+    observed |= {resolve_banking77_label(r["label"], class_names) for r in train}
+    options = sorted(observed)
     print(f"  banking77: {len(options)} classes (train {len(train)} / {split} {len(rows)})")
     if len(options) != 77:
         print(f"  WARNING: expected 77 classes, found {len(options)}")
@@ -265,7 +326,7 @@ def load_banking77(split: str = "test") -> tuple[Path, Path]:
     def _recs(source: list[dict]) -> list[dict]:
         out = []
         for r in source:
-            label = r["label"]
+            label = resolve_banking77_label(r["label"], class_names)
             if label not in options:
                 raise ValueError(f"label {label!r} missing from class list")
             out.append({

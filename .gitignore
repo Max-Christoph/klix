@@ -19,3 +19,8 @@ venv/
 
 # Hermes planning artifacts (internal working files, not part of the package)
 .hermes/
+
+# Bespoke eval data: fetched at run time by evals/bespoke_loader.py, not vendored
+# (decision §7.4 — the repo keeps the loader + SHA256, not the ~5 MB of JSONL).
+# Provenance, licences and hashes: evals/data/bespoke/PROVENANCE.md
+evals/data/bespoke/*.jsonl

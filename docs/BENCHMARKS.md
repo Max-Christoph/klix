@@ -25,9 +25,9 @@ MASSIVE's `train` and `test` splits are not sentence-disjoint. In German, 115/2,
 
 ---
 
-## 2. Accuracy Scaling with Anchor Density (BANKing77)
+## 2. Accuracy Scaling with Anchor Density (BANKing77, n=500 subsample)
 
-On 77 fine-grained classes (random chance = 1.3%), scaling the anchor set from 3 to 20 examples per class dramatically lifts accuracy without changing the inference footprint:
+On 77 fine-grained classes (random chance = 1.3%), scaling the anchor set from 3 to 20 examples per class dramatically lifts accuracy without changing the inference footprint. Evaluated on a deterministic 500-case subsample (full split baseline $n=3,080$ scores 61.4% for $k=3$ nearest, see Section 1):
 
 | Classifier | Anchors / class ($k$) | Compile Time | Accuracy | Bulk Latency |
 |---|:---:|:---:|:---:|:---:|
@@ -39,7 +39,7 @@ On 77 fine-grained classes (random chance = 1.3%), scaling the anchor set from 3
 | `centroid` | $k=20$ | 39.6 s | **79.6 %** (+19.4 pt) | 26.7 ms/doc |
 | `linear` | **$k=20$** | 132 s | **85.2 %** (+25.0 pt) | 41.9 ms/doc |
 
-*Evaluated on 500 subsampled test cases from BANKing77.*
+*Evaluated on 500 subsampled test cases from BANKing77. All measurements are backed by committed evaluation runs in `evals/`: `bespoke_result_banking77_few_shot_k3_nearest.json`, `..._k3_centroid.json`, and `..._k20_linear.json`.*
 
 ---
 

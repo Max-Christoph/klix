@@ -121,15 +121,15 @@ Every metric is measured on a standard Intel CPU without a GPU. Full provenance 
 
 | Benchmark / Task | Classes | Test Cases | Klix Result | Baseline | Bulk Throughput |
 |---|:---:|:---:|:---:|:---:|:---:|
-| **BANKing77** *(77 banking intents)* | 77 | 3,080 | **61.4 %** *(k=3 anchors)* | 53.3 % *(bare labels)* | **72 docs/s** |
+| **BANKing77** *(77 banking intents)* | 77 | 3,080 *(full split)* | **61.4 %** *(k=3 anchors)* | 53.3 % *(bare labels)* | **72 docs/s** |
 | **MASSIVE** *(Amazon intent, EN)* | 60 | 2,974 | **43.8 %** *(k=3 anchors)* | 47.9 % *(bare labels)* | **72 docs/s** |
 | **MASSIVE** *(Amazon intent, DE)* | 60 | 2,974 | **36.2 %** *(k=3 anchors)* | 40.5 % *(Qwen 2B LLM)* | **72 docs/s** |
 | **Cross-Domain Routing** *(6 domains)* | 6 | 70 | **84.3 %** *(centroid / linear)* | 78.0 % *(dense Embed-KNN)* | **72 docs/s** |
 | **Few-Shot vs. Training** | 5 | 60 | **85.0 %** *(linear probe)* | 85.0 % *(SetFit contrastive)* | **72 docs/s** |
 
-### Accuracy Scales with Anchor Density (BANKing77, 77 classes)
+### Accuracy Scales with Anchor Density (BANKing77, 77 classes, n=500 subsample)
 
-On complex, fine-grained taxonomies (BANKing77 has 77 distinct classes, random chance = 1.3%), accuracy scales directly with anchor quality and classifier choice on the exact same CPU:
+On complex, fine-grained taxonomies (BANKing77 has 77 distinct classes, random chance = 1.3%), accuracy scales directly with anchor quality and classifier choice on the exact same CPU. Evaluated on a deterministic 500-case stride subsample (where $k=3$ nearest scores 60.2%, compared to 61.4% on the full 3,080-case test split in the table above):
 
 | Classifier | Anchors / class ($k$) | Compile Time | Accuracy | Bulk Latency |
 |---|:---:|:---:|:---:|:---:|
@@ -141,7 +141,7 @@ On complex, fine-grained taxonomies (BANKing77 has 77 distinct classes, random c
 | `centroid` | $k=20$ | 39.6 s | **79.6 %** *(+19.4 pt)* | 26.7 ms/doc |
 | **`linear`** | **$k=20$** | 132 s | **85.2 %** *(+25.0 pt!)* | 41.9 ms/doc |
 
-*Key takeaway:* `centroid` delivers massive gains (64.8 % → 79.6 %) with **zero training overhead** (compile is a pure embedding pass), while `linear` reaches **85.2 %** with 20 examples per class.
+*Key takeaway:* Evaluated on 500 subsampled test cases from BANKing77 (all result JSONs tracked in `evals/`). `centroid` delivers massive gains (64.8 % → 79.6 %) with **zero training overhead** (compile is a pure embedding pass), while `linear` reaches **85.2 %** with 20 examples per class.
 
 > **Anchor Rule of Thumb:** While 2–3 example sentences per class work as a quick zero-shot baseline (60–65 % on 77 classes), production schemas benefit significantly from providing **10–20 representative sentences** per category. Combined with `classifier="linear"` or `centroid`, this pushes accuracy into the **80–85 %+** range while keeping evaluation in the ~25–40 ms range on CPU.
 

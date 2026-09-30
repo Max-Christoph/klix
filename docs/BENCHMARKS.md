@@ -60,61 +60,64 @@ Evaluates the `MultiLabel` head on Google Research GoEmotions (Reddit comments l
 
 ---
 
-## 4. vs. Local 2B/9B LLMs (Ollama)
+## 4. Comparison with Autoregressive Small Language Models (Ollama)
 
 Evaluated on 500 MASSIVE-de cases on an Intel Core Ultra 5 CPU (no dedicated GPU):
 
-| Metrik | Klix (`few_shot_k3`) | `qwen3.5:2b` (Ollama) | Nimble 9B (Est. CPU) |
+| Metric | Klix (`few_shot_k3`) | `qwen3.5:2b` (Ollama) | Nimble 9B (Est. CPU) |
 |---|---|---|---|
 | **Accuracy** | 36.2 % (full split) | 40.5 % (500 subsample) | ~50–60 % |
-| **Model Size** | **240 MB** | 2.7 GB | 9.5 GB |
-| **Sustained Latency** | **13.9 ms / doc** | ~9,000 ms / call | ~20,000 ms / call |
+| **Model Footprint** | **240 MB** | 2.7 GB | 9.5 GB |
+| **Median Per-Query Latency** | **13.9 ms / doc** | ~9,000 ms / call | ~20,000 ms / call |
 | **Throughput** | **72 docs/s** | ~0.11 docs/s | ~0.05 docs/s |
-| **100k Documents** | **~24 minutes** | ~10 days | ~23–30 days |
-| **Coverage** | 100 % | 99.2 % (4 unparseable) | 99 % |
+| **100k Documents (Est.)** | **~24 minutes** | ~10 days | ~23–30 days |
+| **Output Validity** | 100 % (deterministic) | 99.2 % (4 unparseable) | 99 % |
 
-The LLM buys +4.3 percentage points on German MASSIVE at the cost of **650× higher latency** and **11× larger footprint**.
+*Analysis:* On German MASSIVE, an autoregressive 2B parameter model achieves 40.5% accuracy (+4.3 percentage points over Klix $k=3$), at the trade-off of ~9,000 ms median latency and 2.7 GB memory allocation. Klix provides bounded linear-algebra latency (13.9 ms/doc) suitable for real-time routing gates.
 
 ---
 
-## 5. Cross-Domain Routing (6 domains, 70 cases)
+## 5. Cross-Domain Routing Sanity Suite (6 Domains, N=70)
 
-Evaluated via `evals/benchmark.py` (HR, Finance, Image-captions, Tasks, Shop, Guardrails):
+Small-scale sanity test suite ($N=70$ cases across 6 distinct domain schemas: HR, Finance, Image-captions, Tasks, Shop, Guardrails) designed to evaluate cross-domain schema stability via `evals/benchmark.py`:
 
-| Method | Avg Accuracy | Median Latency |
+| Method | Mean Accuracy ($N=70$) | Median Latency |
 |---|:---:|:---:|
-| TF-IDF + LogReg | 51 % | ~1–5 ms |
-| Embed-KNN (dense) | 78 % | ~58 ms |
-| Klix `nearest` | 72 % | ~71 ms |
-| **Klix `linear`** | **84 %** | ~80 ms |
+| TF-IDF + Logistic Regression | 51.4 % | ~1–5 ms |
+| Embed-KNN (dense anchor matching) | 78.0 % | ~58 ms |
+| Klix `nearest` | 72.9 % | ~71 ms |
+| Klix `linear` | 84.3 % | ~80 ms |
 | **Klix `centroid`** | **84.3 %** | ~72 ms |
 
+*Note:* This test suite serves as a quick sanity check for schema composition. For high-cardinality statistical characterization, refer to the full BANKing77 ($N=3,080$) and MASSIVE ($N=2,974$) test splits.
+
 ---
 
-## 6. vs. SetFit (Contrastive Few-Shot Training)
+## 6. Contrastive Fine-Tuning Comparison (SetFit, N=60)
 
-`evals/setfit_baseline.py` — SetFit trained on the same anchor texts (`num_epochs=1`, MiniLM backbone, CPU):
+`evals/setfit_baseline.py` — Evaluates whether an $L_2$-regularized linear probe over frozen embeddings performs comparably to a contrastively fine-tuned model (`SetFit`, `num_epochs=1`, MiniLM backbone, CPU) on the identical anchor set:
 
-| Dataset | Klix `nearest` | Klix `linear` | SetFit (Trained) |
+| Domain | Klix `nearest` | Klix `linear` | SetFit (Fine-Tuned) |
 |---|:---:|:---:|:---:|
 | HR | 8/12 | 9/12 | 9/12 |
 | FIN | 10/12 | 12/12 | 11/12 |
 | IMAGE | 9/12 | 11/12 | 11/12 |
 | TASK | 7/12 | 11/12 | 10/12 |
 | SHOP | 7/12 | 8/12 | 10/12 |
-| **Total (n=60)** | 41/60 (68 %) | **51/60 (85 %)** | **51/60 (85 %)** |
+| **Total (N=60)** | 41/60 (68.3 %) | **51/60 (85.0 %)** | **51/60 (85.0 %)** |
 
-**Finding:** Klix `linear` matches SetFit few-shot training accuracy (85%) with zero gradient updates and instant compilation.
+*Observation ($N=60$):* On this 5-domain sample, fitting an $L_2$-regularized convex linear probe over frozen embeddings attains 85.0% accuracy, matching the contrastively fine-tuned model without requiring backpropagation passes or PyTorch runtime dependencies.
 
 ---
 
-## 7. vs. Laya (`convaiinnovations/laya`)
+## 7. Comparison with Zero-Shot NLI / Instruction Models (Laya, N=70)
 
-Measured on the 70 cross-domain cases on **CPU**:
+Measured on the 70 cross-domain cases on CPU to compare anchor-based vector projection against zero-shot natural language inference parsing:
 
-| Metrik | Klix `linear` | Laya (Zero-Shot) |
+| Metric | Klix `linear` (Anchors) | Laya (Zero-Shot Instructions) |
 |---|:---:|:---:|
-| **Accuracy** | **86 %** | 67 % |
-| **Latency (CPU)** | **~13 ms** | ~1.3–1.5 s |
+| **Accuracy ($N=70$)** | **85.7 %** | 67.1 % |
+| **Latency (CPU)** | **~13 ms** | ~1,300–1,500 ms |
 | **Model Size** | **240 MB** | ~2 GB |
-| **Setup** | Anchors (Few-shot) | Instructions + Criteria (Zero-shot) |
+| **Configuration** | Anchor examples ($k \ge 3$) | Natural language instructions + criteria |
+

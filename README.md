@@ -9,13 +9,11 @@
 
 ---
 
-### Highlights
-
-* 🚀 **High Throughput on CPU:** **~13.9 ms/doc** in bulk (72 docs/s sustained → **100,000 documents in ~24 minutes** on a standard laptop CPU).
-* 🎯 **Accurate & Scalable:** **61.4 %** on 77 classes with just 3 anchors ($k=3$), scaling up to **85.2 %** with $k=20$ anchors on BANKing77.
-* 🧩 **4 Decoupled Decision Heads:** `Choice` (single-label routing), `MultiLabel` (calibrated continuous scores $[0, 1]$), `Score` (1D axis), and `Flag` (boolean confidence).
-* 🪶 **Self-Contained & Offline:** 240 MB on-disk multilingual ONNX model (`paraphrase-multilingual-MiniLM-L12-v2`). No GPU required, 0 € API costs.
-* 🛡️ **Deterministic Guardrails:** Layer exact business rules (`Rule`) and cross-lingual synonym bridges (`Glossary`) over vector geometry without fine-tuning.
+- **High Throughput on CPU:** **~13.9 ms/doc** in bulk (72 docs/s sustained → **100,000 documents in ~24 minutes** on a standard laptop CPU).
+- **Accurate & Scalable:** **61.4 %** on 77 classes with minimal anchors ($k=3$), scaling up to **85.2 %** with $k=20$ anchors on BANKing77.
+- **Four Decoupled Decision Heads:** `Choice` (single-label routing), `MultiLabel` (calibrated continuous scores $[0, 1]$), `Score` (1D axis), and `Flag` (boolean confidence).
+- **Self-Contained & Offline:** 240 MB on-disk multilingual ONNX model (`paraphrase-multilingual-MiniLM-L12-v2`). No GPU required, 0 € API costs.
+- **Deterministic Guardrails:** Layer exact business rules (`Rule`) and cross-lingual synonym bridges (`Glossary`) over vector geometry without fine-tuning.
 
 ---
 
@@ -144,6 +142,8 @@ On complex, fine-grained taxonomies (BANKing77 has 77 distinct classes, random c
 | **`linear`** | **$k=20$** | 132 s | **85.2 %** *(+25.0 pt!)* | 41.9 ms/doc |
 
 *Key takeaway:* `centroid` delivers massive gains (64.8 % → 79.6 %) with **zero training overhead** (compile is a pure embedding pass), while `linear` reaches **85.2 %** with 20 examples per class.
+
+> **Anchor Rule of Thumb:** While 2–3 example sentences per class work as a quick zero-shot baseline (60–65 % on 77 classes), production schemas benefit significantly from providing **10–20 representative sentences** per category. Combined with `classifier="linear"` or `centroid`, this pushes accuracy into the **80–85 %+** range while keeping evaluation in the ~25–40 ms range on CPU.
 
 ### Throughput & Efficiency
 

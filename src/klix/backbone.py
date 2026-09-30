@@ -98,6 +98,11 @@ class HybridBackbone:
         # wrap has to sit there — patching only encode() would leave anchors at
         # full dimension and queries truncated, which cannot be compared.
         # When truncate_dim is None the original generator is kept untouched.
+        #
+        # NOTE: Dimension slicing requires a model explicitly trained with
+        # Matryoshka Representation Learning (MRL, e.g. nomic-embed-text or bge-m3).
+        # Default MiniLM was NOT trained with MRL; truncating it causes arbitrary
+        # semantic degradation.
         if truncate_dim is not None:
             orig_embed = self.embed_model.embed
 
@@ -108,11 +113,12 @@ class HybridBackbone:
             self.embed_model.embed = _truncating_embed
 
     def _postprocess(self, dense: np.ndarray) -> np.ndarray:
-        """Applies embedding truncation (MRL-style) and L2 normalization.
+        """Applies embedding truncation (for MRL-trained models) and L2 normalization.
 
-        Slicing + re-normalizing is the standard Matryoshka procedure and needs
-        no training. Applied to anchors and queries alike, which is what makes
-        the comparison meaningful.
+        Note: Prefix dimension slicing preserves semantic fidelity ONLY when the
+        underlying embedding backbone was trained with Matryoshka Representation
+        Loss (MRL). When used with non-MRL backbones (such as default MiniLM),
+        slicing degrades vector geometry.
         """
         if self.truncate_dim is not None:
             dense = dense[..., : self.truncate_dim]

@@ -27,6 +27,15 @@ No training run, no labelled dataset, no GPU, no API keys. The schema is a
 declarative list of example sentences that lives in your repo, reads like
 documentation, and changes in milliseconds — running fully offline on CPU.
 
+**The mechanism is semantic, not lexical.** Every decision is made by vector
+geometry: one dense sentence embedding per text, scored by cosine similarity
+against anchor vectors (or their per-label centroids). No regex, no keyword
+list, no rule pattern decides anything by itself. `rules` and `glossaries` are
+**optional, deterministic guardrails layered on top** of that semantic core — a
+`Rule` can force or boost a keyword hit, a `Glossary` can bridge synonyms across
+languages — and a schema that uses neither behaves identically to one that has
+them registered but never triggered.
+
 **Honest framing:** klix is *packaging*, not a novel algorithm — the core is
 embedding + nearest-anchor / logistic probe, standard since 2019. What it adds
 is the schema abstraction, uncertainty handling, and explainability around that
@@ -159,10 +168,10 @@ Every head and the engine expose meaningful knobs:
 | `truncate_dim` | `DecisionEngine` | Opt-in: slice every dense vector to N dims + re-normalize (MRL-style, no training, deterministic). Lowers cosine cost proportionally. **Measured on the repo's own corpora it improves `nearest` accuracy consistently** (60 cases 68.3 % → 76.7 %, 70 cases 71.4 % → 77.1 %, 273 cases 93.0 % → 94.9 % at 64 dims) — but the curve is **not monotone** on the hard sets (96 dims dips below 128 dims) and the corpus is small, so it stays opt-in. Tested with `classifier="nearest"` only; not recommended together with the `linear` probe. See `evals/backbone_compare.py` |
 | `stop_words` | `DecisionEngine` | Custom stopword list for the TF-IDF index (default: extended EN+DE list filtering grammatical fillers; pass `[]` to disable filtering) |
 | `evaluate(encoded)` | `BaseHead` subclass | Add entirely custom head types (regex, business rules, ...) |
-| `rules` | `Choice` | Hard keyword/regex `Rule`s (force/boost) layered over the semantic decision |
+| `rules` | `Choice` | **Optional deterministic guardrail** (not the decision mechanism): hard keyword/regex `Rule`s (force/boost) layered *over* the semantic result. Leave empty for a purely vector-geometric schema |
 | `engine.calibrate(head, samples)` | `DecisionEngine` | Learn Flag threshold / Score sharpness+remap / Choice reject_threshold from labeled samples; k-fold CV for n ≥ 6, stability reported via `spread` |
 | `res.explain(head)` | `DecisionResult` | Token-level attribution: which keywords and which anchor drove the decision |
-| `engine.decide_batch(texts)` | `DecisionEngine` | Bulk mode: one embedding pass for the whole list — per-item overhead drops sharply for large volumes |
+| `engine.decide_batch(texts)` | `DecisionEngine` | Bulk mode: one embedding pass for the whole list — per-item overhead drops sharply for large volumes. Measured **~13.9 ms/item at n=500 (72 sentences/s)** on the dev CPU, i.e. ~24 min for 100,000 documents; see [Throughput](#throughput-and-cost-per-document) |
 | `engine.validate_anchors()` | `DecisionEngine` | Read-only anchor-quality report: overlapping classes (centroid cosine), shared confuser terms, sharpening hints, misplaced and duplicate anchors. `validate_anchors_report()` returns a formatted string |
 | `glossary.validate(anchors=None)` | `Glossary` | Read-only structural report: duplicate terms, circular/ambiguous mappings (one term under two concepts), homograph conflicts (same word, different languages, different concepts) and collisions between glossary tokens and anchor text. Also `engine.validate_glossary()` |
 | `klix.langid.detect(text)` | `klix.langid` | Opt-in language identification across 10 languages (`de, en, fr, es, it, pt, nl, pl, sv, da`). Trigram rank distance + function words. Pure stdlib, ~33 µs median, budget 0.2 ms. Never called in `decide()` (verified by test) |
@@ -401,6 +410,89 @@ the measured evidence: `Score` docstring, "WHEN NOT TO USE THIS HEAD".
 All benchmarks are **reproducible** — scripts live in `evals/` and every method is
 trained/evaluated on the *same* labeled data (the anchors are the few-shot training set).
 
+### Throughput and cost per document
+
+Single-decision latency is dominated by one MiniLM forward pass and is
+**~46 ms p50 / ~77 ms p95** on the dev CPU (`evals/measure_footprint.py`, 60
+warm calls, measured in a clean process — never measure this while anything
+else holds the CPU).
+
+Bulk mode is what matters for volumes. `decide_batch()` embeds the whole list in
+one pass (`evals/bench_batch.py`, n=500, one `Choice` + one `Score` head):
+
+| n | batch ms/item | throughput |
+|---|---|---|
+| 25 | 8.7 ms | 116 sentences/s |
+| 100 | 13.3 ms | 75 sentences/s |
+| **500** | **13.9 ms** | **72 sentences/s** |
+
+**≈ 72 sentences/s sustained → 100,000 documents in ~24 minutes** on one CPU
+core, no GPU, no API calls, no per-document cost. The single-call figure
+(~46 ms) and the bulk figure (~14 ms) differ because the forward pass amortizes
+across the batch.
+
+Footprint, measured (not estimated): the package wheel is **289 KB**; the
+multilingual embedding model is **240 MB on disk** (224 MB ONNX + 16 MB
+tokenizer) and ~0.3 GB resident once loaded. Note: the `118 MB` figure that
+circulated in the repo was a hardcoded label in `evals/backbone_shootout.py`,
+never a measurement — the numbers above are.
+
+### On large public datasets (MASSIVE, BANKing77)
+
+Both are **repurposing** runs, not the task klix is built for: klix needs anchor
+sentences per label and these datasets ship only `text` + `label`. Anchors are
+therefore constructed by `evals/bespoke_anchors.py` — `few_shot_k3` draws 3 real
+sentences per class from the dataset's own `train` split (seeded, no test
+overlap), and `label_string` uses the bare label as the honest lower bound.
+Reproduce with `evals/run_bespoke.py`; full provenance, licences and known data
+defects in `evals/data/bespoke/PROVENANCE.md`.
+
+| Dataset | classes | test cases | anchors | accuracy | 95 % CI |
+|---|---|---|---|---|---|
+| **BANKing77** | 77 | 3,080 | few_shot_k3 | **61.4 %** | [59.8, 63.2] |
+| BANKing77 | 77 | 3,080 | label_string | 53.3 % | [51.5, 55.1] |
+| **MASSIVE** (en) | 60 | 2,974 | few_shot_k3 | **43.9 %** | [41.9, 45.7] |
+| **MASSIVE** (de) | 60 | 2,974 | few_shot_k3 | **36.2 %** | [34.5, 38.0] |
+| MASSIVE (de) | 60 | 2,974 | label_string | 30.1 % | [28.5, 31.8] |
+
+The k=3 anchors beat the label-string lower bound by +8.2 pt (BANKing77) and
++6.1 pt (MASSIVE de), so the anchor construction carries signal rather than
+noise. Coverage is 100 % throughout — klix answers every case rather than
+abstaining.
+
+**Known defect in the source data, measured:** MASSIVE's `train`/`test` splits
+are not sentence-disjoint. In German, 115/2974 (3.9 %) of test texts appear
+verbatim in `train`, **8 of them with a contradictory label** (identical
+sentence, two different intents); English 21/2974 (0.7 %), 2 contradictory. This
+caps achievable accuracy on the German set and is the main reason MASSIVE-de
+scores below MASSIVE-en. Details and the assertions that pin it:
+`evals/data/bespoke/PROVENANCE.md` §1.1.
+
+### vs. a local 2B LLM (same 60-class task, same CPU)
+
+Same 500 MASSIVE-de cases, same machine, no GPU: `qwen3.5:2b` via Ollama,
+prompted with all 60 labels and told to answer with one label name.
+
+| | klix (few_shot_k3) | qwen3.5:2b (Ollama) |
+|---|---|---|
+| accuracy (answered) | 36.2 % (full 2,974 cases) | 40.5 % (500-case subsample) |
+| model footprint | 240 MB | 2.7 GB |
+| sustained latency | **13.9 ms/item** (bulk) | **~9,000 ms/call** |
+| throughput | 72 docs/s | ~0.11 docs/s |
+| coverage | 100 % | 99.2 % (4 unparseable) |
+
+**Read this carefully — it is not a like-for-like comparison.** The LLM prompt
+contains all 60 labels; klix sees 3 anchors per class. The LLM run is a
+500-case subsample of the same 2,974-case split; klix's figure is the full
+split. Both systems are scored on identical case texts, and the LLM figure is
+the *sustained* rate, not an average that includes model load.
+
+What it does show is the cost/benefit shape: the LLM's **+4.3 pt** costs
+**~650× the latency**, **11× the footprint**, and ~5 GB of downloads to run at
+all. Published vendor figures for Tev1 (Together AI) and Nimble (Bespoke Labs)
+are **not** reproduced here; if you quote them, quote them as vendor numbers —
+nothing in this repository measures them.
+
 ### Bilingual routing (EN/DE, 5 classes, support tickets)
 
 `evals/benchmark_bilingual.py` — 10 English + 10 German test cases with parallel
@@ -420,9 +512,11 @@ uv run python -m evals.benchmark_bilingual
 
 **Latency per decision (CPU, includes the embedding forward pass):**
 TF-IDF+LogReg ≈ 1–5 ms (no embeddings); embedding-based methods
-≈ 60–80 ms, dominated by the ~50–90 ms MiniLM forward pass. Measured
-2026-09-24 on the dev workstation; absolute values are
-hardware-dependent (see the version note below).
+≈ 46–80 ms single-call, dominated by the ~40 ms MiniLM forward pass. Under
+`decide_batch()` the same work costs ~14 ms/item (see
+[Throughput](#throughput-and-cost-per-document)). Measured 2026-09-24/30 on the
+dev workstation; absolute values are hardware-dependent (see the version note
+below).
 
 **Reading this honestly:** on this *mixed-language, few-anchor* schema the
 `linear` probe overfits to English (90 % EN / 60 % DE). The dense Embed-KNN is
@@ -583,6 +677,11 @@ results are snapshots in time — re-running may show different numbers).
 
 | Script | Purpose | Status |
 |---|---|---|
+| `run_bespoke.py` | klix vs. Ollama on MASSIVE/BANKing77/PAWS — the README table | live |
+| `bespoke_loader.py` | Fetch + normalise those datasets (parquet, no `datasets` dependency) | live (data source) |
+| `bespoke_anchors.py` | Anchors for 60/77-class sets (`few_shot_k3`, `label_string`) + leakage check | live (data source) |
+| `bespoke_probe.py` | Feasibility/latency probe before a long Ollama sweep | live |
+| `measure_footprint.py` | Isolated single-call latency + memory + on-disk model size | live |
 | `multilingual_spotecheck.py` | Wikidata item-label spot check of the 10-language core (96 terms) | live |
 | `langid_bench.py` | Accuracy, per-language breakdown, tuning calibration for `klix.langid` | live |
 | `langid_experiment.py`, `langid_hybrid.py` | Language ID ablation studies (n-gram order, channel weights, profiles) | live |
@@ -598,7 +697,7 @@ results are snapshots in time — re-running may show different numbers).
 | `charngram_experiment.py` | Did char-n-grams help the probe? (measured: no) | historical |
 | `verify_crosslingual.py`, `whatif.py`, `whatif_anchors.py`, `instrument.py` | Feature verification / what-if simulations | historical |
 | `eval_baseline.py`, `eval_after.py` | Pre/post head-feature comparisons | historical |
-| `bench_batch.py` | Batch-vs-serial latency measurement | historical |
+| `bench_batch.py` | Batch-vs-serial latency/throughput — the README throughput table | live |
 | `bug_hunt.py` | Edge-case hunting script (not a test file) | historical |
 | `export_datasets.py` | Export the labeled datasets to JSONL | historical |
 

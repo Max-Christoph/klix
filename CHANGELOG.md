@@ -3,7 +3,7 @@
 All notable changes to klix are documented here. Format based on
 [Keep a Changelog](https://keepachangelog.com/); versioning: SemVer.
 
-## [0.10.0] - unreleased (release candidate)
+## [0.10.0] - 2026-09-30
 
 Multi-language release. Two new public capabilities, one behavioural change to an
 existing preset, and a structural fix the new tests found. The engine's decision

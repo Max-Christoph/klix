@@ -1,0 +1,41 @@
+{
+  "dataset": "banking77",
+  "full_split_cases": 3080,
+  "scored_cases": 3080,
+  "subsampled": false,
+  "seed": 20260930,
+  "anchor_method": "label_string",
+  "anchor_provenance": {
+    "methods": [
+      "few_shot_k3",
+      "label_string"
+    ],
+    "main_method": "few_shot_k3",
+    "lower_bound_method": "label_string",
+    "k": 3,
+    "seed": 20260930,
+    "split": "train",
+    "no_leakage": "anchors are drawn from `train` only; overlap with `test` is measured with assert_no_leakage() and reported",
+    "built_by": "klix (evals/bespoke_anchors.py)",
+    "caveat": "repurposed run; anchors are constructed by klix (see anchor_provenance), not shipped by the dataset; not comparable to published Tev1/Nimble/JevBench figures"
+  },
+  "anchor_overlap_with_test": 0,
+  "case_aligned": true,
+  "systems": {
+    "klix": {
+      "n": 3080,
+      "correct": 1641,
+      "answered": 3080,
+      "unparseable": 0,
+      "accuracy": 0.5327922077922078,
+      "coverage": 1.0,
+      "accuracy_ci95": [
+        0.5146,
+        0.551
+      ],
+      "seconds": 188.9
+    }
+  },
+  "caveat": "repurposed run; anchors are constructed by klix (see anchor_provenance), not shipped by the dataset; not comparable to published Tev1/Nimble/JevBench figures",
+  "note": "MASSIVE train/test are not sentence-disjoint (see evals/data/bespoke/PROVENANCE.md 1.1): achievable accuracy is capped and some anchors mirror test sentences."
+}

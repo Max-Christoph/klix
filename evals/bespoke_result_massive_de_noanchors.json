@@ -1,0 +1,28 @@
+{
+  "dataset": "massive_de",
+  "full_split_cases": 2974,
+  "scored_cases": 500,
+  "subsampled": true,
+  "seed": 20260930,
+  "anchor_method": null,
+  "anchor_provenance": null,
+  "anchor_overlap_with_test": 0,
+  "case_aligned": true,
+  "systems": {
+    "ollama:qwen3.5:2b": {
+      "n": 500,
+      "correct": 201,
+      "answered": 496,
+      "unparseable": 4,
+      "accuracy": 0.40524193548387094,
+      "coverage": 0.992,
+      "accuracy_ci95": [
+        0.358,
+        0.446
+      ],
+      "seconds": 7176.0
+    }
+  },
+  "caveat": "repurposed run; anchors are constructed by klix (see anchor_provenance), not shipped by the dataset; not comparable to published Tev1/Nimble/JevBench figures",
+  "note": "MASSIVE train/test are not sentence-disjoint (see evals/data/bespoke/PROVENANCE.md 1.1): achievable accuracy is capped and some anchors mirror test sentences."
+}

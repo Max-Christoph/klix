@@ -3,7 +3,7 @@
 [![PyPI version](https://img.shields.io/pypi/v/klix-engine.svg)](https://pypi.org/project/klix-engine/)
 [![Python](https://img.shields.io/pypi/pyversions/klix-engine.svg)](https://pypi.org/project/klix-engine/)
 [![CI](https://github.com/Max-Christoph/klix/actions/workflows/ci.yml/badge.svg)](https://github.com/Max-Christoph/klix/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/Max-Christoph/klix/blob/main/LICENSE)
 
 **Fast, zero-training semantic decisions on CPU. Route text, assign multi-label scores, extract boolean flags, and score continuous axes — by providing example sentences instead of training models.**
 
@@ -106,7 +106,7 @@ Each text is embedded **exactly once** by the shared semantic backbone; each hea
 
 | Head | Purpose | Output (`res.<name>`) | Key Knobs |
 |---|---|---|---|
-| [`Choice`](#choosing-a-variant--three-rules) | Single-label classification & routing | Winning label string (or `None`) | `classifier="centroid"`, `reject_anchors`, `keyword_boost` |
+| [`Choice`](#choosing-a-classifier-mode-3-simple-rules) | Single-label classification & routing | Winning label string (or `None`) | `classifier="centroid"`, `reject_anchors`, `keyword_boost` |
 | **`MultiLabel`** | Multi-label classification with continuous scores | List of active label strings $\ge$ threshold | `threshold=0.5`, `sharpness=12.0`, `center=0.40`, `calibration="sigmoid"` |
 | `Score` | Calibrated continuous metric axis (e.g. 0 to 5) | Float in `[min_val, max_val]` | `aggregation="topk"`, `min_coverage` |
 | `Flag` | Binary boolean decision with neutral pole | `True`, `False`, or `None` | `threshold=0.5`, `temp=0.12`, `neutral_anchors` |
@@ -115,7 +115,7 @@ Each text is embedded **exactly once** by the shared semantic backbone; each hea
 
 ## Performance & Benchmarks
 
-Every metric is measured on a standard Intel CPU without a GPU. Full provenance and test setups are documented in [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md).
+Every metric is measured on a standard Intel CPU without a GPU. Full provenance and test setups are documented in [`docs/BENCHMARKS.md`](https://github.com/Max-Christoph/klix/blob/main/docs/BENCHMARKS.md).
 
 ### At a Glance
 

@@ -1,6 +1,6 @@
 [project]
 name = "klix-engine"
-version = "0.12.1"
+version = "0.12.2"
 description = "Lightweight multi-task decision runtime (Choice, MultiLabel, Score, Flag) over frozen embeddings on CPU."
 readme = "README.md"
 requires-python = ">=3.10"

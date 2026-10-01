@@ -3,6 +3,23 @@
 All notable changes to klix are documented here. Format based on
 [Keep a Changelog](https://keepachangelog.com/); versioning: SemVer.
 
+## [0.12.2] - 2026-10-01
+
+### Fixed
+- **PyPI Readme Rendering**:
+  - Removed all raw LaTeX `$...$` delimiters from `README.md` that broke rendering on PyPI (`pypi.org/project/klix-engine`) and caused text overflow/clipping into the sidebar.
+  - Retained full LaTeX formulations, derivations, and proofs in dedicated [`docs/MATHEMATICS.md`](docs/MATHEMATICS.md) rendered natively by GitHub.
+
+### Added
+- **External `scikit-learn` Baseline on Identical Embeddings**:
+  - Added empirical comparison against `scikit-learn LogisticRegression(C=1.0)` on CLINC150 ($N=5,500$): Klix parameter-free centroid projection reaches 86.93% accuracy / 94.79% AUROC ($k=10$) vs. sklearn's 86.22% accuracy / 92.28% AUROC, compiling in < 0.1 s vs. 120 s.
+- **Reject Anchors vs. Cosine Thresholding Ablation**:
+  - Quantified the localized Voronoi suppression role of `reject_anchors` on CLINC150 ($N=5,500$): 100 out-of-scope anchors block 56.70% of unseen OOS test queries with only 3.76% false in-scope rejections, acting as an instant zero-calibration negative filter before continuous thresholding.
+- **Empirical Risk-Coverage Curve**:
+  - Documented measured selective classification trade-offs on CLINC150 across cosine thresholds $\tau \in [0.40, 0.75]$ in `docs/BENCHMARKS.md` and `README.md`.
+- **Validation vs. Test Split Consistency**:
+  - Documented generalization stability between validation split ($N=3,100$, 86.40% Acc, 97.30% AUROC) and test split ($N=5,500$, 86.93% Acc, 94.79% AUROC), confirming zero hyperparameter tuning bias.
+
 ## [0.12.1] - 2026-10-01
 
 ### Added

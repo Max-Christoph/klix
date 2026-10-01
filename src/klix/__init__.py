@@ -23,7 +23,7 @@ from klix.heads import BaseHead, Choice, Flag, MultiLabel, Score
 from klix.monitoring import DriftMonitor
 from klix.rules import Rule
 
-__version__ = "0.12.2"
+__version__ = "0.12.3"
 
 __all__ = [
     "DecisionEngine",

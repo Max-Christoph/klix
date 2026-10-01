@@ -3,22 +3,24 @@
 All notable changes to klix are documented here. Format based on
 [Keep a Changelog](https://keepachangelog.com/); versioning: SemVer.
 
-## [0.12.2] - 2026-10-01
+## [0.12.3] - 2026-10-01
 
 ### Fixed
 - **PyPI Readme Rendering**:
   - Removed all raw LaTeX `$...$` delimiters from `README.md` that broke rendering on PyPI (`pypi.org/project/klix-engine`) and caused text overflow/clipping into the sidebar.
   - Retained full LaTeX formulations, derivations, and proofs in dedicated [`docs/MATHEMATICS.md`](docs/MATHEMATICS.md) rendered natively by GitHub.
+- **Latency Claim Harmonization**:
+  - Reconciled all latency figures across documentation to consistently distinguish interactive single-item latency (~26–30 ms p50 on single CPU core) from amortized vectorized batch throughput (~13.9 ms per document, 72–99 docs/s).
 
 ### Added
+- **Direct `semantic-router` Baseline on CLINC150 ($N=5,500$)**:
+  - Evaluated the nearest-anchor max-similarity routing algorithm (equivalent to `semantic-router`) on CLINC150 ($k=3$): scores 73.02% in-scope accuracy and 91.44% AUROC at 54 docs/s. Klix parameter-free centroid aggregation improves accuracy to 78.78% (+5.76 pt) and AUROC to 92.92% (+1.48 pt) while evaluating 1.8x faster (94.9 docs/s).
 - **External `scikit-learn` Baseline on Identical Embeddings**:
-  - Added empirical comparison against `scikit-learn LogisticRegression(C=1.0)` on CLINC150 ($N=5,500$): Klix parameter-free centroid projection reaches 86.93% accuracy / 94.79% AUROC ($k=10$) vs. sklearn's 86.22% accuracy / 92.28% AUROC, compiling in < 0.1 s vs. 120 s.
-- **Reject Anchors vs. Cosine Thresholding Ablation**:
-  - Quantified the localized Voronoi suppression role of `reject_anchors` on CLINC150 ($N=5,500$): 100 out-of-scope anchors block 56.70% of unseen OOS test queries with only 3.76% false in-scope rejections, acting as an instant zero-calibration negative filter before continuous thresholding.
-- **Empirical Risk-Coverage Curve**:
-  - Documented measured selective classification trade-offs on CLINC150 across cosine thresholds $\tau \in [0.40, 0.75]$ in `docs/BENCHMARKS.md` and `README.md`.
-- **Validation vs. Test Split Consistency**:
-  - Documented generalization stability between validation split ($N=3,100$, 86.40% Acc, 97.30% AUROC) and test split ($N=5,500$, 86.93% Acc, 94.79% AUROC), confirming zero hyperparameter tuning bias.
+  - Added empirical comparison against `scikit-learn LogisticRegression(C=1.0)` on CLINC150 ($N=5,500$): Klix parameter-free centroid projection matches/edges out multinomial logistic regression (86.93% vs 86.22% at $k=10$, 78.78% vs 76.62% at $k=3$) while compiling in < 0.1 s vs. 120 s.
+- **Matched-Loss Reject Anchors vs. Cosine Thresholding Ablation**:
+  - Evaluated discrete negative poles vs. continuous thresholding at identical in-scope loss rates: at 2.24% in-scope false rejection (101/4,500 queries), pure reject anchors block 53.8% of unseen OOS test queries without threshold calibration; combined with thresholding at 95% in-scope TPR (5% loss), OOD blocking rises to 79.1% (+2.1 pt over pure thresholding). Committed in `evals/ablation_reject_matched.json`.
+- **Decision Head Empirical Scope & Calibration Transparency**:
+  - Added dedicated documentation in `docs/BENCHMARKS.md` Section 8 and `README.md` defining the empirical scope of each head: `Choice` (extensively validated across >14k queries), `MultiLabel` (benchmarked on GoEmotions, 19.5% F1 vs 14.1% 1-NN), and `Score` / `Flag` (parameter-free geometric projection heuristics requiring task-specific calibration).
 
 ## [0.12.1] - 2026-10-01
 

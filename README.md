@@ -30,9 +30,10 @@ To maintain technical clarity and prevent architectural mismatch, Klix explicitl
 
 1. **Not a Generative Language Model:** Klix does not generate text, extract open entities, or conduct multi-step conversational reasoning. It is strictly an anchor-based decision boundary runtime.
 2. **Contrastive Hard Negatives vs. Open-World OOD:** Supplying `reject_anchors` does not solve the unbounded open-set problem (the entire complement embedding space). A reject anchor carves out a localized Voronoi suppression cell against known false positives. Universal open-world Out-of-Domain (OOD) rejection relies on similarity thresholds (e.g. `max_sim < threshold`) or margin gating between leading classes.
-3. **Algorithmic Transparency on Linear Probes:** The `linear` classifier mode compiles an L2-regularized multinomial logistic regression probe over frozen representations (essentially FastEmbed + scikit-learn). Klix does not claim a novel optimization solver; its engineering contribution is unified multi-head compilation, single-pass vector reuse, symbolic rule overrides, and sub-15ms agent graph integration.
+3. **Algorithmic Transparency on Linear Probes:** The `linear` classifier mode compiles an L2-regularized multinomial logistic regression probe over frozen representations (essentially FastEmbed + scikit-learn). Klix does not claim a novel optimization solver; its engineering contribution is unified multi-head compilation, single-pass vector reuse, symbolic rule overrides, and low-latency agent graph integration (~26–30 ms interactive, ~13.9 ms batched).
 4. **No Backbone Fine-Tuning:** Transformer backbone weights remain strictly frozen. Tasks requiring domain-adapted metric representations should use contrastive fine-tuning frameworks (e.g. SetFit) before exporting to an ONNX runtime.
 5. **Matryoshka Truncation Requires MRL Backbones:** Slicing dimensions via `truncate_dim` preserves semantic fidelity only when using models trained with Matryoshka Representation Learning (MRL, e.g. `nomic-embed-text` or `bge-m3`). The default MiniLM model was not trained with MRL; truncating it induces arbitrary geometric distortion.
+6. **Calibration Scope for Score and Flag:** While `Choice` and `MultiLabel` are benchmarked on standard public corpora (CLINC150, BANKing77, MASSIVE, GoEmotions), `Score` (polar scalar projection) and `Flag` (3-simplex softmax polarity gate) are parameterized geometric heuristics intended for low-latency state enrichment in agent graphs. Their default calibration settings (`sharpness=12.0`, `center=0.40`, `temperature=1.0`) are starting points that require task-specific calibration.
 
 ---
 
@@ -159,7 +160,7 @@ All evaluations were executed on commodity x86 CPU hardware without GPU accelera
 
 | Benchmark / Corpus | Task Type | Classes (K) | Prior (1/K) | Test Split (N) | Klix Centroid | External Baseline / Reference | Sustained Throughput |
 |---|---|:---:|:---:|:---:|---|---|:---:|
-| **CLINC150** | Intent + OOD Rejection | 150 | 0.7 % | 5,500 *(full)* | **86.9 % Acc / 94.8 % AUROC** *(k=10)*<br>78.8 % Acc / 92.9 % AUROC *(k=3)* | 86.2 % Acc / 92.3 % AUROC *(sklearn LogReg, k=10)*<br>76.6 % Acc / 89.1 % AUROC *(sklearn LogReg, k=3)* | **99 docs/s** |
+| **CLINC150** | Intent + OOD Rejection | 150 | 0.7 % | 5,500 *(full)* | **86.9 % Acc / 94.8 % AUROC** *(k=10)*<br>78.8 % Acc / 92.9 % AUROC *(k=3)* | 86.2 % Acc / 92.3 % AUROC *(sklearn LogReg, k=10)*<br>76.6 % Acc / 89.1 % AUROC *(sklearn LogReg, k=3)*<br>73.0 % Acc / 91.4 % AUROC *(semantic-router, k=3)* | **99 docs/s** |
 | **BANKing77** | Intent Routing | 77 | 1.3 % | 3,080 *(full)* | **61.4 % Acc** *(k=3 anchors)* | 53.3 % *(canonical labels)* | **72 docs/s** |
 | **MASSIVE** (English) | Intent Routing | 60 | 1.7 % | 2,974 *(full)* | **57.3 % Acc** *(k=3 + label centroid)* | 47.9 % *(canonical labels)* | **72 docs/s** |
 | **MASSIVE** (German) | Intent Routing | 60 | 1.7 % | 2,974 *(full)* | **44.4 % Acc** *(k=3 + label centroid)* | 40.5 % *(Qwen-2B LLM)* | **72 docs/s** |
@@ -171,8 +172,8 @@ All evaluations were executed on commodity x86 CPU hardware without GPU accelera
 
 ### Methodological Observations & Ablations
 
-1. **Out-of-Scope (OOD) Gating & External Baseline on CLINC150 (K=150 Intents + 1,000 OOS Queries):**  
-   Evaluated on the full 5,500-sample benchmark (Larson et al., EMNLP 2019). Parameter-free centroid projection reaches **86.93% in-scope accuracy** and **94.79% AUROC** (k=10), outperforming a standard `scikit-learn` multinomial `LogisticRegression` baseline on identical embeddings (86.22% Acc, 92.28% AUROC) while compiling in < 0.1 s vs. 120 s. Discrete reject anchors (100 training OOS examples) act as a localized suppression filter, blocking 56.7% of unseen OOS test queries without requiring any threshold calibration.
+1. **Out-of-Scope (OOD) Gating & External Baselines on CLINC150 (K=150 Intents + 1,000 OOS Queries):**  
+   Evaluated on the full 5,500-sample benchmark (Larson et al., EMNLP 2019). Parameter-free centroid projection reaches **86.93% in-scope accuracy** and **94.79% AUROC** (k=10), performing competitively with an L2-regularized multinomial `LogisticRegression` baseline on identical embeddings (86.22% Acc, 92.28% AUROC) while compiling in < 0.1 s vs. 120 s. Compared to 1-nearest-neighbor anchor matching (`semantic-router` equivalent: 73.02% Acc, 91.44% AUROC at k=3), centroid aggregation improves accuracy by +5.76 percentage points while evaluating in O(K · D) flops. At matched operating points, supplying 100 training OOS examples as reject anchors blocks 53.8% of unseen OOS test queries with only 2.24% in-scope false rejection (101/4,500), lifting combined OOD rejection to 79.1% at the standard 95% in-scope retention threshold (+2.1 pt over pure thresholding).
 
 2. **Anchor-Label Hybridization on MASSIVE (K=60):**  
    While raw arbitrary few-shot sentence sampling alone (k=3, 43.8% on English) scores lower than bare curated label names (47.9%), combining the canonical label name into the anchor pool under centroid aggregation anchors the semantic subspace: accuracy jumps to **57.3%** on English (+13.5 pt) and **44.4%** on German (+8.2 pt), outperforming the local 2B parameter autoregressive LLM baseline (40.5%).
@@ -184,7 +185,7 @@ All evaluations were executed on commodity x86 CPU hardware without GPU accelera
    The cross-domain (N=70) and SetFit ablation (N=60) test sets represent small qualitative smoke tests for domain-specific schemas. For high-cardinality statistical characterization, primary reference should be made to the full public test splits of CLINC150 (N=5,500, K=150), BANKing77 (N=3,080, K=77), and MASSIVE (N=2,974, K=60).
 
 5. **Selective Classification (Risk-Coverage Trade-Off in Agent Routing):**  
-   In agent dispatch architectures, low-confidence or out-of-domain queries return `None` to escalate to an LLM fallback. On CLINC150 (k=10, N=5,500), sweeping the cosine threshold demonstrates this empirical risk-coverage trade-off: at threshold tau = 0.55, coverage is 81.3% with 88.9% in-scope accuracy and 77.9% of OOS queries blocked; at tau = 0.65, coverage is 71.7% with 90.5% in-scope accuracy and 89.4% of OOS queries blocked.
+   In agent dispatch architectures, low-confidence or out-of-domain queries return `None` to escalate to an LLM fallback. On CLINC150 (k=10, N=5,500), sweeping the cosine threshold demonstrates this empirical risk-coverage trade-off: at threshold tau = 0.55, coverage is 81.3% with 88.9% in-scope accuracy and 77.9% of OOS queries blocked; at tau = 0.65, coverage is 71.7% with 90.5% in-scope accuracy and 89.4% of OOS queries blocked. High-confidence routing resolves in ~26–30 ms per query.
 
 ---
 
@@ -247,7 +248,7 @@ from klix.integrations.langchain import KlixRouterRunnable, create_klix_router
 router = KlixRouterRunnable(engine=engine, route_head="queue", enrich_state=True)
 chain = router | RunnableBranch(...)
 
-# 2. LangGraph Conditional Edge: low-latency (< 15 ms) graph routing
+# 2. LangGraph Conditional Edge: low-latency (< 30 ms) graph routing
 workflow.add_conditional_edges(
     "supervisor",
     create_klix_router(engine, head_name="queue"),

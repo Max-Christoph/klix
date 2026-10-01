@@ -1,0 +1,42 @@
+[
+  {
+    "in_scope_loss_pct": 2.24,
+    "pure_threshold_oos_blocked_pct": 63.4,
+    "pure_ra_oos_blocked_pct": 53.800000000000004,
+    "combined_oos_blocked_pct": 53.8,
+    "tau_pure": 0.4721424143697628,
+    "tau_comb": 0.0
+  },
+  {
+    "in_scope_loss_pct": 5.0,
+    "pure_threshold_oos_blocked_pct": 77.0,
+    "pure_ra_oos_blocked_pct": 53.800000000000004,
+    "combined_oos_blocked_pct": 79.1,
+    "tau_pure": 0.5421998561631323,
+    "tau_comb": 0.5249126501998989
+  },
+  {
+    "in_scope_loss_pct": 10.0,
+    "pure_threshold_oos_blocked_pct": 84.7,
+    "pure_ra_oos_blocked_pct": 53.800000000000004,
+    "combined_oos_blocked_pct": 85.8,
+    "tau_pure": 0.6018116460694777,
+    "tau_comb": 0.5947698295166661
+  },
+  {
+    "in_scope_loss_pct": 15.0,
+    "pure_threshold_oos_blocked_pct": 89.7,
+    "pure_ra_oos_blocked_pct": 53.800000000000004,
+    "combined_oos_blocked_pct": 89.8,
+    "tau_pure": 0.6517126321899234,
+    "tau_comb": 0.6484449342907199
+  },
+  {
+    "in_scope_loss_pct": 20.0,
+    "pure_threshold_oos_blocked_pct": 92.8,
+    "pure_ra_oos_blocked_pct": 53.800000000000004,
+    "combined_oos_blocked_pct": 93.0,
+    "tau_pure": 0.688873374051419,
+    "tau_comb": 0.687363227437733
+  }
+]

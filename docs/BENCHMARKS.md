@@ -38,29 +38,34 @@ Evaluates in-scope intent routing across 150 fine-grained intent categories simu
 * **Prior Baseline:** Uniform random chance for in-scope routing is $1/150 = 0.67\%$.
 * **OOD Scoring Metric:** Maximum class centroid cosine similarity ($\max_k (\mathbf{q} \cdot \mathbf{c}_k)$).
 
-| Anchor Density ($k$) | Classifier | In-Scope Accuracy ($N=4,500$) | OOD AUROC ($N=5,500$) | OOD FPR@95 | Compile Time | Latency | Sustained Throughput |
+| Anchor Density ($k$) | Classifier / Algorithm | In-Scope Accuracy ($N=4,500$) | OOD AUROC ($N=5,500$) | OOD FPR@95 | Compile Time | Latency | Sustained Throughput |
 |:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| $k=3$ | `semantic-router` (nearest-anchor max sim) | 73.02 % | 91.44 % | 39.70 % | < 0.1 s | 18.5 ms/doc | 54.0 docs/s |
 | $k=3$ | `scikit-learn LogisticRegression` | 76.62 % | 89.10 % | 39.40 % | 18.2 s | 10.8 ms/doc | 92.6 docs/s |
-| $k=3$ | **Klix `centroid`** | **78.78 %** (+2.16 pt) | **92.92 %** (+3.82 pt) | **32.30 %** | **< 0.1 s** | 10.5 ms/doc | **94.9 docs/s** |
+| $k=3$ | **Klix `centroid`** | **78.78 %** (+5.76 pt vs SR) | **92.92 %** (+1.48 pt) | **32.30 %** | **< 0.1 s** | 10.5 ms/doc | **94.9 docs/s** |
 | $k=10$ | `scikit-learn LogisticRegression` | 86.22 % | 92.28 % | 29.80 % | 120.4 s | 10.9 ms/doc | 91.7 docs/s |
 | $k=10$ | **Klix `centroid`** | **86.93 %** (+0.71 pt) | **94.79 %** (+2.51 pt) | **23.10 %** | **< 0.1 s** | 10.1 ms/doc | **99.1 docs/s** |
 
-### External Baseline Analysis (`scikit-learn LogisticRegression` on Identical Vectors)
-To evaluate whether Klix introduces an architectural benefit over a standard frozen-embedding pipeline, we fitted `LogisticRegression(C=1.0, max_iter=1000)` from `scikit-learn` over the identical 384-dimensional FastEmbed representations.
-* **Accuracy:** Parameter-free centroid projection matches or slightly outperforms $L_2$-regularized multinomial logistic regression (+2.16 pt at $k=3$, +0.71 pt at $k=10$). On unit-normalized hyperspherical embeddings, class centroids act as maximum-likelihood directional means under a von Mises-Fisher distribution without being subject to optimization variance across 150 classes.
-* **OOD Calibration:** Raw cosine similarity to class centroids yields substantially higher AUROC (+2.5 to +3.8 pt) than uncalibrated multinomial softmax output probabilities.
-* **Compilation Latency:** Fitting a 150-class multinomial logistic regression takes ~120 s; Klix centroid aggregation compiles in **< 0.1 s**.
+### External Baseline Analysis (`scikit-learn` & `semantic-router` on Identical Vectors)
+To evaluate Klix against standard frozen-embedding alternatives without architectural strawmen:
+* **`semantic-router` Equivalent (1-Nearest-Neighbor Anchor Matching):** `semantic-router` routes by comparing query cosine similarity to each individual anchor vector per route. On CLINC150 ($k=3$), this nearest-neighbor paradigm scores **73.02 % accuracy** and **91.44 % AUROC** at 54 docs/s. Klix centroid aggregation lifts in-scope accuracy to **78.78 %** (+5.76 pt) and AUROC to **92.92 %** while running 1.8x faster (94.9 docs/s) due to $O(K \cdot D)$ rather than $O(N_{\text{anchors}} \cdot D)$ evaluation.
+* **`scikit-learn LogisticRegression(C=1.0)`:** Class centroids implement standard Nearest Class Mean (NCM) classification. On unit-normalized hyperspherical sentence embeddings, NCM matches or slightly edges out convex $L_2$-regularized multinomial logistic regression (+2.16 pt at $k=3$, +0.71 pt at $k=10$). At $k=10$, the two approaches are statistically comparable, but NCM compiles in **< 0.1 s** versus **120.4 s** for scikit-learn's iterative L-BFGS solver across 150 classes, while raw centroid cosine similarity provides better OOD calibration (+2.51 pt AUROC) than uncalibrated softmax output probabilities.
 
-### Ablation: Reject Anchors vs. Cosine Thresholding ($N=5,500$)
-Evaluates the interaction between discrete contrastive negative poles (`reject_anchors`) and continuous similarity thresholds on the full CLINC150 test set ($k=10$ in-scope anchors, 100 `oos_train` queries used as reject anchors):
+### Ablation: Reject Anchors vs. Cosine Thresholding at Matched Operating Points ($N=5,500$)
+To evaluate whether `reject_anchors` provide value beyond similarity thresholding, both mechanisms were evaluated across identical in-scope retention rates (matched operating points) on the full CLINC150 benchmark (150 classes, $k=10$ anchors, 100 `oos_train` reject anchors):
 
-| Gating Mechanism | In-Scope False Rejection | OOS Filtered | Net OOD AUROC | Role in Architecture |
-|---|:---:|:---:|:---:|---|
-| **Pure Thresholding** (`reject_anchors=None`) | 0.0 % (at $\tau=0.0$) | 0.0 % (at $\tau=0.0$) | 94.79 % | Primary open-world rejection across the unbounded embedding space. |
-| **Pure Reject Anchors** ($\tau=0.0$) | **3.76 %** (169 / 4,500) | **56.70 %** (567 / 1,000) | 94.88 % | Discrete, zero-calibration suppression filter against known OOD patterns. |
-| **Combined** (Reject Anchors + Threshold) | Configurable | **Up to 96.7 %** | **94.88 %** | Hybrid defense: instant suppression of known negatives + threshold gating. |
+| In-Scope Loss | In-Scope Accepted (TPR) | Pure Thresholding OOS Blocked | Pure Reject Anchors OOS Blocked | Combined (RA + Threshold) OOS Blocked |
+|:---:|:---:|:---:|:---:|:---:|
+| **2.24 %** | 97.76 % (4,399 / 4,500) | 63.4 % (634 / 1,000, $\tau=0.474$) | **53.8 %** (538 / 1,000, $\tau=0.0$) | **53.8 %** (RA alone reaches this operating point) |
+| **5.00 %** | 95.00 % (4,275 / 4,500) | 77.0 % (770 / 1,000, $\tau=0.525$) | 53.8 % (538 / 1,000, $\tau=0.0$) | **79.1 %** (791 / 1,000, $\tau=0.525$) **[+2.1 pt / +21 OOS blocked]** |
+| **10.00 %** | 90.00 % (4,050 / 4,500) | 84.7 % (847 / 1,000, $\tau=0.595$) | 53.8 % (538 / 1,000, $\tau=0.0$) | **85.8 %** (858 / 1,000, $\tau=0.595$) **[+1.1 pt / +11 OOS blocked]** |
+| **15.00 %** | 85.00 % (3,825 / 4,500) | 89.7 % (897 / 1,000, $\tau=0.648$) | 53.8 % (538 / 1,000, $\tau=0.0$) | **89.8 %** (898 / 1,000, $\tau=0.648$) |
+| **20.00 %** | 80.00 % (3,600 / 4,500) | 92.8 % (928 / 1,000, $\tau=0.687$) | 53.8 % (538 / 1,000, $\tau=0.0$) | **93.0 %** (930 / 1,000, $\tau=0.687$) |
 
-*Takeaway:* Supplying `reject_anchors` does not replace similarity thresholding for open-world novelty, but acts as a discrete Voronoi suppression filter that halts 56.7% of out-of-scope traffic without requiring any threshold calibration.
+*Methodological Findings:*
+1. **Continuous Thresholding is Primary:** Across the unbounded embedding space, cosine similarity thresholding is the dominant mechanism for open-world rejection.
+2. **Zero-Calibration Localized Suppression:** Reject anchors provide an immediate, parameter-free negative filter that removes 53.8% of out-of-scope traffic with only 2.24% in-scope false rejection (101/4,500 queries) without needing any threshold calibration.
+3. **Synergy at Practical Operational Targets:** At the standard 95% in-scope acceptance rate (5% loss), combining reject anchors with thresholding blocks **79.1%** of OOD queries versus **77.0%** for thresholding alone (+2.1 percentage points). At tighter thresholds (15–20% loss), the global threshold increasingly subsumes the localized Voronoi suppression cells. Reject anchors are therefore most valuable for suppressing known localized confusers (e.g. conversational chit-chat, common false positive queries) without having to raise the global rejection threshold.
 
 ### Empirical Risk-Coverage Curve on CLINC150 ($k=10$, $N=5,500$)
 In agent dispatch architectures, the engine operates in a selective classification regime where low-confidence queries return `None` and fall back to an LLM:
@@ -183,4 +188,20 @@ Measured on the 70 cross-domain cases on CPU to compare anchor-based vector proj
 | **Latency (CPU)** | **~13 ms** | ~1,300–1,500 ms |
 | **Model Size** | **240 MB** | ~2 GB |
 | **Configuration** | Anchor examples ($k \ge 3$) | Natural language instructions + criteria |
+
+---
+
+## 8. Empirical Scope & Calibration Transparency Across Decision Heads
+
+To maintain scientific integrity, the empirical evidence for each decision head is explicitly documented:
+
+| Decision Head | Public Datasets Evaluated | Test Cases ($N$) | Evaluation Status | Architectural Role |
+|---|---|:---:|---|---|
+| **`Choice`** | CLINC150, BANKing77, MASSIVE (en/de) | > 14,000 | **Extensively Validated** | Discrete categorical routing, OOD gating, and fallback escalation. |
+| **`MultiLabel`** | Google Research GoEmotions | 500 | **Empirically Benchmarked** (Centroid 19.5% F1 vs. 1-NN 14.1%) | Multi-topic tagging over independent sigmoid boundaries; performance is bounded by frozen backbone geometry. |
+| **`Score`** | Synthetic unit suites (`test_features.py`) | N/A | **Geometric Heuristic** | Continuous scalar projection between polar anchor sets; requires task-specific anchor selection. |
+| **`Flag`** | Synthetic unit suites (`test_hardening.py`) | N/A | **Simplex Heuristic** | 3-way softmax polarity gate with neutral rejection pole; temperature $T=1.0$ is an operational default requiring empirical calibration. |
+
+*Takeaway:* While `Choice` and `MultiLabel` possess reproducible statistical benchmarks on public corpora, `Score` and `Flag` are parameter-free linear algebra projections intended for low-latency heuristic gating in agent workflows, not claimed as pre-trained generalizable estimators.
+
 

@@ -3,6 +3,18 @@
 All notable changes to klix are documented here. Format based on
 [Keep a Changelog](https://keepachangelog.com/); versioning: SemVer.
 
+## [1.0.0] - 2026-10-04
+
+### Changed
+- **Production Milestone (v1.0.0)**:
+  - Transitioned package development status classifier to `Development Status :: 5 - Production/Stable`.
+  - Removed author details from package metadata.
+  - Finalized stable API surface for multi-task decision runtime (`Choice`, `MultiLabel`, `Score`, `Flag`).
+
+### Added
+- **100-Tool Dynamic Retrieval Benchmark (`evals/eval_tool_retrieval_100.py`)**:
+  - Realistic MCP dynamic tool selection evaluation across 10 distinct domains simulating 100 tools.
+
 ## [0.12.3] - 2026-10-01
 
 ### Fixed

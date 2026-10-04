@@ -1,16 +1,13 @@
 [project]
 name = "klix-engine"
-version = "0.12.3"
+version = "1.0.0"
 description = "Lightweight multi-task decision runtime (Choice, MultiLabel, Score, Flag) over frozen embeddings on CPU."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
-authors = [
-    { name = "Max-Christoph Hähnel", email = "m-c-haehnel@gmx.de" }
-]
 keywords = ["nlp", "decision-engine", "embeddings", "classification", "routing", "semantic-search"]
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
